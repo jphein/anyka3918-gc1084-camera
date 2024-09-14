@@ -11,7 +11,7 @@ APP: Yi IOT https://play.google.com/store/apps/details?id=com.yunyi.smartcamera&
 ## What's working?
 * Video
 * Sound
-* PTZ - Pan and Tilt
+* PTZ - Pan and Tilt (Oly from the webui. Haven't figured this out from Home Assistant yet)
 * Wifi
 
 I got my camera from temu: https://share.temu.com/A5qeTOEZVbA Price is in the $3 to $8 range. 
