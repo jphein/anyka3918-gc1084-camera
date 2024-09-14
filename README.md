@@ -34,9 +34,14 @@ NEW_PASSWORD="newrootpassword"
 
 To uncompress the module conf file, and make a symlink to it on the sd card since there is not enough room in the /etc/jffs2 partition. 
 ```
-#extract sensor.tgz into the sdcard
-tar -xzf /etc/jffs2/sensor.tgz -C /mnt
+#extract sensor.tgz into the sdcard if not there.
+FILE="/mnt/isp_gc1084.conf"
+if [ ! -e "$FILE"; then
+  tar -xzf /etc/jffs2/sensor.tgz -C /mnt
+  #make the symlink
+  ln -s /mnt/isp_gc1084.conf /etc/jffs2/
+fi
 
-#make the symlink
-ln -s /mnt/isp_gc1084.conf /etc/jffs2/
+
+
 ```
