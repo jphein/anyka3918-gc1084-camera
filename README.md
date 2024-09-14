@@ -2,6 +2,9 @@
 Brand: Teruhal
 Model: TC20
 FCC ID: 2BEXJ-TC20
+MPU: AK3918EN080 V200 CDSJ09J23
+WiFi: ZT9101UV20
+Camera sensor: 
 
 I got my camera from temu: https://share.temu.com/A5qeTOEZVbA
 ![image](https://github.com/user-attachments/assets/c23b2242-16df-46c6-87fc-d2d16095efb9)
@@ -9,6 +12,7 @@ Price is in the $3 to $8 range.
 I took apart using the 3 screws on the main body. 
 The antennas on the outside are fake. It has a small printed circuit board antenna taped to the inside of the main compartment instead. 
 The main chip is the anyka ak3918. The camera sensor chip is the gc1084.
+
 
 Since my camera used the exact same micro controller chip, and wifi card. I was able to use this great project:
 https://gitea.raspiweb.com/Gerge/Anyka_ak3918_hacking_journey/
@@ -48,4 +52,5 @@ I tried:
 echo "1" > /sys/user-gpio/WHITE_LED
 echo "1" > /sys/user-gpio/IR_LED
 ```
+
 Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 15fps. PTZ works well, and so does the microphone. I haven't yet figured out how to use the speaker.
