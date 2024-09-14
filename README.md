@@ -43,4 +43,9 @@ if [ ! -e "$FILE"; then
 fi
 ```
 I can't get the lights or the IR lights to work yet.
+I tried:
+```
+echo "1" > /sys/user-gpio/WHITE_LED
+echo "1" > /sys/user-gpio/IR_LED
+```
 
