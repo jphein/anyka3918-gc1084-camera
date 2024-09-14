@@ -70,3 +70,12 @@ the IR LEDs are automaticly controlled by a photoresistor?
 ## Sound from the builtin speaker in the camera
 I haven't yet figured out how to use the speaker.
 https://gitea.raspiweb.com/Gerge/Anyka_ak3918_hacking_journey/src/branch/main/SD_card_contents/anyka_hack/ak_adec_demo
+
+## IR shutter/filter operation (the thing that makes the CLICK sound)
+This is different from the IR LEDs, the LEDs are automaticly controlled by a photoresistor
+When this is on it makes everything pink. It was stuck on for me the next day for some reason. 
+To turn off
+```
+echo "1" > /sys/user-gpio/ircut_b
+echo "1" > /sys/user-gpio/ircut_b
+```
