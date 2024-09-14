@@ -45,6 +45,10 @@ if [ ! -e "$FILE"; then
   ln -s /mnt/isp_gc1084.conf /etc/jffs2/
 fi
 ```
+##What is working
+Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 15fps. PTZ works well, and so does the microphone. 
+
+##Lights and IR
 I can't get the lights or the IR lights to work yet.
 I tried:
 ```
@@ -52,4 +56,6 @@ echo "1" > /sys/user-gpio/WHITE_LED
 echo "1" > /sys/user-gpio/IR_LED
 ```
 
-Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 15fps. PTZ works well, and so does the microphone. I haven't yet figured out how to use the speaker.
+## Sound from the builtin speaker in the camera
+I haven't yet figured out how to use the speaker.
+https://gitea.raspiweb.com/Gerge/Anyka_ak3918_hacking_journey/src/branch/main/SD_card_contents/anyka_hack/ak_adec_demo
