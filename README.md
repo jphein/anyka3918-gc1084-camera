@@ -45,10 +45,10 @@ if [ ! -e "$FILE"; then
   ln -s /mnt/isp_gc1084.conf /etc/jffs2/
 fi
 ```
-##What is working
+## What is working
 Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 15fps. PTZ works well, and so does the microphone. 
 
-##Lights and IR
+## Lights and IR
 I can't get the lights or the IR lights to work yet.
 I tried:
 ```
