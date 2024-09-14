@@ -48,4 +48,4 @@ I tried:
 echo "1" > /sys/user-gpio/WHITE_LED
 echo "1" > /sys/user-gpio/IR_LED
 ```
-
+Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 15fps. PTZ works well, and so does the microphone. I haven't yet figured out how to use the speaker.
