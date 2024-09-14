@@ -41,7 +41,6 @@ if [ ! -e "$FILE"; then
   #make the symlink
   ln -s /mnt/isp_gc1084.conf /etc/jffs2/
 fi
-
-
-
 ```
+I can't get the lights or the IR lights to work yet.
+
