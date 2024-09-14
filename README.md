@@ -1,4 +1,4 @@
-# ak3918-gc1084-camera RTSP integration for Home Assistant
+# ak3918-gc1084-camera RTSP integration for Home Assistant with go2rtc
 ## 
 Brand: Teruhal
 Model: TC20
