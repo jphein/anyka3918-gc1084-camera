@@ -54,7 +54,7 @@ if [ ! -e "$FILE"; then
 fi
 ```
 ## What is working
-Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 15fps. PTZ works well, and so does the microphone. 
+Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 5-15fps. PTZ works well, and so does the microphone. 
 PTZ? = 
 Pan Tilt Zoom - basically the camera controls.
 
