@@ -1,4 +1,4 @@
-# ak3918-gc1084-camera ESPhome integration for Home Assistant
+# ak3918-gc1084-camera RTSP integration for Home Assistant
 ## 
 Brand: Teruhal
 Model: TC20
