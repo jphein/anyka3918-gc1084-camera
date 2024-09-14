@@ -8,6 +8,12 @@ WiFi: ZT9101UV20
 Camera sensor: 
 APP: Yi IOT https://play.google.com/store/apps/details?id=com.yunyi.smartcamera&pcampaignid=web_share
 
+## What's working?
+* Video
+* Sound
+* PTZ - Pan and Tilt
+* Wifi
+
 I got my camera from temu: https://share.temu.com/A5qeTOEZVbA Price is in the $3 to $8 range. 
 ![image](https://github.com/user-attachments/assets/c23b2242-16df-46c6-87fc-d2d16095efb9)
 
