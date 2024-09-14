@@ -57,6 +57,7 @@ I tried:
 echo "1" > /sys/user-gpio/WHITE_LED
 echo "1" > /sys/user-gpio/IR_LED
 ```
+the IR LEDs are automaticly controlled by a photoresistor? 
 
 ## Sound from the builtin speaker in the camera
 I haven't yet figured out how to use the speaker.
