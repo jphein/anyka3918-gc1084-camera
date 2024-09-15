@@ -87,4 +87,40 @@ echo "1" > /sys/user-gpio/ircut_b
 echo "1" > /sys/user-gpio/ircut_b
 ```
 ## PTZ from Home assistant
-I will probably use the telnet integration
+I will probably use the telnet integration, or maybe the webui endpoints if I can figure out the token, and auth. 
+After that I'll use the webrtc custom card ptz controls:
+```
+##Custom
+##configuration.yaml
+
+script:
+  camera_ptz:
+    sequence:
+      - service: rest_command.camera_ptz_start
+        data:
+          param: "{{ direction }}"
+      - service: rest_command.camera_ptz_stop
+        data:
+          param: "{{ direction }}"
+##card
+
+type: 'custom:webrtc-camera'
+entity: ...
+ptz:
+  service: script.camera_ptz
+  data_left:
+    direction: directionleft
+  data_right:
+    direction: directionright
+  data_up:
+    direction: directionup
+  data_down:
+    direction: directiondown
+```
+## Home assistant with the webrtc custom card works well for video and audio
+What works
+* Fullscreen
+* Picture in Picture
+* Digital Zoom with scroll wheel
+* Download a snapshot
+  
