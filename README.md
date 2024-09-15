@@ -117,6 +117,8 @@ ptz:
   data_down:
     direction: directiondown
 ```
+From: https://github.com/AlexxIT/WebRTC/wiki/PTZ-Config-Examples
+
 ## Home assistant with the webrtc custom card works well for video and audio
 What works
 * Fullscreen
