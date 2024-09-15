@@ -53,6 +53,13 @@ if [ ! -e "$FILE"; then
   ln -s /mnt/isp_gc1084.conf /etc/jffs2/
 fi
 ```
+
+Actually, I already found it decompressed in /tmp
+I can just make a symlink from there.
+```
+ln -s /tmp/sensor_ko_and_isp_conf/isp_gc1084.conf /etc/jffs2/
+```
+
 ## What is working
 Camera works from both main freed and sub feed. pretty good quality, but pretty slow high latency at 5-15fps. PTZ works well, and so does the microphone. 
 PTZ? = 
