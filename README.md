@@ -88,7 +88,7 @@ echo "1" > /sys/user-gpio/ircut_b
 ```
 ## PTZ from Home assistant
 I will probably use the telnet integration, or maybe the webui endpoints if I can figure out the token, and auth. 
-After that I'll use the webrtc custom card ptz controls:
+After that I'll use the [webrtc custom card](https://github.com/AlexxIT/WebRTC?tab=readme-ov-file#custom-card) ptz controls:
 ```
 ##Custom
 ##configuration.yaml
