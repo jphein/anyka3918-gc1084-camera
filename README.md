@@ -5,7 +5,7 @@ Model: TC20
 FCC ID: 2BEXJ-TC20
 MPU: AK3918EN080 V200 CDSJ09J23
 WiFi: ZT9101UV20
-Camera sensor: 
+Camera sensor: GC1084
 APP: Yi IOT https://play.google.com/store/apps/details?id=com.yunyi.smartcamera&pcampaignid=web_share
 
 ## What's working?
