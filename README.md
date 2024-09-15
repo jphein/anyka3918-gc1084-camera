@@ -83,8 +83,8 @@ This is different from the IR LEDs, the LEDs are automaticly controlled by a pho
 When this is on it makes everything pink. It was stuck on for me the next day for some reason. 
 To turn off
 ```
-echo "1" > /sys/user-gpio/ircut_b
-echo "1" > /sys/user-gpio/ircut_b
+echo "1" > /sys/user-gpio/ircut_a
+#echo "1" > /sys/user-gpio/ircut_b
 ```
 ## PTZ from Home assistant
 I will probably use the telnet integration, or maybe the webui endpoints if I can figure out the token, and auth. 
