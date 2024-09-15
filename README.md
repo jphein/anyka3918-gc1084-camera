@@ -79,3 +79,5 @@ To turn off
 echo "1" > /sys/user-gpio/ircut_b
 echo "1" > /sys/user-gpio/ircut_b
 ```
+## PTZ from Home assistant
+I will probably use the telnet integration
