@@ -87,6 +87,27 @@ survive a partially-bad flash, not just a good one.
 `/etc/jffs2` remains a last-resort fallback if `/data` is somehow absent. It is
 warned about loudly and the marker records which store it landed in.
 
+### A legacy mtd6 marker is migrated, not just reported
+
+If a marker is found at `/etc/jffs2/unit.json`, the next boot **copies it to
+`/data` and removes the mtd6 copy**. The state is reachable going forward, not
+only historically — the no-`/data` fallback above can create one.
+
+Migration earns its place on the case that **cannot self-heal**. A MAC-derived
+name erased by a slot-`C` update re-derives identically, so for those this is
+only tidying. An `--unit-name` override is *not* derivable: erase it and the
+name JP chose is gone for good, with no error anywhere.
+
+Three properties worth knowing:
+
+- **The name is copied verbatim and never recomputed.** A migration that
+  re-derived would silently rename any unit carrying an override — the precise
+  failure it exists to prevent. Only the `store` field is rewritten.
+- **The mtd6 copy is removed only after the `/data` copy is in place.** A power
+  cut leaves one marker or two, never zero.
+- **With no `/data` at all, the legacy marker is left intact** and warned about,
+  rather than destroyed with nowhere to put it.
+
 ### The property that makes a wipe survivable
 
 The name is **derived from the MAC**, so it is idempotent. If a marker is ever
@@ -313,6 +334,22 @@ tell a fresh read from a cached one.
 
 **`card_build` is cosmetic. Never compare it.** Two sigil names can sort any
 way at all. Compare `card_hash` against git history.
+
+**Two states that are *unidentifiable*, not *behind*** — a different problem
+with a different fix (rewrite from a clean checkout). `whoami.sh` calls both out
+rather than printing them as if they were values:
+
+| state | means |
+|---|---|
+| `card_hash: "dev"` | git could not identify the checkout at write time. A **sentinel that reads like a value** — this card cannot say which commit produced it. |
+| `card_dirty: true` | the tree had uncommitted changes, so the hash does not fully describe the card. |
+| `card_stock: true` | written with `--stock`: none of the project fixes, and no identity toolkit. |
+
+**Parse these with a real JSON parser, not a regex.** `dirty` and `stock` are
+unquoted booleans; a pattern that treats them as strings gets them **silently**
+wrong, which is exactly the failure an inventory exists to catch. That is why
+the enumerator parses on the workstation rather than on the device, where no
+JSON parser is available.
 
 ### Reading identity costs no token — and that is load-bearing
 
