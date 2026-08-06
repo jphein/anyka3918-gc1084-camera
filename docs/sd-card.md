@@ -110,9 +110,8 @@ So:
 * **Via the web UI** → `settings_submit.sh` writes **both** copies when the card is mounted, so
   web UI changes stick correctly. That is the easiest correct path.
 
-`tools/write-sd-card.sh` prints a reminder saying settings are copied to flash on "FIRST boot
-only". That is true of `Factory/config.sh` but not of the system as a whole — `gergehack.sh`
-re-syncs on every boot as above.
+`tools/write-sd-card.sh` prints this as its first reminder after writing a card, so you get told
+at the point it matters.
 
 ## The sensor problem
 
