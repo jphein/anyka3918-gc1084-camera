@@ -22,8 +22,9 @@ are preserved verbatim in `upstream/`.
   file the stock firmware executes from the SD card; `anyka_hack/gergehack.sh` is the hack script
   itself; `anyka_hack/gergesettings.txt` holds its settings. The subdirectories are prebuilt ARM
   binaries: `rtsp/` and `libre_anyka_app/` (video), `ptz/` (pan/tilt), `web_interface/` (the web UI
-  the README uses for PTZ), `snapshot/` + `jpeg_snapshot/` (stills), and the `*_demo/` dirs for
-  audio and motion detection.
+  — its CGI scripts are the source of truth for [`../docs/web-ui.md`](../docs/web-ui.md), and all
+  twelve md5-match what is deployed on the camera), `snapshot/` + `jpeg_snapshot/` (stills), and
+  the `*_demo/` dirs for audio and motion detection.
 - **`isp_sensor_conf/`** — ISP sensor tuning configs. **Note the gap:** upstream ships configs for
   gc1034, gc1054, sc1135, sc1235, sc1245, sc2232, F37, and h63 — but *not* gc1084, which is this
   camera's sensor. See the warning below.
@@ -33,16 +34,26 @@ are preserved verbatim in `upstream/`.
 - **`IR_shutter.txt`** — upstream notes on the IR cut filter (the thing that clicks), which the
   root README covers.
 
-## ⚠️ `isp_gc1084.conf` is not here, and not recoverable from this repo
+## ✅ `isp_gc1084.conf` has been recovered
 
-The GC1084 ISP config does not exist upstream and does not exist anywhere on the workstation.
-It lives **only on the camera**, compressed inside `/etc/jffs2/sensor.tgz` and extracted at boot
-to `/tmp/sensor_ko_and_isp_conf/isp_gc1084.conf`. The root README's fix is a symlink to that
-extracted copy.
+**This was previously listed here as missing and unrecoverable. It is not — it was recovered on
+2026-08-05 and is committed.**
 
-If that camera's flash is ever reset or the chip replaced, the sensor tuning for this exact
-sensor is lost. **Next time the camera is reachable over telnet, copy that file off and commit
-it here** — it is the one irreplaceable artifact in the whole project:
+The GC1084 ISP config does not exist upstream and existed nowhere else on the workstation. It
+lived **only on the camera**, compressed inside `/etc/jffs2/sensor.tgz` and extracted at boot to
+`/tmp/sensor_ko_and_isp_conf/isp_gc1084.conf`. It is now in this repo:
+
+| File | Path | Size | md5 |
+|---|---|---|---|
+| ISP tuning | [`sd-card-original/isp_gc1084.conf`](sd-card-original/isp_gc1084.conf) | 104238 | `85bab13dcdef87574341d713eb366f96` |
+| Sensor module | [`sd-card-original/sensor_gc1084.ko`](sd-card-original/sensor_gc1084.ko) | 7551 | |
+| Both, archived | [`sd-card-original/sensor.tgz`](sd-card-original/sensor.tgz) | 28805 | |
+
+The checksum matches the copy on the running camera, verified over telnet.
+
+So the irreplaceable artifact is no longer a single point of failure — if the camera's flash is
+reset or the chip replaced, the sensor tuning can be restored from here. To re-pull it from a
+camera anyway:
 
 ```
 # on the camera
@@ -50,6 +61,9 @@ cat /tmp/sensor_ko_and_isp_conf/isp_gc1084.conf
 # or grab the whole archive
 cat /etc/jffs2/sensor.tgz
 ```
+
+How the symlink works around the 64 KB flash partition is covered in
+[`../docs/sd-card.md`](../docs/sd-card.md#the-sensor-problem).
 
 ## ⚠️ Before prepping an SD card — two traps in `gergesettings.txt`
 
