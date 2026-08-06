@@ -81,6 +81,32 @@ interesting the problem is.
 
   Corollary that falls out of it: **sort such a list by frequency and read the
   bottom first.** A value appearing once is the one no convention covers.
+
+- **A fix whose evidence is an *absence* needs a way to observe the behaviour** —
+  or the next person re-reports the bug. (Anyka volume, 2026-08-06; cost a false
+  *"still broken"* verdict within the hour.) Two halves:
+
+  **(a) Duplicated correct implementations are camouflage for the missing one.**
+  Two call sites handled volume and one did not — an asymmetry a reader could
+  spot. Centralising removed the bug *and* the only visible clue it had ever
+  existed.
+
+  **(b) Ship an observation with it.** `anyka_http.py level` answers *"is it
+  wired up?"* in one command, where a code read cannot. **Put the reason in the
+  new code's comment**, or someone deletes it as redundant.
+
+  Applies to any invisible-by-design fix: a removed workaround, a defaulted config
+  key, an inherited behaviour. **If the diff is mostly deletions, ask what a
+  reviewer is meant to point at — and if the answer is "nothing", build the thing
+  they can.**
+
+  > **The compounding is the part that generalises.** After centralising, all three
+  > call sites look identical, so **the correct state and the defect are
+  > byte-identical from a code read** — only behaviour distinguishes them. The
+  > false verdict came from checking for the *old shape* and finding none. That is
+  > the same failure as ["proximity is not protection"](#improvement-backlog) seen
+  > from the reviewer's side: **the reader is looking where the evidence used to
+  > be, and a good fix is precisely what moves it.**
 - **A uniform result across varied inputs means a broken instrument, not a
   conclusion.** Six different `&level=` values that all report the same thing are
   telling you about your *test*, not the system. Seen four times today: a `ps`
