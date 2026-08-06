@@ -63,6 +63,21 @@ REPO_URL="https://github.com/jphein/anyka3918-gc1084-camera"
 # See docs/ptz.md and reference/patches/README.md.
 LAA_STOCK_MD5="3458b8598ca9525a0d5e693ff5fd5d5c"   # stock, and what we ship
 
+# Speaker volume. ak_adec_demo hardcodes the DAC volume to 6 - the MAXIMUM of a
+# 0-6 range - with no CLI flag and no getenv. Upstream saw a volume that would
+# not change, concluded "volume control fails when running", and told everyone to
+# pre-attenuate the mp3. The control never failed; it was never exposed. And the
+# workaround cannot work: the file is UPSTREAM of the ASLC compressor, which
+# normalises it straight back up (10.3 dB measured into the camera, inaudible out).
+#
+# One byte fixes it. The `mov r1,#N` immediate at file offset 9356 (0xa48c-0x8000)
+# feeds ak_ao_set_dac_volume, and because that value reaches the DAC by ioctl it
+# sits DOWNSTREAM of ASLC and cannot be normalised away. ASLC is left ENABLED -
+# it was never the problem, and with it on, quiet clips stay audible.
+ADEC_STOCK_MD5="21a59c852dfb7af2fbaebd0994e24570"   # stock == the level-6 variant
+ADEC_VOL_OFFSET=9356                                # 0xa48c - 0x8000
+ADEC_DEFAULT_LEVEL=4                                # JP: "let's try in the middle for now"
+
 # THE RULE BOTH OF THOSE TEACH, and the reason it is repeated in a shell script
 # rather than left in the docs: a string that looks broken may be a DEAD PATH
 # WHOSE FAILURE IS LOAD-BEARING. Every one of these binaries contains sysfs paths
@@ -470,6 +485,68 @@ IRCUT
 [ -f /mnt/anyka_hack/identity/name-unit.sh ] && sh /mnt/anyka_hack/identity/name-unit.sh &
 IDENTITY
   fi
+
+  # --- 9. the speaker volume ladder: six one-byte variants of ak_adec_demo.
+  #
+  # ctl takes an optional &level=1..6 and runs ak_adec_demo.volN. Absent,
+  # malformed or out-of-range falls back to the default binary (level
+  # $ADEC_DEFAULT_LEVEL), and a missing variant falls back the same way - which
+  # is deliberate, because a volume control that can wedge the speaker into
+  # silence is worse than no volume control.
+  #
+  # That fallback is exactly why this section has to exist and has to be checked.
+  # Without it a fresh card has no ladder at all: every .volN is missing, every
+  # -x test fails, and the camera quietly reverts to the too-loud stock level
+  # with no error anywhere. A hook that silently never runs is this project's
+  # signature failure, so the result is ASSERTED below, not assumed.
+  #
+  # Generated here rather than committed: six 36 KB binaries that differ from
+  # each other by ONE BYTE do not belong in git.
+  ADEC_DIR="$MNT/anyka_hack/ak_adec_demo"
+  if [ -f "$ADEC_DIR/ak_adec_demo" ]; then
+    # .orig is seeded ONCE, from whatever the backup shipped, and every variant
+    # is cut from .orig rather than from the live file. Without that guard a
+    # second run would ladder an already-laddered binary and every level would be
+    # wrong by the previous default - silently, since all six would still exist.
+    [ -f "$ADEC_DIR/ak_adec_demo.orig" ] || cp "$ADEC_DIR/ak_adec_demo" "$ADEC_DIR/ak_adec_demo.orig"
+
+    adec_base="$(md5sum "$ADEC_DIR/ak_adec_demo.orig" | cut -d' ' -f1)"
+    if [ "$adec_base" != "$ADEC_STOCK_MD5" ]; then
+      warn "ak_adec_demo base is $adec_base, expected stock $ADEC_STOCK_MD5 - NOT building the ladder"
+      NOTES+=("speaker volume ladder SKIPPED: base binary is $adec_base, not stock.")
+      NOTES+=("  -> ctl's &level= will silently fall back to the default at every level.")
+    else
+      echo "==> building the speaker volume ladder (default level $ADEC_DEFAULT_LEVEL)"
+      for n in 1 2 3 4 5 6; do
+        cp "$ADEC_DIR/ak_adec_demo.orig" "$ADEC_DIR/ak_adec_demo.vol$n"
+        printf "\0$n" | dd of="$ADEC_DIR/ak_adec_demo.vol$n" \
+          bs=1 seek="$ADEC_VOL_OFFSET" conv=notrunc status=none
+      done
+      cp "$ADEC_DIR/ak_adec_demo.vol$ADEC_DEFAULT_LEVEL" "$ADEC_DIR/ak_adec_demo"
+
+      # REPORT what was installed; do not merely assert a constant. A gate that
+      # checks a stale expectation is worse than no gate, because it reads as
+      # verification - and repo/device copies have already been observed to
+      # drift once today (see docs/backlog.md item 8).
+      for n in 1 2 3 4 5 6; do
+        printf '      vol%s  %s\n' "$n" "$(md5sum "$ADEC_DIR/ak_adec_demo.vol$n" | cut -d' ' -f1)"
+      done
+
+      # The self-check with teeth: vol6 IS the stock file, zero bytes changed,
+      # because stock is already level 6. So one comparison proves BOTH that the
+      # base was stock and that ADEC_VOL_OFFSET landed on the right byte. If the
+      # offset were wrong, vol6 would differ from stock and this would catch it.
+      adec_v6="$(md5sum "$ADEC_DIR/ak_adec_demo.vol6" | cut -d' ' -f1)"
+      if [ "$adec_v6" != "$ADEC_STOCK_MD5" ]; then
+        warn "ladder self-check FAILED: vol6 is $adec_v6, must equal stock $ADEC_STOCK_MD5"
+        NOTES+=("volume ladder is WRONG: vol6 must be byte-identical to stock.")
+        NOTES+=("  -> ADEC_VOL_OFFSET is suspect. Do not ship this card.")
+      fi
+    fi
+  else
+    warn "ak_adec_demo not found in the backup - this card will have no volume control"
+    NOTES+=("ak_adec_demo MISSING: ctl's &level= will do nothing on this card.")
+  fi
 fi
 
 # --- the build marker. Written on EVERY card including --stock.
@@ -573,7 +650,8 @@ echo "    fixable on this board - the sense input the vendor driver wants does n
 echo "    exist here. See docs/ptz.md before trying."
 echo "  * IDENTITY IS SPLIT ON PURPOSE. The camera's name lives in its own flash"
 echo "    (/data/unit.json, mtd7 - the partition the stock updater does not touch)"
-echo "    and survives both a card swap and a firmware update; the build version lives"
+echo "    and survives a card swap; the stock update.sh never targets slot D, so a"
+echo "    vendor firmware update leaves it alone too. The build version lives"
 echo "    on the card (/anyka_hack/build.json) and follows it. So moving a card"
 echo "    between cameras moves the BUILD, never the NAME - which is what makes a"
 echo "    bag of identical cameras inspectable. Ask a camera who it is with:"
