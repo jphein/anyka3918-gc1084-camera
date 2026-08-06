@@ -1,0 +1,6 @@
+# This repo is PUBLIC and deliberately scrubbed: no real addresses, SSIDs or
+# credentials. Anything here exists to keep it that way.
+
+# Your camera list for tools/fleet-status.sh. Real IPs/hostnames — never commit.
+# The tool ships with no host list baked in precisely so this file can be local.
+tools/hosts.local
