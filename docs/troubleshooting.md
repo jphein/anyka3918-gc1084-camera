@@ -246,9 +246,32 @@ Fixed by adding a `my-iot-ssid` SSID on one **access point** (`192.168.1.2`) mir
 AP's trunk, so only the interface definition was missing. Configs were backed up on the AP at
 `/root/backups/`.
 
-The longer-term choice is either to keep that mirror SSID, or to edit `gergesettings.txt` to say
-`wifi_ssid=my-home-ssid` and drop the mirror. Note that editing it means editing the **card** —
-see [sd-card.md](sd-card.md#settings-precedence).
+### ✅ Resolved: the mirror SSID is permanent, and this camera moved off it
+
+This section used to leave a choice open — keep the mirror SSID, or point `gergesettings.txt` at
+the main network and drop it. **Both, as it turns out, and the split is deliberate:**
+
+* **This camera was migrated to its own SSID.** One edit to `gergesettings.txt` on the **card**,
+  and [the self-heal](sd-card.md#the-wifi-credentials-self-heal-from-gergesettingstxt-on-every-boot)
+  propagates it into the vendor config at the next boot. Verified back on the network in ~40 s.
+* **The mirror SSID stays broadcasting indefinitely**, because *other* cameras on that VLAN
+  depend on it and cannot be moved as cheaply.
+
+> ⚠️ **Do not "finish the migration" by retiring the mirror SSID.** That is the tidy-looking action
+> and it is the wrong one. Cameras of other makes on that VLAN join by that SSID, and at least one
+> family of them can only be re-provisioned from **its own setup access point** — meaning a
+> physical visit per unit, not a config change.
+>
+> **The cost of an SSID retirement is not paid by the device you are thinking about.** Enumerate
+> what joins by a name before removing the name; a leftover-looking SSID is often load-bearing for
+> something you are not currently working on.
+
+> 🔑 **Why the migration was one edit rather than a fleet operation, and why that is not general.**
+> This camera's credentials live in a plain-text file on removable media, so changing them is a
+> file edit on a card you are already holding. Devices whose provisioning is a *protocol* rather
+> than a *file* are far more expensive to move — and on some of them the only mechanism to apply
+> a change is also the only mechanism that reveals it failed. **Cheap to re-provision is a
+> property of the device, not of the network change.**
 
 ### 🔑 Name the VLAN by its tag, never by a nickname
 
