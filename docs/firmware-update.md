@@ -18,37 +18,82 @@ account. Nobody had read it until 2026-08-06. This is what it does, what it does
 
 ### The bootloader is out of the updater's reach — MEASURED
 
-The boot log gives the offset directly:
+The `ENV` partition (`mtd3`, read out 2026-08-06) gives the layout directly:
 
 ```
-SF: 1417200 bytes @ 0x31000 Read: OK        u-boot reads the kernel from 0x31000
+kernel_addr=31000        erase_env=sf probe ...; sf erase 0x20000 0x2000
 ```
 
-So `KERNEL` (mtd1) begins at **0x31000 = 196 KB**, and the partition sizes close
-the arithmetic exactly:
+which matches the boot log's `SF: 1417200 bytes @ 0x31000 Read: OK`. So:
 
-| region | bytes |
-|---|---|
-| before `KERNEL` (0x31000) | 200,704 |
-| `mtd1`…`mtd7` | 8,065,024 |
-| **flash total** (`mtd0`, 0x800000) | **8,388,608** |
-| unallocated at the end | 122,880 |
+| region | span | contents |
+|---|---|---|
+| **0x00000 – 0x20000** | **128 KB** | **u-boot — no partition name maps here** |
+| 0x20000 – 0x22000 | 8 KB | the u-boot environment (`erase_env` erases this) |
+| 0x22000 – 0x31000 | 60 KB | unaccounted |
+| 0x31000 → | | `KERNEL`, `A`, `B`, `C`, `D` in order |
+| 0x7E0000 – 0x800000 | 128 KB | spare at the end |
 
-**196 KB before `KERNEL` and 120 KB after `D`, neither inside any named
-partition.** `updater` resolves targets *only* by name through
-`/sys/kernel/partition_table/<NAME>/mtd_index`, and the live table is
-`KERNEL→1 MAC→2 ENV→3 A→4 B→5 C→6 D→7`. **No name maps to the bootloader, so no
-invocation can erase u-boot.**
+> ⚠️ **An earlier version of this page said "196 KB before `KERNEL`, neither
+> inside any named partition." The first half is right and the second is wrong.**
+> `MAC` and `ENV` *are* named partitions and they sit inside that 196 KB, at
+> 0x20000. The arithmetic was sound; the sentence summarising it over-reached —
+> the same shape as the collision-cap claim in
+> [identity.md](identity.md). **Prose drifts, data doesn't.**
 
-*Inferred:* that the 196 KB sits at offset 0. It must — the SoC boots from the
-start of SPI flash — but no dump has been read.
+**The narrower claim is the true one, and it is still sufficient: u-boot
+occupies roughly the first 128 KB, and no partition name maps to it.**
 
-**ANSWERED 2026-08-06 (`lucid-camera`): nothing resolves to `mtd0`.** The table
-is exactly `KERNEL→1 MAC→2 ENV→3 A→4 B→5 C→6 D→7`; `mtd0` is `"spi0.0"`, the
-whole 8 MB flash, and **no name maps to it**. Since `updater` builds
+**ANSWERED 2026-08-06 (`lucid-camera`): nothing resolves to `mtd0` either.** The
+table is exactly `KERNEL→1 MAC→2 ENV→3 A→4 B→5 C→6 D→7`; `mtd0` is `"spi0.0"`,
+the whole 8 MB flash, and no name maps to it. Since `updater` builds
 `/sys/kernel/partition_table/<NAME>/mtd_index` and errors when the directory is
 absent, **there is no string you can pass that reaches the bootloader.** Not a
 convention being honoured — there is no name to type.
+
+### 🔴 `bootdelay=0` — MEASURED, and it is the open risk
+
+Straight out of the environment:
+
+```
+bootdelay=0
+console=ttySAK0,115200n8
+bootargs=... root=/dev/mtdblock4 rootfstype=squashfs init=/sbin/init
+```
+
+**There is no countdown to interrupt.** Whether this u-boot build still polls
+for a keypress at zero delay is a compile-time option that **cannot be read from
+the environment** — it needs the case open to settle. Until then, *a prompt is
+reachable* is an assumption, not a fact.
+
+### The `ENV` slot is writable from a running system — and that cuts both ways
+
+`ENV` is slot `3`, and `updater` resolves slots by generic sysfs lookup with **no
+name whitelist**. So `updater local ENV=<image>` would rewrite the u-boot
+environment **over the network, with no serial console** — and setting
+`bootdelay=3` would make every future flash recoverable at a prompt. `ipaddr`,
+`serverip` and `netmask` are already populated, which suggests network support
+is compiled in, so a reachable prompt plausibly means TFTP recovery rather than
+just a prompt.
+
+**Not recommended yet, for three reasons — the third found by arithmetic:**
+
+1. **A bad `ENV` write is a brick upstream of everything, including the clip.**
+   If u-boot cannot parse its environment it falls back to compiled-in defaults,
+   which may or may not boot this board.
+2. **`updater local ENV=` has never been run.** The mechanism is established;
+   that it works is **inferred from how `updater` resolves names, not measured.**
+3. ⚠️ **`/proc/mtd` says `ENV` is 4 KB. `erase_env` erases 8 KB at 0x20000.**
+   That is the signature of a *redundant* u-boot environment — two 4 KB copies
+   with a flags byte, where u-boot picks the valid one. **Writing only `mtd3`
+   would update one copy and leave the other stale**, and which one wins is
+   decided by a flags byte a naive image would get wrong. A u-boot environment
+   is `crc32 + data`; a wrong CRC is silently rejected and you get defaults.
+
+> **Order: get a console once with the clip and establish whether a prompt is
+> reachable at all. Only then consider setting `bootdelay` remotely.** Doing it
+> the other way risks bricking to gain a recovery path nobody has confirmed
+> exists.
 
 ### The console IS reachable — and my earlier write-up was wrong about this
 
