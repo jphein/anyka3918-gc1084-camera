@@ -49,9 +49,22 @@ Override the location with `BACKUP=/path/to/backup sudo -E tools/write-sd-card.s
 * `sensor_kern_module` points at the GC1084 module **on this card**. A camera with a different
   image sensor will not produce video until that line and `isp_gc1084.conf` are swapped for the
   right sensor.
-* `ffmpeg` is **not** in this repo (37 MB, re-downloadable), so a card built purely from repo
-  contents will have a dead "Run FFMPEG" button and a failing `app_restarter.sh`. The backup
-  tarball is a copy of the real card and does include it.
+> ⚠️ **The `ffmpeg/` directory is excluded from this repo**, so a card built purely from repo
+> contents is missing three things that the real card has:
+>
+> | Missing | Consequence |
+> |---|---|
+> | `ffmpeg` (37 MB binary) | Motion clips are never wrapped into MP4 |
+> | `wrap_mp4.sh` | The Events page's "Run FFMPEG" button does nothing |
+> | `app_restarter.sh` | **Nothing restarts `libre_anyka_app` if it dies** — no RTSP, no snapshots, until you reboot |
+>
+> That last one is the significant one, and it is easy to miss because the failure is silent
+> until the app happens to crash. `start_web_interface.sh` launches `app_restarter.sh`
+> unconditionally, so on a repo-built card that line fails quietly at every boot.
+>
+> The backup at `~/Backups/anyka-yicam-sd-2026-08-05/` is a copy of the real card and **does**
+> include all three, so `tools/write-sd-card.sh` produces a complete card. Only a card assembled
+> by hand from `reference/sd-card-hack/` is affected.
 
 ## Settings precedence
 
@@ -171,6 +184,7 @@ working sensor config. Fix it if you rebuild the card.
 /anyka_hack/ptz/                      pan/tilt daemon
 /anyka_hack/libre_anyka_app/          RTSP (554) + snapshots (3000)
 /anyka_hack/web_interface/            busybox httpd + CGI web UI
+/anyka_hack/web_interface/www/cgi-bin/ctl   fast control endpoint — OURS, not upstream
 /anyka_hack/snapshot/, jpeg_snapshot/ stills helpers
 /anyka_hack/rtsp/                     standalone RTSP
 /anyka_hack/ffmpeg/                   MP4 wrapping + app_restarter  (NOT in this repo)

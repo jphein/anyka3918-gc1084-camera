@@ -23,6 +23,8 @@ nothing to tell you the address changed.
 | Associated, has a lease, but no ports open | Card missing or hack not running — check UART or reseat the card |
 | Ports open, RTSP 404 on every path | `libre_anyka_app` not started; check `run_libre_anyka=1` |
 | Video works, PTZ accepted but nothing moves | You sent `init`, not **`init_ptz`**. See [ptz.md](ptz.md) |
+| RTSP works but port 3000 is dead | `libre_anyka_app` restarted under load and failed to rebind. [Overload](#-this-camera-is-trivially-overloaded) — reboot it |
+| Everything slow, timeouts, HA dropping frames | You are asking too much of a 400 MHz core. [Overload](#-this-camera-is-trivially-overloaded) |
 | Web UI redirects to login forever | Token invalid — [web-ui.md](web-ui.md#the-token) |
 | Pink/purple image | IR-cut filter position — [ptz.md](ptz.md#ir-cut-filter) |
 | A setting keeps reverting after reboot | The SD card is overwriting flash — [sd-card.md](sd-card.md#settings-precedence) |
@@ -64,6 +66,64 @@ Re-pointing the SSID to a different VLAN leaves the camera associated but still 
 lease, which strands it — its `udhcpc` will not re-request until the lease renews, which can be
 hours. **Reboot it over telnet while it is still reachable on the old VLAN, and flip the SSID
 during the boot.**
+
+## ⚠️ This camera is trivially overloaded
+
+**A 400 MHz single-core ARM926 with ~36.5 MB of usable RAM is doing H.264 encode, RTSP serving,
+JPEG snapshots, a CGI web server and motion detection at the same time.** It has no headroom.
+Treat every request to it as expensive.
+
+### It has already happened here
+
+On 2026-08-05 the camera hit **load average 4.95 with 3.6 MB RAM free**. `libre_anyka_app` died
+and was restarted, and **came back without binding port 3000** — so snapshots were dead while
+RTSP on 554 and the web UI on 80 kept working. That in turn broke a Home Assistant config save,
+because HA validates `still_image_url` before writing and got a connection failure.
+
+No single thing caused it. Four things landed on the same tiny CPU at once:
+
+* an endpoint sweep probing every port and path,
+* three HA switches polling on a 60-second timer,
+* HA pulling the video stream continuously,
+* and an `ffprobe` negotiating both RTSP streams, which is much heavier than grabbing one frame.
+
+Any one of these is fine. Together they were not.
+
+### Budget guidance
+
+| Do | Don't |
+|---|---|
+| Pull one frame with `curl` when you need a still | Run `ffprobe`/`ffmpeg` against the RTSP streams casually — stream negotiation is expensive |
+| Poll GPIO/state at 5 minutes or slower | Poll several HA switches at 60 s each |
+| Use [`/cgi-bin/ctl`](web-ui.md#cgi-binctl--our-fast-control-endpoint) for automation | Drive automation through `/cgi-bin/webui`, which costs **0.2–1.0 s of CPU per request** |
+| Hold one RTSP consumer (go2rtc) and fan out from there | Point several clients straight at the camera |
+| Space out bulk investigation | Sweep endpoints while video is streaming |
+
+The stock web UI's cost is not incidental: `header` URL-decodes the query string with a
+per-character shell loop that spawns subshells, then the page is rendered in full even when the
+request is only writing one line to a FIFO. That is the whole reason `ctl` exists.
+
+### Recovering from an overload
+
+Restarting `libre_anyka_app` is the obvious move, but **a full reboot is the more reliable
+one** — it clears sockets stuck in `TIME_WAIT` and the memory fragmentation that a restart under
+pressure inherits.
+
+Why the snapshot server specifically fails to come back is **not confirmed**. Two plausible
+explanations, neither tested:
+
+* **Bind failure.** If port 3000 was still held from the previous process and the binary does not
+  set `SO_REUSEADDR`, the bind fails while the app carries on and still serves RTSP. This fits
+  the observed "554 yes, 3000 no" shape.
+* **Memory.** At 3.6 MB free, a JPEG encode buffer allocated at snapshot-server startup could
+  simply fail, with the app continuing without that listener.
+
+> The process that restarts the app is `/mnt/anyka_hack/ffmpeg/app_restarter.sh`, and it runs
+> continuously (started by `start_web_interface.sh`). **It is in the `ffmpeg/` directory, which
+> this repo excludes**, so its restart policy is undocumented here and cannot be read from the
+> repo — which is a good argument for vendoring at least the small shell scripts out of that
+> directory even if the 37 MB `ffmpeg` binary stays out. See
+> [`reference/README.md`](../reference/README.md).
 
 ## Known rough edges
 

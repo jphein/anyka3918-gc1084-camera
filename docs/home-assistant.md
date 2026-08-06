@@ -47,6 +47,23 @@ Home Assistant with the [WebRTC custom card](https://github.com/AlexxIT/WebRTC) 
 > "Custom element doesn't exist". `go2rtc` is still enabled. Re-enable WebRTC before re-adding
 > the card.
 
+## ⚠️ Go easy on the polling
+
+**This camera has no CPU headroom.** Three HA switches polling every 60 s, plus a live video
+stream, plus anything else touching it, is enough to push it to load 4.95 and knock the snapshot
+server off port 3000 — which then breaks HA config saves, because HA validates `still_image_url`
+before writing.
+
+Practical limits:
+
+* Poll camera state at **5 minutes or slower**, not 60 seconds.
+* Let **go2rtc hold the single RTSP connection** and have everything else consume it from there,
+  rather than pointing several clients at port 554.
+* Point automation at [`/cgi-bin/ctl`](web-ui.md#cgi-binctl--our-fast-control-endpoint), not
+  `/cgi-bin/webui` — the stock page costs 0.2–1.0 s of camera CPU per request.
+
+Full incident write-up and budget guidance: [troubleshooting.md](troubleshooting.md#-this-camera-is-trivially-overloaded).
+
 ## PTZ
 
 PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_up`, `_down`,

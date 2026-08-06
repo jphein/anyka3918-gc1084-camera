@@ -81,6 +81,14 @@ Write a card for a new camera:
 sudo tools/write-sd-card.sh /dev/sdX --ssid <your-ssid>
 ```
 
+> ⚠️ **Go easy on it.** This is a 400 MHz single-core ARM926 with ~36 MB of RAM doing H.264
+> encode, RTSP, snapshots and a CGI web server at once. We pushed one to load 4.95 with a
+> handful of 60-second pollers and an endpoint sweep, and `libre_anyka_app` came back without
+> its snapshot server. Poll in minutes, not seconds, and point automation at
+> [`/cgi-bin/ctl`](docs/web-ui.md#cgi-binctl--our-fast-control-endpoint) rather than the stock
+> web UI, which costs 0.2–1.0 s of camera CPU per request.
+> [→ budget guidance](docs/troubleshooting.md#-this-camera-is-trivially-overloaded)
+
 ## ⚠️ Security
 
 **These cameras must live on an isolated, cloud-blocked VLAN.** That is not generic caution —
