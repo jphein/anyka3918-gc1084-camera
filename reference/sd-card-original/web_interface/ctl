@@ -1,0 +1,69 @@
+#!/bin/sh
+# Minimal fast control endpoint for the Anyka AK3918 hack web interface.
+#
+#   GET /cgi-bin/ctl?token=<token>&command=<cmd>
+#
+# The stock /cgi-bin/webui is slow (0.2-1.0s) because every request sources
+# `header`, which URL-decodes QUERY_STRING with a per-character bash loop that
+# spawns subshells - painful on a 400MHz ARM926 - and then renders the whole
+# control page. This does neither: it parses two known-safe parameters, writes a
+# single whitelisted line into the ptz_daemon FIFO, and returns "OK".
+#
+# Same token auth as the stock UI: ?token= must match line 1 of /tmp/token.txt,
+# which /cgi-bin/login_validate.sh writes on successful login.
+#
+# Commands are WHITELISTED. Never interpolate $c into a shell command - it comes
+# straight off the network.
+#
+# Install to: /mnt/anyka_hack/web_interface/www/cgi-bin/ctl  (mode 755)
+
+echo "Content-type: text/plain"
+echo ""
+
+t=""
+c=""
+for kv in $(echo "$QUERY_STRING" | tr '&' ' '); do
+  case "$kv" in
+    token=*) t="${kv#token=}" ;;
+    command=*) c="${kv#command=}" ;;
+  esac
+done
+
+if [ ! -f /tmp/token.txt ]; then
+  echo "ERR notoken"
+  exit 0
+fi
+if [ "$t" != "$(sed 1q /tmp/token.txt)" ]; then
+  echo "ERR auth"
+  exit 0
+fi
+
+case "$c" in
+  up|down|left|right|left_up|right_up|left_down|right_down)
+    echo "$c" > /tmp/ptz.daemon ;;
+  init_ptz|init_ir)
+    echo "$c" > /tmp/ptz.daemon ;;
+  ircut_on)
+    echo "set_ir_cut 1" > /tmp/ptz.daemon ;;
+  ircut_off)
+    echo "set_ir_cut 0" > /tmp/ptz.daemon ;;
+  white_led_on)
+    echo 1 > /sys/user-gpio/WHITE_LED ;;
+  white_led_off)
+    echo 0 > /sys/user-gpio/WHITE_LED ;;
+  ir_led_on)
+    echo 1 > /sys/user-gpio/IR_LED ;;
+  ir_led_off)
+    echo 0 > /sys/user-gpio/IR_LED ;;
+  status)
+    printf 'ircut_a=%s white_led=%s ir_led=%s\n' \
+      "$(cat /sys/user-gpio/ircut_a 2>/dev/null)" \
+      "$(cat /sys/user-gpio/WHITE_LED 2>/dev/null)" \
+      "$(cat /sys/user-gpio/IR_LED 2>/dev/null)"
+    exit 0 ;;
+  *)
+    echo "ERR cmd"
+    exit 0 ;;
+esac
+
+echo "OK"

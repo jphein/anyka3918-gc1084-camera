@@ -207,6 +207,7 @@ and all of them redirect to `/cgi-bin/login` when it does not match.
 | `/cgi-bin/events` | yes | `token` | List recorded motion clips |
 | `/cgi-bin/video` | yes | `token`, `file=<name>` or `scan=true` | Play a clip, or run ffmpeg to wrap new ones |
 | `/cgi-bin/del_video.sh` | yes | `token`, `file=<name>`, `undo=<name>` | Delete / restore a clip |
+| `/cgi-bin/ctl` | yes | `token`, `command=<cmd>` | **Not upstream — added by this project.** Fast, whitelisted control endpoint. [See below](#cgi-binctl--our-fast-control-endpoint). |
 
 `header` and `footer` are sourced fragments, not endpoints.
 
@@ -250,6 +251,49 @@ The three IR commands are reachable but have **no buttons in the UI** — `irini
 
 The page also renders an endpoint card advertising `rtsp://<ip>:554/vs0` as Main and
 `.../vs1` as Sub. Both are real — see [Media endpoints](#media-endpoints).
+
+### `/cgi-bin/ctl` — our fast control endpoint
+
+> **This file is not part of Gerge's project and you will not find it upstream.** It was written
+> for this repo. Source: [`reference/sd-card-original/web_interface/ctl`](../reference/sd-card-original/web_interface/ctl).
+> Install to `/mnt/anyka_hack/web_interface/www/cgi-bin/ctl`, mode `755`.
+
+```
+GET /cgi-bin/ctl?token=<t>&command=<cmd>
+```
+
+Returns `text/plain`: `OK`, or `ERR notoken` / `ERR auth` / `ERR cmd`.
+
+It exists because **the stock `/cgi-bin/webui` takes 0.2–1.0 s per request.** Two reasons: every
+request sources `header`, whose URL-decoder is a per-character shell loop spawning subshells —
+brutal on a 400 MHz ARM926 — and then it renders the entire control page just to write one line
+to a FIFO. `ctl` does neither. It parses two known parameters, writes one whitelisted line, and
+returns three bytes.
+
+| `command=` | Effect |
+|---|---|
+| `up` `down` `left` `right` | Relative move, 10° |
+| `left_up` `right_up` `left_down` `right_down` | Relative diagonal |
+| `init_ptz` | Home both axes |
+| `init_ir` | Initialise the IR-cut driver |
+| `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` |
+| `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` |
+| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` |
+| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` |
+
+Note it uses the **daemon command names directly** (`left`, `init_ptz`) rather than the stock
+UI's abbreviations (`ptzl`, `ptzinit`), and it exposes LED and `status` commands the stock UI has
+no way to reach.
+
+**It does not source `header`, so it is not affected by the injection described above** — it
+matches `token=*` and `command=*` with `case`, never interpolates the command into a shell
+command, and rejects anything not on the whitelist. That makes `ctl` the right thing to point
+automation at.
+
+> ⚠️ It is not a fix for the stock CGIs. `webui`, `system`, `settings`, `settings_submit.sh`,
+> `events`, `video`, `del_video.sh` and `pwd_change` sit in the same directory and remain
+> exploitable. Adding `ctl` reduces how often you *use* the vulnerable pages; it does not remove
+> them. The isolated VLAN is still the control that matters.
 
 ### System — `/cgi-bin/system`
 
