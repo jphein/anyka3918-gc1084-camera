@@ -456,3 +456,49 @@ Two ways to avoid it entirely:
 Note the interaction with polling frequency: **more pollers means more logins means more
 contention**, so this is a second argument for the conservative interval, independent of CPU
 cost. Four pollers at 60 s is four token overwrites a minute.
+
+## `/etc/jffs2` is 87.5 % full and there is no easy win — investigated 2026-08-06
+
+Surfaced by `luna-volume` from the `disk_jffs2_*` fields, which the contract hadn't
+documented. **8 kB free of 64 kB.** That partition is `mtd6` = slot **`C`** of the stock
+updater, so it is both nearly full *and* already known to be wiped wholesale by any firmware
+update carrying a `usr.jffs2` (see `reference/usr-sbin/README.md`).
+
+### The obvious fix does not work — do not try it
+
+`sensor.tgz` is **28 805 bytes, ~75 % of everything on the partition**, and
+`/mnt/sensor.tgz` is **byte-identical** (`5ca12b43954766f42ca5cf76e80e4f83`). It looks like
+pure duplication begging to be deleted.
+
+**It is not. Three things read the `/etc/jffs2` copy specifically:**
+
+```
+/mnt/Factory/config.sh:25    tar -xzf /etc/jffs2/sensor.tgz -C /mnt
+                             (jffs2 is the SOURCE; /mnt's copy is DERIVED from it at boot)
+/usr/sbin/camera.sh:58-59    extracts it to /tmp for the sensor .ko and ISP conf
+                             — this is the video path
+/usr/sbin/wifi_driver.sh:420 copies it to /tmp and back
+```
+
+**Deleting it would cost the sensor driver, i.e. video.** The 28 kB is structural, not waste.
+
+### What is actually removable: ~1.2 kB
+
+`gergesettings.txt.bak-iot` (1068 B, left over from the SSID-rename incident) and `passwd-`
+(140 B). That moves 8 kB → ~9.2 kB free. **Marginal, and not worth spending unless something
+is actually failing.**
+
+### So what protects us
+
+**Do not write anything new to `/etc/jffs2`.** That is the whole mitigation, and it is already
+policy — unit identity was sited in `/data` instead, a decision this measurement now
+retro-justifies rather than merely supports.
+
+Runtime writers to be aware of: `settings_submit.sh` (rewrites `gergesettings.txt`, 1072 B),
+`pwd_change` (`webui.hash`), and the CGIs generally. jffs2 needs a spare erase block (4 kB)
+to rewrite a file, and 8 kB is **two blocks** — thin but evidently working, since the
+partition has been in this state since at least 2024.
+
+**Assessment: a fragility to know about, not an emergency.** The failure mode if it does fill
+is a settings save that silently does not persist — which, on this device, is exactly the
+kind of thing that would be blamed on the web UI for a week.
