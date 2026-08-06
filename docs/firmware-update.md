@@ -12,15 +12,26 @@ account. Nobody had read it until 2026-08-06. This is what it does, what it does
 > **There is no network recovery from any bad flash**, because the exploit
 > trigger lives on `B`. See [the gate](#the-gate-recovery-first).
 
-> ⚠️ **Scope: this applies to two cameras, not the fleet.** JP has **two Anykas
-> and twelve icam365s**, and the icam365s are **EYEPLUS hardware** — a different
-> SoC, a different updater, a different everything. The card writer, this update
-> tooling and the OTA path are Anyka-only.
+> ⚠️ **Scope: this applies to ONE camera, not the fleet.** JP has **one Anyka**
+> and twelve **EYEPLUS** icam365s — a different SoC, a different updater, a
+> different everything. The card writer, this update tooling and the OTA path are
+> Anyka-only.
 >
 > **The parts that generalise are [identity](identity.md) and inventory**, and
-> even those would need a different *read* path on the EYEPLUS units — the
-> scheme travels, the transport does not. Do not mistake this page for the
-> fleet's upgrade path; it is the upgrade path for a sixth of it.
+> even those need a different *read* path on the EYEPLUS units — the scheme
+> travels, the transport does not. Do not mistake this page for the fleet's
+> upgrade path; **it is the upgrade path for a thirteenth of it.**
+>
+> ❌ **This said "two Anykas… a sixth of it" until 2026-08-06.** The second unit
+> was an **icam365 in an identical case** —
+> [tell them apart by OUI](hardware.md#-two-vendors-one-case--tell-them-apart-by-oui)
+> before assuming anything about a device in your hand.
+>
+> 🔑 **The consequence that matters is not the arithmetic.** With one Anyka and no
+> UART wired to it, **the spare card is that camera's only recovery path** — there
+> is no second unit to fall back on and no partition whose loss leaves a reachable
+> device. That raises the spare card from convenience to the sole fallback, which
+> is [what the gate below is protecting](#the-gate-recovery-first).
 
 ---
 

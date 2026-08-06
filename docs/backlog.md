@@ -388,9 +388,32 @@ interesting the problem is.
 
 ## The goal: this is a platform, not one repaired camera
 
-JP has **a bag of these**. So the unit of work is *a fleet that comes up correct
-and stays that way*, not *this camera made to behave*. That reorders everything
-below — a fix that only exists on one running device is worth roughly nothing.
+JP has **a bag of cheap cameras** — thirteen, of which **exactly one is an
+Anyka**. So the unit of work is *a fleet that comes up correct and stays that
+way*, not *this camera made to behave*. That reorders everything below — a fix
+that only exists on one running device is worth roughly nothing.
+
+> ❌ **This said "a bag of these" until 2026-08-06, meaning a bag of Anykas.**
+> There is one. The presumed second was an
+> [icam365 in an identical case](hardware.md#-two-vendors-one-case--tell-them-apart-by-oui).
+>
+> **The framing survives, but by a different route than the one written, and the
+> difference matters for what goes at the top of this list:**
+>
+> * **Weakened:** the card writer, the update tooling and the OTA path now serve
+>   **one device**. "It must work across the bag" was doing real ordering work for
+>   those, and it no longer applies to them.
+> * **Strengthened:** [identity and inventory](identity.md) are now **the only
+>   items here that operate at fleet scale** — twelve of the thirteen cameras are
+>   ones this repo's transport cannot yet reach.
+> * **Newly load-bearing:** with one Anyka and no UART wired to it, **the spare
+>   card is that camera's sole recovery path.** There is no second unit to fall
+>   back on, and no partition whose loss leaves a reachable device. Anything that
+>   risks the card is now a single point of failure rather than an inconvenience.
+>
+> ⚠️ **I have corrected the premise and deliberately not re-ordered the list**,
+> because which of those three effects should dominate is a call about priorities
+> rather than a fact about the fleet.
 
 **The test for any change: would a camera taken out of the bag today get it?**
 

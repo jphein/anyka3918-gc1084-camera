@@ -1,5 +1,32 @@
 # Hardware
 
+## ⚠️ Two vendors, one case — tell them apart by OUI
+
+**JP's Anyka and his EYEPLUS icam365s ship in visually identical enclosures.** This is a real
+hazard, not a curiosity: on 2026-08-06 an icam365 was powered up as "the second Anyka" and
+**twenty minutes went into diagnosing a WiFi fault that did not exist** — SSID, VLAN binding, PSK
+hashes, AP station dumps, all clean, because the unit was never an Anyka.
+
+**The reliable discriminator is the MAC OUI, and it needs no access to the device:**
+
+| OUI prefix | Vendor |
+|---|---|
+| `c0:4b:24` | **Anyka** (this camera) |
+| `a8:4f:a4` | **EYEPLUS** (icam365) |
+
+**Read it from any AP's station dump** — no telnet, no credentials, no opening the case. Do that
+before concluding anything about a device in your hand.
+
+> 🔑 **The failure that produced this was a search-scope error, not a hardware one.** The APs were
+> searched for the Anyka OUI, one unit was found, and that became *"the second camera isn't
+> associating"* rather than *"there is no second Anyka here."* **A true statement about what was
+> searched, promoted to a claim about what exists** — the same shape as
+> [the repo is not the world](backlog.md), arriving through a station dump instead of a grep.
+>
+> The give-away was in the output all along: a search for an OUI can only ever return devices
+> **with that OUI**, so it can never tell you a device of another vendor is present. **The query
+> could not have produced the answer that was wanted.**
+
 ## Identification
 
 | | |

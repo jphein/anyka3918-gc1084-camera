@@ -1,9 +1,13 @@
 # Identity and version — what is this camera, and what is it running?
 
-JP has a bag of these. Until now every card was the same card and every camera
-was the same camera: no per-unit name, no way to ask a running device which
-build it is on, and a DHCP reservation as the only thing telling two of them
+JP has a bag of cheap cameras. Until now every card was the same card and every
+camera was the same camera: no per-unit name, no way to ask a running device
+which build it is on, and a DHCP reservation as the only thing telling any two
 apart. This is the fix for [backlog](backlog.md) gap 1.
+
+> **Only one of them is an Anyka.** The rest are EYEPLUS icam365s in
+> [visually identical cases](hardware.md#-two-vendors-one-case--tell-them-apart-by-oui),
+> which is precisely why a self-applied name beats a reservation table.
 
 **The one-line answer**, over telnet or dropbear:
 
@@ -24,11 +28,17 @@ clock:
 
 ---
 
-> **Fleet scope.** JP has two Anykas and twelve **EYEPLUS icam365s**. Almost
+> **Fleet scope.** JP has **one Anyka** and twelve **EYEPLUS icam365s**. Almost
 > everything else in this repo is Anyka-only — the card writer, the updater
-> work, the GPIO map. **This scheme is the part that travels**: a unit names
-> itself from its own MAC, write-once, with no registry, which is a property of
-> the *approach* rather than of this SoC.
+> work, the GPIO map. **That makes this scheme the only part of the repo that
+> operates at fleet scale**: a unit names itself from its own MAC, write-once,
+> with no registry, which is a property of the *approach* rather than of this SoC.
+>
+> ❌ **This said "two Anykas" until 2026-08-06.** The presumed second unit was an
+> **icam365 in an identical case**; see
+> [telling them apart](hardware.md#-two-vendors-one-case--tell-them-apart-by-oui).
+> The correction *strengthens* the case for this scheme rather than weakening it —
+> **twelve of the thirteen cameras are the ones the transport does not reach yet.**
 >
 > What does **not** travel is the transport. `whoami.sh` reads two files over
 > telnet because that is what this firmware offers. An EYEPLUS unit needs its
