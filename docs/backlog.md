@@ -17,6 +17,20 @@ interesting the problem is.
   `DrwAck` all mean *parsed*, not *honoured*.
 - **Prefer the SD card to the squashfs root.** Card edits are recoverable by
   pulling the card. Root edits are not.
+- **When you learn something, grep for every place that says otherwise.** A doc
+  gets edited where the new fact lands, not where the old one lives — so it ends
+  up carrying a claim and its own refutation, paragraphs apart, both reading
+  authoritative. Three instances in one day: `troubleshooting.md` stating a
+  green-fraction IN band of 1.06–1.39 while `ptz.md` recorded two confirmed IN
+  readings that band scores as misses; a `SPK_PA must be high before each run`
+  precondition that is 0 before *every* run by design, because the player raises
+  it itself; and `usr-sbin/README.md` calling `/sbin/updater` "not yet analysed"
+  four paragraphs above the section analysing it. **The stale half is the
+  dangerous half**, because it reads like the checked one.
+- **A repo copy and the deployed file are two different things.** The repo `ctl`
+  had eight comment lines the camera's copy did not. Editing the device copy and
+  committing it would have silently deleted them. Diff before you overwrite, and
+  make the two hash the same afterwards.
 
 ---
 
@@ -154,7 +168,29 @@ Filed rather than built. The camera genuinely cannot do it (`gpio-rf_feed`
 absent, fallback ADC constant at 2999), and the HA-side implementation is
 straightforward but not urgent.
 
-## 2. Speaker volume — ASLC is levelling everything
+## 2. Speaker volume — ✅ SOLVED 2026-08-06, shipped in `df16c66`
+
+**`ctl` now takes an optional `&level=1..6`** (DAC device volume 0–5), default **4**,
+falling back to the default binary on absent/malformed/out-of-range input and to the
+stock `/usr/bin` player if a card variant is missing. Six one-byte variants live at
+`/mnt/anyka_hack/ak_adec_demo/ak_adec_demo.vol1..6`, the original is kept as `.orig`,
+and `/usr/bin` is untouched.
+
+**ASLC was never disabled and never needed to be.** The DAC value goes out via ioctl,
+which is *downstream* of the compressor — measured: device volume moved 5 → 1 while
+every ASLC parameter stayed byte-identical (`ena:1`, `aslc volume 6`), and JP confirmed
+the A/B/A/B alternation audibly. That is also why upstream's pre-attenuate-the-file
+workaround cannot work: the file is *upstream* of ASLC.
+
+The `strb → NOP` patch that would have disabled ASLC was **never applied** — its proof
+chain (demo struct offset +44 → `filterObj[0xa8]`) was never closed, and it turned out
+to be unnecessary. Do not apply it.
+
+**Not established:** whether all six rungs are perceptually distinct. Only 6, 4 and 2
+have been listened to; 1, 3 and 5 have not, and the codec's gain table (in the kernel
+DAC driver) is unread. Do not describe the ladder as evenly graded.
+
+The original analysis follows, kept because the reasoning is what made the fix findable.
 
 Automatic Sound Level Control is enabled (`## ASLC OPEN OK ena:1`), so a 10.3 dB
 difference measured *in the file on the card* is inaudible coming out. Confirmed:
