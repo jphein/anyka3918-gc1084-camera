@@ -5,8 +5,12 @@ account. Nobody had read it until 2026-08-06. This is what it does, what it does
 *not* check, and the sequence for getting our own image onto a camera.
 
 > 🔴 **Nothing in this repo has been flashed to a camera.** Every tool here
-> produces files. As of 2026-08-06 no camera has taken a custom image, and
-> **cam1 has no recovery path** — see [the gate](#the-gate-recovery-first).
+> produces files. As of 2026-08-06 no camera has taken a custom image.
+>
+> **Recovery on cam1 is: open the case, clip on a pogo clip, connect
+> USB-serial.** JP has done this before — it is how the hack was worked out.
+> **There is no network recovery from any bad flash**, because the exploit
+> trigger lives on `B`. See [the gate](#the-gate-recovery-first).
 
 ---
 
@@ -39,37 +43,60 @@ invocation can erase u-boot.**
 *Inferred:* that the 196 KB sits at offset 0. It must — the SoC boots from the
 start of SPI flash — but no dump has been read.
 
-*Open:* whether anything in `/sys/kernel/partition_table/` resolves to **mtd0**
-(the whole flash). If nothing does, "the updater cannot erase u-boot" is
-structural rather than a convention we are honouring.
+**ANSWERED 2026-08-06 (`lucid-camera`): nothing resolves to `mtd0`.** The table
+is exactly `KERNEL→1 MAC→2 ENV→3 A→4 B→5 C→6 D→7`; `mtd0` is `"spi0.0"`, the
+whole 8 MB flash, and **no name maps to it**. Since `updater` builds
+`/sys/kernel/partition_table/<NAME>/mtd_index` and errors when the directory is
+absent, **there is no string you can pass that reaches the bootloader.** Not a
+convention being honoured — there is no name to type.
 
-### But that console is not reachable on our cameras — and this is the blocker
+### The console IS reachable — and my earlier write-up was wrong about this
 
 u-boot is interactive (`U-Boot 2013.10.0-AK_V2.0.04`, console
-`ttySAK0,115200n8`), so recovery is *possible*. Reaching it is the problem.
-Upstream, `reference/hack-process.md:149`:
+`ttySAK0,115200n8`).
 
-> *"**Soldered a pin header** to the RX0 TX0 GND points **next to the wifi
-> chip**."*
-
-Bare pads. **Open the case, identify the pads on this board, solder three wires,
-attach a USB-serial adapter.**
-
-⚠️ **Every UART artifact we hold is from a different board revision** —
-`#1 Nov 14 2022 zhoujiahui` versus our `#2 Sep 25 2023 chensheng`. So pad
-location, u-boot version and autoboot behaviour on our units are **family-level
-inference, not measurement**. Nobody has had a serial console on one of JP's
-cameras.
-
-⚠️ **Autoboot delay is 0** on the revision we have logs for. Catching u-boot
-means spamming the serial line from power-on, not waiting for a prompt.
-
-> **The rule: no partition is flashed on a unit until UART is wired on *that*
-> unit and a u-boot prompt has actually been seen on it.**
+> 🔴 **This page previously said "nobody has had a serial console on one of JP's
+> cameras." That was false.** JP has had UART on his own camera — *"uart is how
+> we figured all this out"* — and he uses a **pogo clip**: spring-loaded pins
+> held against the pads. No soldering, no pin header, nothing permanent.
 >
-> Not because a flash is likely to fail. Because **the first failure is also the
-> last thing you learn** — `updater` reports success and reboots, and the device
-> dies later at first read of the missing region.
+> **The claim was an inference from the absence of artifacts in this repo.** Every
+> UART log here is from a different board revision, so "the repo has no evidence
+> of a console on JP's units" was true — and it was reported as "no console has
+> ever been brought up on JP's units", which is a claim about the world. JP's own
+> work simply isn't in the repo. See [backlog](backlog.md) — *the repo is not the
+> world.*
+
+**So the real recovery cost is: unscrew the case, clip on, connect USB-serial.**
+Repeatable, non-destructive, on demand, with a tool JP already owns and has
+already used successfully on this hardware. Not "solder blind to bare pads using
+another revision's photos".
+
+### ⚠️ But *had UART once* is not *can interrupt u-boot now*
+
+Two different facts, and only the second is a recovery path:
+
+| fact | status |
+|---|---|
+| a console can be brought up on cam1 | **established** — JP has done it |
+| **the boot can be interrupted to reach a u-boot prompt** | **unverified on cam1** |
+
+**Autoboot delay is 0** on the revision we have logs for, so catching u-boot
+means spamming the serial line from power-on rather than waiting for a prompt.
+A console that comes up *after* the kernel has already booted shows you a login,
+not a bootloader — and a bootloader is what re-flashes a dead partition.
+
+> **Confirm a u-boot prompt actually appears on cam1 the next time the case is
+> open.** It costs nothing extra while in there, and it is the distinction that
+> would otherwise be discovered at the worst possible moment.
+
+### The gate as it now stands
+
+- **Steps 2 and 3 (no flash writes): proceed.** Unchanged.
+- **Step 4 (first real flash): JP has the clip and adapter to hand when it
+  runs.** The meaningful precaution is *not flashing unattended*, so recovery is
+  minutes away rather than a discovery. Requiring UART be *proven* first would
+  mean opening the case to establish that we could open the case.
 
 ---
 
@@ -121,7 +148,7 @@ uImage  root.sqsh4  usr.sqsh4  usr.jffs2  audio_update.tgz
 |---|---|---|---|
 | `KERNEL` | 1 | uImage | **No** — u-boot loads it, nothing boots |
 | `A` | 4 | `/` squashfs | **No** — `root=/dev/mtdblock4`, kernel panics |
-| `B` | 5 | `/usr` squashfs | **Candidate** — see below |
+| `B` | 5 | `/usr` squashfs | **No** — see below. Answered 2026-08-06. |
 | `C` | 6 | `/etc/jffs2` | 🔴 **NEVER** |
 | `D` | 7 | `/data` | 🔴 **FORBIDDEN** |
 
@@ -148,22 +175,35 @@ and `D → 7` resolves, so **`D=` would flash it**. Any update tooling we write
 must treat it as forbidden; invoking it erases identity on every camera it
 touches.
 
-### Is `B` survivable? One unknown decides it
+### `B` is NOT survivable — the exploit trigger lives on it
 
-`B` mounts *after* boot: the kernel starts, `/` mounts from `A`,
-`init=/sbin/init` runs from `A`. So a corrupt `/usr` may still leave a booting
-device.
+`B` mounts *after* boot, so a corrupt `/usr` looked like it might still leave a
+booting device. It does not, and the reason is exact.
 
-**The deciding fact: which partition holds the binary that executes
-`/Factory/config.sh`?**
+**`/usr/sbin/service.sh` is what executes `/Factory/config.sh`** — and
+`/usr/sbin` is `/dev/mtdblock5`, which is slot `B` (confirmed with `df /usr/sbin`
+by `lucid-camera`, 2026-08-06):
 
-- On **`A`** → a bad `B` still boots, the card's exploit still fires, telnet
-  still comes up, and `B` can be re-flashed over the network. **`B` becomes
-  recoverable without UART.**
-- On **`B`** → nothing is survivable and everything gates on the soldering iron.
+```
+service.sh:179   if test -d /mnt/Factory ; then
+service.sh:180       FACTORY_TEST=1
+service.sh:90    if [ $FACTORY_TEST = 1 ]; then
+service.sh:91        /mnt/Factory/config.sh
+```
 
-**Unresolved.** `reference/usr-sbin/` contains no reference to `Factory` or
-`config.sh`, so the trigger is in a binary or a script not yet dumped.
+**The entire SD exploit is a directory-existence test on removable media.** And
+the chain that reaches it is on `B` too: `rc.local:34` → `/usr/sbin/service.sh start`.
+
+> **So a bad `B` flash destroys `service.sh`, the exploit never fires,
+> `gergehack.sh` never runs, telnet never comes up.** No network recovery, for
+> any partition.
+
+**Every flash write on this hardware has exactly one recovery path: the pogo
+clip and a u-boot prompt.** There is no partition whose loss leaves a
+network-reachable device.
+
+*(`/` is `/dev/root` = mtd4 = `A`, confirmed separately — so `A` was correctly
+ruled out; the trigger simply isn't there either.)*
 
 ---
 
@@ -279,13 +319,21 @@ required and never the reason to proceed.
 
 ## Sequence
 
-| # | step | writes flash? | gated on UART? |
+| # | step | writes flash? | precondition |
 |---|---|---|---|
-| 1 | Wire UART on the target unit, see a u-boot prompt | no | — |
-| 2 | `special.sh`-only tarball, self-disarming, TF path | **no** | no |
-| 3 | Round-trip `B` unchanged, verify, build image | **no** | no |
-| 4 | Flash that image to `B` | **yes** | **yes** |
-| 5 | `B` plus one added file | **yes** | **yes** |
-| 6 | `A`, then `KERNEL` | **yes** | **yes** |
+| 1 | Confirm a **u-boot prompt** appears on cam1 (not just a console) | no | next time the case is open |
+| 2 | `special.sh`-only tarball, self-disarming, TF path | **no** | none — recovery is pulling the card |
+| 3 | Round-trip `B` unchanged, verify, build image | **no** | a read-only `mtdblock5` dump |
+| 4 | Flash that image to `B` | **yes** | **clip + adapter to hand, not unattended** |
+| 5 | `B` plus one added file | **yes** | same |
+| 6 | `A`, then `KERNEL` | **yes** | same |
 
-Steps 2 and 3 are built and tested. **Never `C`. Never `D`.**
+Steps 2 and 3 are **built and tested** (`tools/fw/selftest.sh`, 25 assertions,
+no camera required). Step 3 needs a dump before it can run against the real
+partition.
+
+**Never `C`. Never `D`.**
+
+> The precaution on step 4 is *not flashing unattended* — so that a bad write is
+> minutes from recovery rather than a discovery. Requiring UART be *proven*
+> first would mean opening the case to establish that we could open the case.

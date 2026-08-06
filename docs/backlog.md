@@ -93,6 +93,29 @@ interesting the problem is.
   beside it. At that frequency it is not bad luck, it is **the dominant mode**.
   Tables are usually dumps — measured. Summaries are usually unsourced and drift.
 
+- **The repo is not the world. "No evidence here" is not "it never happened."**
+  On 2026-08-06 a firmware write-up stated *"nobody has had a serial console on
+  one of JP's cameras"* and gated a whole plan on the cost of getting one —
+  soldering to bare pads located from another board revision's photos. **JP had
+  had UART on his own camera all along**; it is how the hack was worked out, and
+  he uses a pogo clip, so the real cost was *unscrew and clip*.
+
+  The reasoning was sound right up to the last step. Every UART artifact in
+  `reference/` genuinely is from a different revision — so *"this repo holds no
+  evidence of a console on JP's units"* was **true**. It was then written down as
+  a claim about the world, and the search scope silently became the system scope.
+
+  > **The tell: a sentence about what nobody has done, sourced entirely from
+  > what you have read.** A repo records what someone chose to commit; JP's own
+  > bench work was never going to be in it.
+
+  Cheap remedy, and it is what actually worked here: **state the absence as an
+  absence, and address it to whoever would know.** *"I can find no record of UART
+  on these units — has anyone had a console on one?"* costs one sentence and
+  invites the correction. The assertive version invites agreement instead. JP
+  volunteered the answer within minutes of being told what we believed —
+  **because we told him what we believed.**
+
 - **A sweep built from what you expect to find will miss what you didn't expect to
   be there.** A real address survived four separate scrubs on 2026-08-06 because
   every sweep was assembled from a mental model of where addresses live, and the
