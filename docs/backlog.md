@@ -76,11 +76,25 @@ identical text rendered at gain 0.307 and 1.0 measures −26.7 dB and −16.4 dB
 
 `ak_adec_demo` imports `ak_ao_set_aslc_volume`, `ak_ao_set_dac_volume` and
 `ak_ao_enable_eq`, and hardcodes them — usage takes only rate, channels, type and
-path. Currently DAC volume 6, DEV volume 5, ASLC volume 6.
+path. In `main` at `0xa484`, both are `mov r1, #6` immediates: DAC volume 6, ASLC
+volume 6, against a range of 0–6. **There is a volume control; it is pinned at
+maximum and never exposed on the command line.**
 
-**Prefer a card-side wrapper over patching `/usr/bin/ak_adec_demo`** — `ctl` calls
-it by bare name, so PATH shadowing is a legitimate seam and keeps the root
-filesystem untouched.
+Upstream found the symptom and stopped there. The card's own
+`anyka_hack/ak_adec_demo/README.md` says *"it is waaayyyy too loud (this is
+probably because volume control fails when running) … so I recommend lowering the
+volume of the mp3 file"*. That workaround is self-defeating: attenuating the file
+just gives ASLC more headroom to normalise back up, which is exactly the effect
+measured here (−26.7 dB vs −16.4 dB in the file, inaudible out of the speaker).
+
+**Patch the card's copy, not `/usr/bin`.** `/mnt/anyka_hack/ak_adec_demo/ak_adec_demo`
+is byte-identical to the squashfs original (`21a59c852dfb7af2fbaebd0994e24570`) and
+already ships with the hack, so it is the natural seam: recoverable by pulling the
+card, and it belongs in `tools/write-sd-card.sh` rather than on one live device.
+Each level is a one-byte change (`e3a01006` → `e3a0100N`); invoke by absolute path.
+
+*Refuted:* PATH shadowing. `ctl` does call `ak_adec_demo` by bare name, but every
+directory on `PATH` is squashfs, so there is nowhere to put the shadowing binary.
 
 ## 3. Watchdog catches death, not hangs
 
