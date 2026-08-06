@@ -24,7 +24,7 @@ time_source=192.168.8.1
 time_zone=GMT-08:00
 
 #WIFI
-wifi_ssid=iot
+wifi_ssid=my-iot-ssid
 wifi_password=<REDACTED>
 
 #if this camera has modified rootfs that does not launch anyka_ipc [default 0]

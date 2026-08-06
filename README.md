@@ -34,7 +34,7 @@ Verified against a live camera on **2026-08-05**.
 |---|---|
 | Address | `192.168.1.20` — the camera VLAN, alongside the other cameras |
 | DHCP | Static reservation `anyka-cam1`, so the address cannot be recycled |
-| SSID | `iot` (2.4 GHz only) |
+| SSID | `my-iot-ssid` (2.4 GHz only) |
 | Main stream | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @20 fps + PCM A-law |
 | Sub stream | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @20 fps + PCM A-law |
 | Snapshot | `http://192.168.1.20:3000/snapshot.jpeg` — ~32 KB JPEG, no auth |

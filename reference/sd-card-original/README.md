@@ -64,17 +64,17 @@ root README's snippet. Fix it in both if you rebuild the card.
 
 ## The WiFi problem that took this camera offline
 
-`wifi_ssid=iot`, but as of 2026-08-05 **no access point on the property broadcast `iot`** — all
+`wifi_ssid=my-iot-ssid`, but as of 2026-08-05 **no access point on the property broadcast `my-iot-ssid`** — all
 access points were checked. The SSID had been renamed to `my-home-ssid` (same VLAN, and verified to use
 the **same PSK**), so the camera was looking for a network that no longer existed. That is why
 it never even attempted 802.11 association and no AP logged a failed auth from it.
 
 Pinned to the exact date: the access point still has the pre-change backups, and
-`/etc/config/wireless.pre-iot-prefix-delete-2026-04-28` contains `option ssid 'iot'` and
-`option ssid 'iot-office'`. So the SSID was removed on **2026-04-28**, and the camera has been
+`/etc/config/wireless.pre-ssid-change-2026-04-28` contains `option ssid 'my-iot-ssid'` and
+`option ssid 'my-iot-ssid-office'`. So the SSID was removed on **2026-04-28**, and the camera has been
 offline since.
 
-Resolved by adding an `iot` SSID on one **access point** (`192.168.1.2`) as a mirror of
+Resolved by adding a `my-iot-ssid` SSID on one **access point** (`192.168.1.2`) as a mirror of
 `my-home-ssid` — `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key —
 bridged to a new `network.cams` interface on `br-lan.20`, the **cams VLAN**, so the camera now
 sits with the other cameras at `192.168.1.20` and inherits that VLAN's cloud-egress blocking. That VLAN
