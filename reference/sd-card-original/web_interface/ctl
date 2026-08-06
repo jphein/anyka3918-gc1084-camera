@@ -42,6 +42,45 @@ if [ "$t" != "$(sed 1q /tmp/token.txt)" ]; then
   exit 0
 fi
 
+# --- shared by play / playnow / stop --------------------------------------
+# Defined ONCE on purpose. play and playnow must agree exactly on what counts as
+# a valid request and which binary a level selects; two copies of that logic is
+# how they drift and one of them quietly starts doing something else.
+
+# Validates $f and selects the player binary for level $v into BIN.
+#
+# $f comes straight off the network and is interpolated into a command, so it is
+# validated hard: bare name only, no path, no extension, no dots, no slashes.
+# The directory and the .mp3 suffix are supplied by us, never by the caller.
+# Reject anything with a character outside [A-Za-z0-9_-].
+#
+# Echoes an ERR line and returns 1 on a bad request, so play and playnow fail
+# identically. Must NOT be called in a subshell - it sets BIN.
+_pick_player() {
+  case "$f" in
+    ""|*[!A-Za-z0-9_-]*) echo "ERR file"; return 1 ;;
+  esac
+  [ -f "/mnt/sounds/$f.mp3" ] || { echo "ERR nofile"; return 1; }
+  BIN=/mnt/anyka_hack/ak_adec_demo/ak_adec_demo
+  case "$v" in
+    [1-6]) [ -x "$BIN.vol$v" ] && BIN="$BIN.vol$v" ;;
+  esac
+  [ -x "$BIN" ] || BIN=ak_adec_demo
+  return 0
+}
+
+# Count of LIVE players, zombies excluded. See stop) for why that matters.
+_live_players() {
+  _n=0
+  for _p in $(pgrep -f ak_adec_demo 2>/dev/null); do
+    case "$(awk '{print $3}' /proc/$_p/stat 2>/dev/null)" in
+      Z|'') ;;
+      *) _n=$((_n+1)) ;;
+    esac
+  done
+  echo "$_n"
+}
+
 case "$c" in
   up|down|left|right|left_up|right_up|left_down|right_down)
     echo "$c" > /tmp/ptz.daemon ;;
@@ -78,15 +117,7 @@ case "$c" in
     # it is validated hard: bare name only, no path, no extension, no dots, no
     # slashes. The directory and the .mp3 suffix are supplied by us, never by
     # the caller. Reject anything with a character outside [A-Za-z0-9_-].
-    case "$f" in
-      ""|*[!A-Za-z0-9_-]*)
-        echo "ERR file"
-        exit 0 ;;
-    esac
-    if [ ! -f "/mnt/sounds/$f.mp3" ]; then
-      echo "ERR nofile"
-      exit 0
-    fi
+    _pick_player || exit 0
     # SPK_PA is the speaker power amplifier and sits at 0 on a cold boot;
     # without it the decoder runs happily and you hear nothing.
     echo 1 > /sys/user-gpio/SPK_PA
@@ -119,13 +150,32 @@ case "$c" in
     # Absent, malformed or out-of-range falls back to the default binary, which is
     # level 4. The final -x fallback is to the stock /usr/bin copy so that a
     # missing card file can never wedge the speaker into silence.
-    BIN=/mnt/anyka_hack/ak_adec_demo/ak_adec_demo
-    case "$v" in
-      [1-6]) [ -x "$BIN.vol$v" ] && BIN="$BIN.vol$v" ;;
-    esac
-    [ -x "$BIN" ] || BIN=ak_adec_demo
     setsid "$BIN" 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
     echo "OK"
+    exit 0 ;;
+
+  playnow)
+    # stop + play in ONE round trip. Measured: ctl play 0.133s, ctl stop 0.282s,
+    # so folding them saves ~0.28s of CGI+auth overhead per cycle. For a radio
+    # loop that is the difference between ~6% and ~2% dead air.
+    #
+    # The file is validated BEFORE anything is killed, deliberately: asking to
+    # play a clip that does not exist must NOT silence what is already playing.
+    # A bad request is a no-op, not a stop.
+    #
+    # SPK_PA is deliberately NOT dropped between the kill and the launch. stop)
+    # drops it because nothing follows; here it is raised again immediately, so
+    # dropping first would be a wasted sysfs write and a brief amp-off.
+    #
+    # Returns "OK STOPPED n" or "OK IDLE" - the same diagnostic stop) gives, so
+    # a caller can tell "interrupted a track" from "started from silence"
+    # without a second call. Errors match play): ERR file / ERR nofile.
+    _pick_player || exit 0
+    n=$(_live_players)
+    pkill -f ak_adec_demo 2>/dev/null
+    echo 1 > /sys/user-gpio/SPK_PA
+    setsid "$BIN" 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
+    if [ "$n" -gt 0 ]; then echo "OK STOPPED $n"; else echo "OK IDLE"; fi
     exit 0 ;;
   stop)
     # Stop playback. Idempotent by design: HA calls this speculatively, so
@@ -155,13 +205,7 @@ case "$c" in
     # back-to-back stops all claimed STOPPED 1, and only a >=2s gap gave IDLE.
     # HA calls this speculatively, so a phantom count is exactly the case that
     # matters. Field 3 of /proc/PID/stat is the state; skip Z.
-    n=0
-    for p in $(pgrep -f ak_adec_demo 2>/dev/null); do
-      case "$(awk '{print $3}' /proc/$p/stat 2>/dev/null)" in
-        Z|'') ;;
-        *) n=$((n+1)) ;;
-      esac
-    done
+    n=$(_live_players)
     pkill -f ak_adec_demo 2>/dev/null
     echo 0 > /sys/user-gpio/SPK_PA 2>/dev/null
     if [ "$n" -gt 0 ]; then echo "STOPPED $n"; else echo "IDLE"; fi
