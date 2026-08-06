@@ -48,6 +48,51 @@ nothing to tell you the address changed.
 | A setting keeps reverting after reboot | The SD card is overwriting flash — [sd-card.md](sd-card.md#settings-precedence) |
 | Video dead after saving web UI settings | The sensor dropdown reset `sensor_kern_module` — [sd-card.md](sd-card.md#the-sensor-problem) |
 
+## ⚠️ Measuring anything on this camera
+
+Two gotchas that **invalidate measurements silently**, and which have already produced a fiction
+in this project's own notes. Read these before trusting any number derived from snapshots.
+
+### The snapshot server returns cached frames
+
+**Polled faster than its encoder updates, port 3000 hands back the *same frame* — byte-identical,
+not merely similar.** Six consecutive fetches of an unchanging scene came back at luma
+`130.47` **six times to two decimal places**.
+
+> ⚠️ **A "noise floor" measured that way is fiction — it is a frame compared against itself.**
+> The real frame-to-frame noise on this camera is **±10–14**, not the ~3 that unpaced sampling
+> suggests.
+>
+> This retroactively weakens any earlier conclusion of the form "the difference was tiny, so
+> nothing happened", because a tiny difference may just mean you fetched one frame twice.
+
+**Pace your requests**, and **verify frames are actually distinct** — compare bytes or hashes,
+do not assume two fetches are two frames.
+
+### Use `curl`, not `urllib`
+
+The same server returns a **deterministic 502 to Python's `urllib`** while `curl` gets 200 every
+time — verified curl → urllib → curl back to back on the same endpoint.
+
+It also **truncates JPEGs mid-stream**. Validate the `FFD9` end-of-image marker before treating a
+downloaded frame as complete; a truncated frame will still decode to *something* and quietly skew
+whatever you measure from it.
+
+### On a watchdog box, `dmesg` is volatile evidence
+
+A GPIO sweep wedged the camera, and the **watchdog rebooted it — destroying the pre-hang `dmesg`
+that would have contained the diagnostic printk.** The recovery erased the evidence for the
+failure.
+
+**Stream kernel output somewhere non-volatile before doing anything that might hang the box** —
+to the SD card, or captured over [UART](hardware.md#serial-console).
+
+> **The cause of that wedge is undetermined.** It was initially attributed to a pin being a
+> reserved SPI/SD line; **that attribution has been withdrawn** — the disassembly shows a
+> `cmp r0, #49` guarding a printk, but the string it loads is
+> `"Error, gpio %d isn't config outpu level"`, which is about the *value*, not the pin. The two
+> cannot be reconciled, and no theory is being built on it. Logged as unexplained.
+
 ## The 2026 outage: a renamed SSID
 
 The camera was offline from **2026-04-28** to **2026-08-05**. It hardcodes `wifi_ssid=my-iot-ssid` in

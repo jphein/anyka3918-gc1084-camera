@@ -280,7 +280,7 @@ returns a few bytes.
 | `init_ir` | Initialise the IR-cut driver |
 | `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` |
 | `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
-| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
+| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--white-confirmed-dark-ir-unresolved) |
 | `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — **but the values are meaningless**, [see below](#the-status-command-works) |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
 | `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
@@ -301,11 +301,11 @@ thing to point automation at.
 build a stateful control on top of it.
 
 > This page briefly said the opposite. That was based on a claim about the kernel that
-> [turned out to be false when measured](ptz.md#readback-works).
+> [turned out to be false when measured](ptz.md#-readback-works-and-it-reads-the-physical-pad).
 >
-> One caveat survives: whether the read reflects the **pad** or the **output latch** is
-> undetermined. For `ircut_a` that distinction is academic — you can see the image change. For
-> the LED pins it matters, because they read back correctly and still produce no light.
+> Confirmed twice over: measured (`wrote 1 → reads 1`), then by disassembly —
+> `g_ak39_gpio_getpin` reads the **pin-state register**, twelve bytes away from the output data
+> register that `setpin` writes. It is a genuine hardware pad read.
 
 #### Sound playback
 

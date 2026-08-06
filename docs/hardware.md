@@ -94,18 +94,28 @@ The root filesystem is **read-only squashfs**. Anything you want to survive a re
 
 ## GPIO
 
-`/sys/user-gpio/` exposes exactly six pins. Full table and cautions are in
-[ptz.md](ptz.md#gpio-map). Reads work — a pin reads back what was written, with `wifi_en` the one
-unexplained exception. Summary: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24), `wifi_en` (34),
-`ircut_b` (41), `ircut_a` (42). **There is no microphone pin**, which is why the mic cannot be
-muted in hardware.
+`/sys/user-gpio/` exposes exactly six pins: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24),
+`wifi_en` (34), `ircut_b` (41), `ircut_a` (42). Full table and cautions in
+[ptz.md](ptz.md#gpio-map). **There is no microphone pin**, which is why the mic cannot be muted
+in hardware.
 
 Pin numbers were decoded from **this camera's own kernel** (`mtd1` dumped from the live device).
 They do **not** match upstream's firmware image, which is a different build — `ircut_b` exists
-here and not there. Of the six, only `SPK_PA` and `ircut_a` are confirmed to do anything — by
-direct observation (audible speech, visibly purple image) rather than by inference. `IR_LED` and
-`WHITE_LED` toggle and read back correctly but **light nothing**; see
-[ptz.md](ptz.md#lights--neither-ring-lights).
+here and not there.
+
+**Reads are real hardware reads.** Disassembly shows the two helpers hit different registers:
+
+```
+g_ak39_gpio_setpin(pin,val)  ->  WRITES  0xf00a000c + bank*4   (output data)
+g_ak39_gpio_getpin(pin)      ->  READS   0xf00a0018 + bank*4   (pin state)
+```
+
+So a readback reflects the **physical pad**, not the output latch — which is what makes the LED
+results meaningful: [the pads swing and nothing lights](ptz.md#lights--white-confirmed-dark-ir-unresolved),
+so whatever is wrong is downstream of the pin.
+
+`SPK_PA` and `ircut_a` are confirmed to drive real hardware by direct observation — audible
+speech, visibly purple image. `WHITE_LED` drives nothing. `IR_LED` is unresolved.
 
 ## I2C
 
