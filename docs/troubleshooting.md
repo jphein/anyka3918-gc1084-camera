@@ -52,7 +52,7 @@ Pinned to the exact date because the AP still had its pre-change backups:
 
 Fixed by adding an `iot` SSID on one **access point** (`192.168.1.2`) mirroring `my-home-ssid` —
 `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key — bridged to a new
-`network.cams` interface on `br-lan.CAMVLAN`, the **camera VLAN**. That VLAN was already tagged on that
+`network.cams` interface on `br-lan.20`, the **camera VLAN**. That VLAN was already tagged on that
 AP's trunk, so only the interface definition was missing. Configs were backed up on the AP at
 `/root/backups/`.
 

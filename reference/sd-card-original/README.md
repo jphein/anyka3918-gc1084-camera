@@ -76,7 +76,7 @@ offline since.
 
 Resolved by adding an `iot` SSID on one **access point** (`192.168.1.2`) as a mirror of
 `my-home-ssid` — `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key —
-bridged to a new `network.cams` interface on `br-lan.CAMVLAN`, the **cams VLAN**, so the camera now
+bridged to a new `network.cams` interface on `br-lan.20`, the **cams VLAN**, so the camera now
 sits with the other cameras at `192.168.1.20` and inherits that VLAN's cloud-egress blocking. That VLAN
 was already tagged on the AP's trunk; only the interface definition was missing. Prior configs
 are backed up on the AP at `/root/backups/wireless-backup-20260805-preiot.conf` and

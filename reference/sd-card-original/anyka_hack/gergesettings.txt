@@ -19,13 +19,13 @@ md_record_sec=0
 extra_args="-i 4 -u"
 
 #NTP time server (can be router IP or url)
-time_source=10.0.8.1
+time_source=192.168.8.1
 #NTP uses GMT 0 so the offset below is used for time zones
 time_zone=GMT-08:00
 
 #WIFI
 wifi_ssid=iot
-wifi_password=<REDACTED — same key as the jplovescl SSID>
+wifi_password=<REDACTED>
 
 #if this camera has modified rootfs that does not launch anyka_ipc [default 0]
 rootfs_modified=0
