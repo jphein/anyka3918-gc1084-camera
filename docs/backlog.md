@@ -82,6 +82,43 @@ interesting the problem is.
   Corollary that falls out of it: **sort such a list by frequency and read the
   bottom first.** A value appearing once is the one no convention covers.
 
+- **Before a repo's first push, a leak must be AMENDED OUT, not fixed forward.
+  A fix-forward publishes the thing you are fixing.** This is the single window in
+  a repository's life where history is free to rewrite — no clone exists, no
+  force-push is needed, nobody's work is at risk — and it closes the instant you
+  push.
+
+  Happened twice on 2026-08-06, and the second time is the instructive one: a
+  pre-publication scrub **found the leak**, fixed it in a follow-up commit, and
+  then pushed the whole history. The scrub worked. The disposal did not.
+
+  > **It is the only condition under which "the tree is clean, the history is not,
+  > accept it" is avoidable at zero cost** — and it is spent by the most natural
+  > motion available, which is to commit a fix.
+
+  ⚠️ **This rule has a placement problem worth stating inside it:** it only helps
+  someone *before* their first push, which is exactly when nobody is reading a
+  backlog. **If you are creating a repo, the check belongs in that repo's own
+  README or CLAUDE.md, not only here.**
+
+- **When a decision is made *because* of a condition, write the condition next to
+  it.** *"Drop the history sweep — moot"* was correct when made and rested
+  entirely on those repos staying private. They were published three hours later
+  and **nothing re-examined the decision**, because nothing recorded what it
+  depended on.
+
+  Four words would have carried it: **`moot — they're local`**. Then a later
+  reader sees the premise, and sees when it expires.
+
+  > **The premise moved because of the deciding party's own later action** — not
+  > an external change. That is the harder case: you will not notice your own
+  > move invalidating your own earlier reasoning, because from the inside it is
+  > just the next thing you did.
+
+  Same instinct as writing a disposal condition on a note: **a note that states
+  what would make it wrong is doing work the whole time it sits there**, and can
+  be retired by anyone rather than only by its author.
+
 - **A fix whose evidence is an *absence* needs a way to observe the behaviour** —
   or the next person re-reports the bug. (Anyka volume, 2026-08-06; cost a false
   *"still broken"* verdict within the hour.) Two halves:
