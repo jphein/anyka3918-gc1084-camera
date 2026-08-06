@@ -36,6 +36,11 @@ interesting the problem is.
   not; and `camera_set_ircut` hardcoding `return 0`. **Before believing a null or
   a uniform result, feed the instrument an input you already know differs** — if
   it cannot tell those apart, it cannot tell anything apart.
+  **Two of those four are in vendor code, and that is why they survived for
+  years**: the reporting layer and the thing being reported were written by the
+  same people, so nothing in the system ever disagreed with itself. A firmware
+  that always says `OK` is internally consistent and externally useless. Expect
+  the vendor's own success signals to be decorative until proven otherwise.
 - **A repo copy and the deployed file are two different things.** The repo `ctl`
   had eight comment lines the camera's copy did not. Editing the device copy and
   committing it would have silently deleted them. Diff before you overwrite, and
