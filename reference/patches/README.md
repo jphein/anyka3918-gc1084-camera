@@ -7,9 +7,23 @@ touched.
 Installed onto a card by [`tools/write-sd-card.sh`](../../tools/write-sd-card.sh), which
 **verifies the md5 before installing** and refuses on a mismatch.
 
-## `libre_anyka_app.node-ircut_a`
+## `libre_anyka_app.node-ircut_a` — 🔴 **shipped, regressed, now off by default**
 
 Fixes automatic day/night IR-cut switching, which has **never worked** on the 2023 build.
+
+> ### ⛔ It works. That is the problem.
+>
+> Making the app's day/night writes land means **the app's day/night loop starts reverting every
+> manual IR-cut toggle** — JP's Home Assistant switch went from working-for-weeks to *"toggles
+> then goes back to the position it was before."* Rolled back on the live camera; manual control
+> restored.
+>
+> `tools/write-sd-card.sh` **no longer installs this by default.** `--ir-cut-daynight` opts in.
+> There is no arbitration in this firmware: on a 2023 build you get automatic day/night **or**
+> reliable manual control. Given both LED rings are dark, automatic night mode has nothing to
+> switch to, so manual wins.
+>
+> [Full story](../../docs/ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
 
 | | |
 |---|---|
@@ -31,24 +45,24 @@ printf '/sys/user-gpio/ircut_a\0\0\0\0\0\0' \
   | dd of=libre_anyka_app bs=1 seek=17532 count=28 conv=notrunc
 ```
 
-> ⚠️ **Status: verified applied, effect NOT yet validated.** On the live camera the patched
-> binary is running, its md5 matches, and `strings` confirms the corrected path with `IR_LED`
-> untouched. **But the day/night code path has not been exercised** — it was applied at 09:00 in
-> stable daylight, when the app has no reason to switch. A watcher is capturing the first real
-> transition. Do not read this as "day/night switching is fixed"; read it as "the binary is
-> correct and running".
+> ❌ **RETRACTED: "verified applied, effect NOT yet validated."** This said the patch was correct
+> and running and merely awaiting its first day/night transition. **The transition came, and it
+> broke manual IR-cut control.** The effect is validated now, and it is not the wanted one.
+>
+> The wording was careful and still not careful enough: *"the binary is correct and running"* was
+> true, and it framed the only open question as **whether** the feature would work — when the live
+> question was **what else changes when it does.** A patch awaiting validation is not a neutral
+> state; it is a change whose consequences have not arrived yet.
 
 > ⚠️ **This patch is kernel-build-specific.** It is *wrong* on the 2022 build, whose node really
 > is `gpio-ircut_a`. That is why the card ships both binaries and
-> [selects one per boot](../../docs/sd-card.md#-one-card-works-in-any-of-these-cameras) rather
+> [selects one per boot](../../docs/sd-card.md#-the-per-boot-selection-one-card-works-in-any-of-these-cameras) rather
 > than baking a choice in at write time.
 
-> ⚠️ **Same reasoning as the regression below — read that first.** This patch was justified by
-> "the string is wrong, so correct the string", which is exactly the argument that broke IR-cut
-> control when applied to `libplat_drv.so`. **It is kept because nothing regressed from it**: the
-> day/night loop did not work before and does not work after, so at worst it is inert. **Do not
-> extend it, and do not build a new patch on string evidence alone.**
-> [Detail](../../docs/ptz.md#-this-reasoning-is-now-under-suspicion--and-it-is-the-patch-we-ship).
+> ⚠️ **The file is kept, correct, and verified — the question was never whether the patch is
+> right.** It is a valid fix to a real bug. It is off by default because *repairing that bug has a
+> consequence nobody wanted.* Keep the distinction: this is not a bad patch, it is a patch whose
+> side effect costs more than its benefit on this deployment.
 
 ## `cgi-bin-header.hardened`
 
@@ -106,24 +120,22 @@ uppercase by convention — `PATH`, `IFS`, `LD_*`, `ENV`, `BASH_ENV`, `CDPATH`.
 obvious unfinished job.** Each one is a real, visible, easily-patched wrong string. None of them
 should be patched. Read the reason before reaching for `dd`.
 
-### `libplat_drv.so` — 🔴 **tried, regressed, rolled back**
+### `libplat_drv.so` — 🔴 **tried, rolled back, never validated**
 
 This is where `ptz_daemon_dyn` gets `gpio-ircut_a`, `gpio-ircut_b` and `ir-led` from. On
-2026-08-06 those three strings were patched on the **live camera** and the result was measured as
-a fix.
+2026-08-06 those three strings were patched on the **live camera**, then rolled back to md5
+`f5769ff013d7a3094e73ee76e312cad0` during the regression hunt.
 
-**It was not a fix.** JP reported that the Home Assistant IR-cut switch — which had been working
-for weeks — stopped working after the patch. The library was restored to md5
-`f5769ff013d7a3094e73ee76e312cad0`, the daemon restarted, and the solenoid **audibly clicks
-again**.
+**It was not the culprit** — that was `libre_anyka_app` — but it was never shown to *help* either.
+The daemon does not reach the filter through sysfs at all: `set_ir_cut` moves the filter while
+`/sys/user-gpio/ircut_a`'s mtime never changes, which is measured. So correcting those strings
+repairs a path nothing uses.
 
-> **Leading hypothesis, untested:** the daemon reaches the filter through a driver call
-> (`ak_drv_ir_set_ircut` is the likely candidate), and the sysfs strings are a **legacy path that
-> was failing silently and harmlessly**. Correcting them woke up a writer that then interfered
-> with the route that worked.
+> **Leading hypothesis, untested and staying that way:** the daemon reaches the filter through
+> `ak_drv_ir_set_ircut`, and the sysfs strings are a legacy path failing silently and harmlessly.
 
 **No patch file for this library exists in this directory, and none should be added.**
-[Full story](../../docs/ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+[Full story](../../docs/ptz.md#-retracted-ir-cut-control-through-the-daemon-is-broken).
 
 ### `ptz_daemon` (the static 2.1 MB binary) — inert
 
@@ -142,11 +154,16 @@ exist** — that turns a clean `ENOENT` into a silent wrong-pin write.
 >
 > **A string that looks broken may be a dead path whose failure is load-bearing.**
 >
-> Before patching a wrong-looking path, establish that it is **the path actually being taken** —
-> not that it exists, not that it is wrong, that it *executes*. The cheapest test is usually to
-> ask whether the feature currently works.
+> `libre_anyka_app` writing a non-existent sysfs path is unambiguously a bug by inspection.
+> Fixing it was obviously correct. **And that silent failure was the only reason manual IR-cut
+> control worked at all.**
 >
-> Three of the four entries above are real defects in code that **does not run**, and the fourth
-> was a real defect whose **failure was holding the system together**. This project has now spent
-> four separate efforts patching things outside the execution path in a single day. Assume you are
-> about to be the fifth.
+> So the rule has two halves, and the second is the one that was missing:
+>
+> 1. **Establish that the path is actually taken** — not that it exists, not that it is wrong,
+>    that it *executes*. Three of the entries above are real defects in code that does not run.
+> 2. **Establish what currently depends on it failing.** A path that reliably fails is a behaviour
+>    the rest of the system has been built on top of, whether or not anyone designed it that way.
+>
+> The cheapest version of both: **ask whether the feature currently works, and what would notice
+> if it started.**

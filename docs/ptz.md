@@ -98,7 +98,7 @@ mechanisms, not two names for one — the daemon route does not touch sysfs at a
 > ⚠️ **This heading used to say "the only method shown to work".** That was true when written and
 > is not true now; the daemon route was wrongly written off. Kept visible because the wrong
 > version of this line is what licensed
-> [the regression below](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+> [the regression below](#-retracted-ir-cut-control-through-the-daemon-is-broken).
 
 ### ✅ Route 1: write the pin
 
@@ -136,7 +136,7 @@ solenoid clicks. That is the strongest evidence on this page, and it is not a nu
 >   `set_ir_cut` produced no visible change **in a situation where no change was needed** — which
 >   supports "the daemon did nothing" just as well. Retracted, correctly.
 > * It then said the daemon path was **broken**. That retraction
->   [over-corrected](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback) and was
+>   [over-corrected](#-retracted-ir-cut-control-through-the-daemon-is-broken) and was
 >   itself wrong.
 >
 > **The common defect is not the conclusion, it is the experiment**: in both cases the filter was
@@ -145,7 +145,7 @@ solenoid clicks. That is the strongest evidence on this page, and it is not a nu
 
 A direct sysfs write to `ircut_a` **also** moves the filter. The two are different routes to the
 same mechanism, and — importantly — the daemon does **not** reach it through sysfs at all; see
-[below](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+[below](#-retracted-ir-cut-control-through-the-daemon-is-broken).
 
 ### ⚠️ `init_ir` is required first — and nothing runs it at boot
 
@@ -181,75 +181,123 @@ echo "init_ir" > /tmp/ptz.daemon
 > that was measured — but it means the boot-time story is not yet understood, and a camera that
 > has just been power-cycled should have `init_ir` sent explicitly.
 
-### ⚠️ The vendor app's day/night logic is half-broken on this build
+### 🔴 ROOT CAUSE: patching `libre_anyka_app` is what broke manual IR-cut control
 
-**`libre_anyka_app` can turn the IR illuminator on, and can never move the IR-cut filter.**
+**This is the answer, and it is the opposite of the obvious one. The patch did not fail. It
+worked — and that is precisely the problem.**
 
-Observed unprompted: with the filter left out and the scene looking IR-washed, **the app asserted
-`IR_LED` by itself.** So *something* in its day/night logic runs.
+JP's description is the whole diagnosis, and it is worth quoting exactly because a paraphrase
+loses it:
 
-> ❔ **But the loop has never been seen to move the IR-cut pin — even patched.** With the
-> corrected binary running, the lens was covered **many times** and **no `ircut` toggle occurred
-> at all**.
+> *"it toggles then goes back to the position it was before"*
+
+**That is not a failed write.** A failed write does not toggle. Something toggled the pin and then
+**something else put it back** — a second actor on the same pin, on a loop.
+
+| | `libre_anyka_app` writes | Result | Consequence for manual control |
+|---|---|---|---|
+| **Stock** (2023 camera) | `gpio-ircut_a` | ❌ `ENOENT`, silently | ✅ **manual control owns the pin** |
+| **Patched** | `ircut_a` | ✅ **succeeds** | 🔴 **every manual toggle is reverted at the app's next evaluation** |
+
+The app's automatic day/night writes had been failing harmlessly **since the day this firmware was
+installed**. Correcting the path made them land **for the first time ever** — so the day/night
+loop woke up and began overwriting Home Assistant.
+
+**The patch fixed a real bug. The bug was load-bearing.**
+
+#### 🔑 The two-actors conflict was predicted, in writing, and then deleted
+
+**This exact failure was documented as a risk in this file, argued about, and dismissed.** It is
+reproduced verbatim, because the reasoning that dismissed it is more instructive than the bug:
+
+> > **Two actors on one pin — a documented risk, deliberately not designed around.** Once
+> > `libre_anyka_app` *and* `ptz_daemon` can both reach `ircut_a`, the app's automatic day/night
+> > loop and manual `set_ir_cut` (what Home Assistant drives) could contend.
+> >
+> > **No arbitration has been built, on purpose.** The conflict is hypothetical: the app's
+> > automatic loop has **never been observed to move that pin**, patched or not. Building
+> > sequencing or locking now would mean designing around behaviour nobody has seen, which is the
+> > exact failure mode this project has produced repeatedly today.
+> >
+> > **Symptom if it does appear:** a manual `set_ir_cut` gets reverted at the app's next
+> > evaluation.
+
+**The predicted symptom is, word for word, the symptom that occurred.**
+
+> ### Why the dismissal was sound reasoning and still wrong
 >
-> So the honest state is: **the path is fixed, and the automatic loop is not observed to use it.**
-> Whether that loop functions on this hardware at all is **an open question**, and a better thing
-> to record than implying the patch restored a working feature. Possibilities nobody has
-> separated: the trigger threshold is never met by covering a lens; the loop needs a longer
-> settle than the test allowed; or it does not run on this build for an unrelated reason.
+> The argument was: *don't build for a conflict nobody has observed.* That is a good rule — it is
+> the rule this project adopted after inventing a photoresistor, an H-bridge and an I²C expander
+> that all turned out not to exist.
+>
+> **It failed because the evidence was produced by the defect being repaired.** The loop had never
+> been observed to move the pin **because the path was broken** — and the very next action was to
+> fix the path. The observation "this never happens" was **an artefact of the bug**, and it was
+> being used to justify shipping the fix that would end it.
+>
+> **The generalisation:** *"never observed"* is only evidence of *"will not happen"* **while the
+> conditions that prevented it hold.** If you are about to change one of those conditions, your
+> entire observational record expires at that moment. Ask what your evidence is conditional on
+> before you treat absence as safety.
+>
+> **And the warning was deleted** in the same commit that moved the investigation to
+> `libplat_drv.so` — removed as no-longer-relevant scaffolding while it was, in fact, the correct
+> prediction. That is the [over-retraction failure mode](#-init_ir-is-required-first--and-nothing-runs-it-at-boot)
+> doing real damage: the record no longer contained the one paragraph that would have explained
+> the regression on sight.
 
-The reason is the node-naming difference already noted [above](#gpio-map):
+#### What the app does and does not do
 
-| The app writes | On this camera | Result |
+Observed unprompted, and still true: with the filter left out and the scene looking IR-washed,
+**the app asserted `IR_LED` by itself.** That answers an older open question — the repeated
+`IR_LED store:0` / `store:1` in `dmesg` is **the vendor app**, not a mystery writer.
+
+> ❌ **RETRACTED: "the loop has never been seen to move the IR-cut pin, even patched."** That was
+> based on covering the lens many times with the patched binary running and seeing no `ircut`
+> toggle. **The regression proves the loop does move the pin** — so that was a **false negative**,
+> and the test was the problem, not the loop.
+>
+> The likely reason: the loop evaluates on the ISP's luma/gain over a window, not on an abrupt
+> occlusion, and it acts on its own interval rather than on demand. **Covering a lens is not a
+> day/night transition.** Add it to the list of nulls from experiments that could not have
+> produced a positive.
+
+#### Current state: both binaries reverted
+
+| File | md5 | State |
 |---|---|---|
-| `IR_LED` | exists | ✅ write succeeds |
-| `gpio-ircut_a` | **does not exist** — this build has unprefixed `ircut_a` | ❌ `ENOENT` |
+| `libre_anyka_app` | `3458b8598ca9525a0d5e693ff5fd5d5c` | **ORIGINAL** — reverted |
+| `ptz/lib/libplat_drv.so` | `f5769ff013d7a3094e73ee76e312cad0` | **ORIGINAL** — reverted |
+| `cgi-bin/header` | `934ce4814d4fc90edec82275769986c5` | **PATCHED — keep**, unrelated |
 
-The prefixed `gpio-ircut_a` name belongs to the *other* firmware build. On this one the app is
-reaching for a node that is not there, silently, on every day/night transition.
+Verified alongside: snapshot server returns `200`, RTSP carries h264 + `pcm_alaw`, filter is IN
+and the image is normal.
 
-**Two consequences:**
+> ✅ **The `cgi-bin/header` RCE fix stays and is not implicated in any of this.** It closes a real
+> unauthenticated remote root hole, it was verified by demonstrating the exploit and then its
+> absence, and it touches nothing to do with GPIO. **Do not revert it while cleaning up.**
 
-* It answers an open question. This page used to ask whether something else was writing
-  `IR_LED`, given repeated `store:0` / `store:1` in `dmesg`. **Yes — the vendor app is.**
-* It reframes the "filter drifts" reports below. A day/night state machine that flips the
-  illuminator but cannot move the filter is exactly the kind of half-state that produces
-  confusing, intermittent-looking behaviour.
+#### The trade, stated plainly
 
-> This is reported from another agent's analysis, along with a patch. **I have not verified
-> either the ENOENT or the patch directly** — recorded as their finding, not mine.
+On a 2023-build camera you may have **automatic day/night IR-cut switching** *or* **reliable
+manual control**, and not both — there is no arbitration anywhere in this firmware.
 
-> ### ⚠️ This reasoning is now under suspicion — and it is the patch we ship
->
-> **The argument above is the same argument that produced the
-> [`libplat_drv.so` regression](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback):**
-> a prefixed string is in the binary, the node does not exist, therefore that is the defect,
-> therefore correct the string. For the library, that reasoning was **wrong** — the path was dead
-> and its failure was load-bearing.
->
-> **This is not a retraction.** Two things distinguish the app patch, and both are real:
->
-> * **No regression has been observed from it.** Automatic day/night switching did not work
->   before the patch and does not work after it. Nothing that used to work has stopped.
-> * It is [selected per boot](sd-card.md#-one-card-works-in-any-of-these-cameras) against the node
->   that actually exists, so it cannot be wrong on the other kernel build.
->
-> **But the honest status is weaker than this page once implied.** After the patch, the lens was
-> covered many times and **no `ircut` toggle occurred at all** — which is *consistent with* the
-> app also reaching the filter by a route that has nothing to do with `/sys/user-gpio`, exactly as
-> the daemon does. In that case the patched string is no more the live path than the library's
-> was, and the patch is simply inert rather than helpful.
->
-> **What would settle it**, and nobody has done it: establish which call `libre_anyka_app`
-> actually makes when its day/night loop fires, before drawing any further conclusion from the
-> strings. Do not "improve" this patch on string evidence alone.
+**The stock binary is the right default**, because on this camera the automatic feature is worth
+very little: [both LED rings are dark](#lights--neither-ring-lights), so there is no working IR
+illumination for a night mode to switch *to*. Manual control is what JP actually uses, and it is
+what the Home Assistant switch drives.
+
+> ❔ **Not investigated, and deliberately left open** — [`-i 4`](#-the-filter-has-been-seen-to-read-back-off--cause-unknown)
+> selects the app's day/night invert behaviour, and it is plausible some `-i` value disables the
+> loop entirely, which would allow the patch *and* keep manual control. Nobody has tested that.
+> **It is recorded as a possibility, not a plan.**
 
 ### ❌ RETRACTED: "IR-cut control through the daemon is broken"
 
-**It was never broken. A patch to "fix" it is what broke it.** This section previously asserted,
-in bold, that the daemon could not move the filter. That was wrong, it was wrong on the strength
-of a measurement that did not test what it appeared to test, and the correction cost a live
-regression to discover.
+**It was never broken.** This section previously asserted, in bold, that the daemon could not move
+the filter. That was wrong, and it was wrong on the strength of a measurement that did not test
+what it appeared to test. JP had been driving the filter through the daemon for weeks while this
+page said it was impossible.
 
 #### What was actually measured, and what it actually proved
 
@@ -282,35 +330,48 @@ statements, and everything downstream followed from conflating them.
 > [1.06–1.39](troubleshooting.md#the-bands-and-the-boundary-that-does-not-exist) anyway, so the
 > numbers agree with each other and say nothing about the daemon.
 
-#### 🔴 The daemon path was never broken: a regression, and its rollback
+#### The rollback sequence, and a correction to how it was first written up
 
-**Sequence of events, 2026-08-06:**
+**2026-08-06, in order:**
 
-1. On the strength of the reasoning above, `/mnt/anyka_hack/ptz/lib/libplat_drv.so` was patched
-   **on the live camera** — `gpio-ircut_a` → `ircut_a`, `gpio-ircut_b` → `ircut_b`, `ir-led` →
-   `IR_LED` — and the daemon restarted.
-2. The result was **measured as a fix**: `set_ir_cut` now moved the pin.
-3. **JP reported the regression.** The Home Assistant IR-cut switch **had been working fine for
-   weeks** and stopped working after that patch — *"it was working before even if it doesn't
-   now."*
-4. The library was **rolled back** to the original (md5 `f5769ff013d7a3094e73ee76e312cad0`) and
-   the daemon restarted.
-5. **JP confirmed by ear** that the solenoid *"does actually click on and off again."*
+1. `libre_anyka_app` was patched (`gpio-ircut_a` → `ircut_a`) and shipped as a day/night fix.
+2. `/mnt/anyka_hack/ptz/lib/libplat_drv.so` was patched on the live camera — `gpio-ircut_a`,
+   `gpio-ircut_b`, `ir-led` — and the daemon restarted.
+3. **JP reported the regression:** the Home Assistant IR-cut switch had worked for weeks and
+   stopped — *"it was working before even if it doesn't now"*, and then the decisive detail,
+   *"it toggles then goes back to the position it was before."*
+4. `libplat_drv.so` was rolled back. JP confirmed by ear that the solenoid *"does actually click
+   on and off again."*
+5. `libre_anyka_app` was rolled back too — and **that is the one that mattered**, per
+   [the root cause above](#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
 
-**The live camera is running the original, unpatched library. That is the correct state.**
-
-> ❔ **Why it broke — a hypothesis, explicitly untested.** The daemon appears to have a *working*
-> route to the filter that has nothing to do with sysfs — most likely the
-> **`ak_drv_ir_set_ircut` driver call**, which fits the surviving mtime evidence exactly (the
-> filter moves; `/sys/user-gpio/ircut_a` is never written). On that reading, the `gpio-`prefixed
-> sysfs string was a **legacy path that had been failing silently and harmlessly for the entire
-> life of this firmware**, and "fixing" it woke up a second writer that then fought with, or
-> pre-empted, the route that worked.
+> ❌ **RETRACTED: "the `libplat_drv.so` patch caused the regression."** An earlier version of this
+> section pinned it on the library, because that was the patch applied immediately before the
+> report and rolling it back appeared to restore the click. **The actual culprit was
+> `libre_anyka_app`** — its day/night loop reverting each toggle, which is what *"toggles then goes
+> back"* describes and what a simple "the write fails" story cannot.
 >
-> **This is a hypothesis. Nobody has read the daemon's control flow, and nobody has confirmed
-> which call moves the solenoid.** It is recorded because it is the leading explanation and it
-> predicts something testable — but it is *not* the reason the rollback happened. The rollback
-> happened because the filter stopped clicking, which needs no theory at all.
+> **Recorded rather than rewritten, because the error is a textbook one:** two changes were in
+> flight, the second was blamed on proximity, and a partial recovery was read as confirmation.
+> **With overlapping changes, "I reverted X and it improved" does not identify X** — especially
+> when the true fault is intermittent on a loop interval, so *any* observation window can look
+> like a fix.
+
+**Both are reverted now, so this is moot in practice — but the reasoning about the daemon still
+stands on its own evidence**, independent of who caused the regression: the mtime never moved, so
+the daemon does not reach the filter through sysfs, and the filter demonstrably moves when the
+daemon is asked. `set_ir_cut` works.
+
+> ❔ **The `ak_drv_ir_set_ircut` hypothesis, still untested.** The daemon most likely reaches the
+> filter through that driver call, which fits the surviving mtime evidence exactly — the filter
+> moves and `/sys/user-gpio/ircut_a` is never written. **Nobody has read the daemon's control flow
+> to confirm it**, and per JP this is where the investigation stops. Recorded as the leading
+> explanation, not as a finding.
+
+> ⛔ **`libplat_drv.so` stays reverted regardless.** It was not the culprit, but nothing about it
+> was ever *validated* either — it was patched, and the effect was never cleanly attributed. The
+> live camera runs the original. There is no reason to touch it again, and
+> [every reason not to](#-libplat_drvso--where-the-prefixed-strings-live-do-not-patch-it).
 
 > ### 🔑 The lesson, and it is the sharpest one this project has produced
 >
@@ -363,7 +424,7 @@ variant that launches it, since `gergehack.sh` has a `/usr/bin/ptz_daemon_dyn` p
 >
 > Everything below is **reference for identifying the file**, not a recipe. The offsets are
 > correct, the strings really are wrong, and **applying the patch breaks working IR-cut control**
-> — [that experiment has been run](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+> — [that experiment has been run](#-retracted-ir-cut-control-through-the-daemon-is-broken).
 >
 > It is documented rather than deleted for one reason: **this table is exactly what makes the
 > patch look obvious and safe.** Someone will rediscover these strings with `strings` and reach
@@ -386,17 +447,18 @@ There are two different builds sharing the filename:
 Offsets in the 33782-byte build. **These are the edits that were applied and then reverted** —
 listed so the damage can be recognised, not so it can be repeated:
 
-| Offset | Original (**correct — leave it**) | What the regression wrote |
+| Offset | Original (**correct — leave it**) | What the patch wrote |
 |---|---|---|
 | `0x450f` | `/sys/user-gpio/gpio-ircut_a` | `/sys/user-gpio/ircut_a` |
 | `0x452b` | `/sys/user-gpio/gpio-ircut_b` | `/sys/user-gpio/ircut_b` |
 | `0x466e` | `/sys/user-gpio/ir-led` | `/sys/user-gpio/IR_LED` |
 | `0x4457` | `/sys/user-gpio/gpio-rf_feed` | — never touched |
 
-**`ir-led` vs the live `IR_LED` is a genuine fourth naming mismatch** — and it is now the clearest
-illustration of the lesson, because being the same length it was *the safest and simplest of the
-four edits*, and that made it no less part of the regression. **Ease of patching says nothing
-about whether patching is the right move.**
+**`ir-led` vs the live `IR_LED` is a genuine fourth naming mismatch** — and it is the clearest
+illustration of how these patches sell themselves, because being the same length it was *the
+safest and simplest of the four edits*. **Ease of patching says nothing about whether patching is
+the right move**, and "it's only a rename, and the lengths even match" is the argument that
+carried all four.
 
 > ⚠️ **`gpio-rf_feed` cannot be fixed by renaming, and this reasoning survived the regression
 > intact.** The live node list is exactly `IR_LED SPK_PA WHITE_LED ircut_a ircut_b wifi_en` —
@@ -445,9 +507,28 @@ readback path is known healthy.
 > [snapshot-server story](troubleshooting.md#recovering-from-a-dead-snapshot-server) — is still
 > unexplained.
 
-If it does turn out to be real, the leading mechanism would be that `libre_anyka_app` runs its
-own day/night state machine and re-asserts the position — a raw GPIO write being a change the
-owning process does not know about. Circumstantial support:
+> ### ⚠️ The proposed mechanism has since been **proven real** — and it still does not explain
+> ### this observation. Resist merging them.
+>
+> This section long speculated that `libre_anyka_app` re-asserts the pin from its own day/night
+> loop. **That mechanism is now confirmed**: it is exactly
+> [what the patch unleashed](#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control),
+> and JP's *"toggles then goes back"* is it operating.
+>
+> **But it cannot be the cause of the observations above**, and the reason is a date. Those
+> readbacks happened while the camera ran the **stock** binary, whose writes fail `ENOENT`. **A
+> writer that cannot write cannot revert anything.** The confirmed mechanism only exists in a
+> configuration that did not exist yet when the symptom was recorded.
+>
+> **This is the trap this repo has documented and fallen into repeatedly** — see
+> [the pattern note](#-wifi_en--resolved-and-it-needed-no-new-mechanism): a mechanism being real
+> is not the same as it being *the* mechanism, and the temptation to close an open question with a
+> newly-proven neighbour is strongest right after proving it. The two remaining explanations below
+> are unchanged, and the token bug is still the more likely.
+
+If it does turn out to be real **on the stock binary**, the mechanism would have to be something
+other than the app's sysfs writes — those demonstrably fail. Circumstantial support for *an*
+owning process, which survives:
 
 * `libre_anyka_app`'s `-i` argument selects exactly this behaviour. The Settings page folds two
   checkboxes into it, and the mapping is:
@@ -462,7 +543,7 @@ owning process does not know about. Circumstantial support:
   So the app has an opinion about IR state. This camera runs `-i 4 -u`.
 * The daemon exposes `init_ir` / `set_ir_cut`, implying a driver-level owner rather than a bare
   pin. **This is no longer only circumstantial**: the daemon demonstrably moves the filter
-  [without writing sysfs at all](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback),
+  [without writing sysfs at all](#-retracted-ir-cut-control-through-the-daemon-is-broken),
   so a driver-level owner is not an inference from the API shape — something has to be moving that
   solenoid, and it is not `/sys/user-gpio/ircut_a`.
 
@@ -673,7 +754,7 @@ rings being dark for the same reason is an assumption, not a finding.
 
 Separately, `dmesg` shows repeated `IR_LED store:0` / `store:1` transitions. **That is answered:
 the vendor app is writing them**, from a day/night loop that
-[works for the LED and fails for the filter](#-the-vendor-apps-daynight-logic-is-half-broken-on-this-build).
+[works for the LED and fails for the filter](#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
 So assert and hold rather than pulsing when testing — something else is competing with you.
 
 > **On the day/night mechanism: we do not know what it is.** Upstream's

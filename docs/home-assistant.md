@@ -75,12 +75,21 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 runs `anyka_http.py ircut on` → `ctl?command=ircut_on` → `set_ir_cut 1` at the daemon. JP has
 driven it this way for weeks; the solenoid audibly clicks.
 
-> ⛔ **If this switch stops working, the first thing to check is whether somebody patched
-> `libplat_drv.so` on the camera.** Rewriting its `gpio-ircut_a` / `gpio-ircut_b` / `ir-led`
-> strings to match the real node names **breaks this switch** — it looks like an obvious bug fix
-> and it is a regression. The good library is md5 `f5769ff013d7a3094e73ee76e312cad0`. Restore it
-> and restart the daemon.
-> [Why](ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+> ⛔ **If this switch stops holding — the filter toggles and then goes back — somebody enabled
+> automatic day/night.** That is the vendor app's loop reverting you, and it is what the
+> `libre_anyka_app` IR-cut patch turns on. The known-good binaries are:
+>
+> | File | Good md5 |
+> |---|---|
+> | `libre_anyka_app` | `3458b8598ca9525a0d5e693ff5fd5d5c` (**stock** — yes, stock) |
+> | `ptz/lib/libplat_drv.so` | `f5769ff013d7a3094e73ee76e312cad0` (**original**) |
+>
+> Restore and restart. **Leave `cgi-bin/header` patched** (`934ce4814d4fc90edec82275769986c5`) —
+> it is the RCE fix and is unrelated.
+> [Why](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
+>
+> **Distinguish the two failure shapes before touching anything:** *toggles then reverts* is the
+> day/night loop; *never moves at all* is something else entirely.
 
 > ⚠️ **After a power cycle, send `init_ir` before expecting the switch to work.** Nothing runs it
 > at boot — `ptz_init_on_boot=1` homes the *PTZ axes* only.

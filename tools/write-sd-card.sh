@@ -2,7 +2,8 @@
 # Write a ready-to-run Anyka AK3918 hack SD card from the backup taken 2026-08-05,
 # with this project's fixes baked in.
 #
-#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
+#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] \
+#                               [--stock] [--ir-cut-daynight]
 #
 # The card is the camera's brain: /Factory/config.sh is what the stock firmware
 # executes at boot (the SD exploit), and /mnt/anyka_hack/ holds every binary the
@@ -26,30 +27,44 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OVERLAY="$REPO/tools/card-overlay"
 CTL_SRC="$REPO/reference/sd-card-original/web_interface/ctl"
 
-# The IR-cut fix. Two builds of the vendor kernel disagree about the sysfs node
-# name, so the card carries BOTH binaries and the launcher picks one per boot.
-# See tools/card-overlay/.../run_libre_anyka_app.sh for the full reasoning.
+# The libre_anyka_app IR-cut patch. OFF BY DEFAULT since 2026-08-06 - it is a
+# REGRESSION on a camera whose IR-cut filter is driven manually.
+#
+# The patch is correct: on a 2023 kernel the stock binary writes gpio-ircut_a,
+# which does not exist, so the app's automatic day/night switching has never
+# worked. Fixing the path makes those writes LAND - and the app's day/night loop
+# then reverts every manual toggle at its next evaluation. JP's Home Assistant
+# IR-cut switch had worked for weeks; after this patch it "toggles then goes back
+# to the position it was before". Rolled back on the live camera; manual control
+# restored.
+#
+# There is no arbitration anywhere in this firmware, so on a 2023 build you get
+# automatic day/night OR reliable manual control, not both. Stock is the right
+# default because this camera's LED rings are both dark - there is no working IR
+# illumination for a night mode to switch to. See docs/ptz.md.
+#
+# --ir-cut-daynight opts in, for a camera nobody drives by hand.
 LAA_STOCK_MD5="3458b8598ca9525a0d5e693ff5fd5d5c"   # writes gpio-ircut_a (2022 build)
 LAA_PATCH_MD5="351d54e853ee6774e50e9704986bd6b6"   # writes ircut_a      (2023 build)
 LAA_PATCH_SRC="$REPO/reference/patches/libre_anyka_app.node-ircut_a"
 
 # ---------------------------------------------------------------------------
-# DO NOT ADD A libplat_drv.so PATCH HERE. It has been tried; it is a regression.
+# DO NOT ADD A libplat_drv.so PATCH HERE.
 #
 # That library (ptz/lib/libplat_drv.so, md5 f5769ff013d7a3094e73ee76e312cad0)
 # contains gpio-ircut_a, gpio-ircut_b and ir-led, none of which exist as nodes
 # on the 2023 build. It reads as an obvious unfinished job, exactly like the
-# libre_anyka_app patch below. It is not.
+# libre_anyka_app patch above. It was patched on the live camera on 2026-08-06,
+# never cleanly validated, and rolled back. Manual IR-cut control (set_ir_cut,
+# which is what Home Assistant drives) does not go through sysfs at all, so
+# correcting those strings fixes nothing anybody uses.
 #
-# Patching those strings on the live camera on 2026-08-06 STOPPED the IR-cut
-# solenoid from clicking. JP had been driving it from Home Assistant for weeks.
-# Rolling the library back restored it. Manual IR-cut control (set_ir_cut, which
-# is what HA uses) does not go through sysfs at all, so "fixing" the sysfs paths
-# only introduces a second writer that fights the one that works.
-#
-# The general rule, which is the thing worth keeping: a string that looks broken
-# may be a dead path whose failure is LOAD-BEARING. Establish that a path is
-# actually executed before correcting it. See docs/ptz.md.
+# THE RULE BOTH OF THESE TEACH, and the reason this comment is here rather than
+# only in the docs: a string that looks broken may be a DEAD PATH WHOSE FAILURE
+# IS LOAD-BEARING. libre_anyka_app writing a non-existent sysfs path is a bug by
+# inspection - and that silent failure was the only reason manual IR-cut control
+# worked at all. Before repairing a wrong-looking path, establish what currently
+# DEPENDS ON IT FAILING. See docs/ptz.md.
 # ---------------------------------------------------------------------------
 
 # The pre-auth root RCE fix for cgi-bin/header. UNLIKE the binary patch this is
@@ -74,16 +89,18 @@ DEV="${1:-}"; shift || true
 SSID=""
 TIME_SOURCE=""
 STOCK=0
+DAYNIGHT=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ssid)        SSID="${2:-}"; shift 2 ;;
-    --time-source) TIME_SOURCE="${2:-}"; shift 2 ;;
-    --stock)       STOCK=1; shift ;;
+    --ssid)            SSID="${2:-}"; shift 2 ;;
+    --time-source)     TIME_SOURCE="${2:-}"; shift 2 ;;
+    --stock)           STOCK=1; shift ;;
+    --ir-cut-daynight) DAYNIGHT=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
-[ -n "$DEV" ] || die "usage: $0 /dev/sdX [--ssid NAME] [--time-source IP] [--stock]"
+[ -n "$DEV" ] || die "usage: $0 /dev/sdX [--ssid NAME] [--time-source IP] [--stock] [--ir-cut-daynight]"
 [ -b "$DEV" ] || die "$DEV is not a block device"
 [ -d "$BACKUP" ] || die "backup not found at $BACKUP"
 [ "$(id -u)" -eq 0 ] || die "must run as root (writing a raw device)"
@@ -102,7 +119,12 @@ echo "Source : $BACKUP"
 if [ "$STOCK" -eq 1 ]; then
   echo "Mode   : --stock (backup contents only, NO project fixes)"
 else
-  echo "Mode   : fixes applied (timezone, ptz_init_on_boot, ctl, RCE fix, IR-cut selection)"
+  echo "Mode   : fixes applied (timezone, ptz_init_on_boot, ctl, RCE fix)"
+  if [ "$DAYNIGHT" -eq 1 ]; then
+    echo "IR-cut : automatic day/night ON  -- WILL revert manual toggles on a 2023 camera"
+  else
+    echo "IR-cut : manual control (stock binary; automatic day/night off)"
+  fi
 fi
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
 echo
@@ -214,19 +236,30 @@ if [ "$STOCK" -eq 0 ]; then
       echo "==> installing IR-cut node detection"
       mv "$STOCK_BIN" "$APPDIR/libre_anyka_app.node-gpio-ircut_a"
 
-      if [ -f "$LAA_PATCH_SRC" ]; then
+      if [ "$DAYNIGHT" -eq 0 ]; then
+        # Default. The launcher finds no patched binary and falls back to stock,
+        # which is the state the live camera was restored to.
+        echo "    stock binary only (automatic day/night OFF - the safe default)"
+        NOTES+=("Automatic day/night IR-cut switching is OFF (the default since 2026-08-06).")
+        NOTES+=("  -> MANUAL IR-cut control works: Home Assistant, ctl?command=ircut_on, set_ir_cut.")
+        NOTES+=("  -> Enabling it (--ir-cut-daynight) makes the vendor app REVERT manual toggles.")
+        NOTES+=("  -> There is no arbitration in this firmware; you get one or the other.")
+      elif [ ! -f "$LAA_PATCH_SRC" ]; then
+        warn "--ir-cut-daynight requested but no patched binary at $LAA_PATCH_SRC"
+        NOTES+=("--ir-cut-daynight had no patched binary to install; card falls back to stock.")
+      else
         pgot="$(md5sum "$LAA_PATCH_SRC" | cut -d' ' -f1)"
-        if [ "$pgot" = "$LAA_PATCH_MD5" ]; then
-          install -m 755 "$LAA_PATCH_SRC" "$APPDIR/libre_anyka_app.node-ircut_a"
-          echo "    both builds installed - launcher will detect per boot"
-        else
+        if [ "$pgot" != "$LAA_PATCH_MD5" ]; then
           warn "patched binary md5 is $pgot, expected $LAA_PATCH_MD5 - NOT installing it"
           NOTES+=("Patched IR-cut binary REJECTED on md5 mismatch; card falls back to stock.")
+        else
+          install -m 755 "$LAA_PATCH_SRC" "$APPDIR/libre_anyka_app.node-ircut_a"
+          echo "    both builds installed - launcher will detect per boot"
+          warn "--ir-cut-daynight: the vendor app will REVERT manual IR-cut toggles on a 2023 camera"
+          NOTES+=("AUTOMATIC DAY/NIGHT IS ON, and it BREAKS manual IR-cut control on a 2023 build.")
+          NOTES+=("  -> symptom: the filter toggles, then goes back within the app's loop interval.")
+          NOTES+=("  -> Home Assistant's switch.anyka_cam_ir_cut_filter will not hold. See docs/ptz.md.")
         fi
-      else
-        NOTES+=("No patched IR-cut binary at $LAA_PATCH_SRC.")
-        NOTES+=("  -> automatic day/night IR-cut switching will NOT work on a 2023-build camera.")
-        NOTES+=("  -> the card is still correct on a 2022-build camera. Nothing is broken.")
       fi
 
       # our launcher does the detection; keep upstream's for reference

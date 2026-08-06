@@ -21,7 +21,8 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ WiFi | 2.4 GHz only |
 | ✅ Web UI | Port 80, PTZ pad and live preview — [but see the security warning](#-security) |
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
-| ✅ IR-cut filter | Works, from Home Assistant and by hand — the solenoid audibly clicks. Send [`init_ir` first](docs/ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot); nothing does it at boot. ⛔ **Do not "fix" the `gpio-`prefixed paths in `libplat_drv.so`** — [that is a regression](docs/ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback) |
+| ✅ IR-cut filter | Manual control works, from Home Assistant and by hand — the solenoid audibly clicks. Send [`init_ir` first](docs/ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot); nothing does it at boot |
+| ⛔ Automatic day/night | **Deliberately disabled.** The vendor app's day/night loop can be repaired on a 2023 build — and it then **reverts every manual toggle**, because there is no arbitration on that pin. [Why we chose manual](docs/ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control) |
 | ❌ IR LEDs | Pin and pad both toggle correctly, but **the ring is dark** — confirmed with a phone that demonstrably sees another camera's emitters. [Why is still open](docs/ptz.md#-ir-confirmed-dark) |
 | ❌ White LEDs | Present in hardware (4 on the ring) but dark. The **pad demonstrably swings** and nothing lights, the vendor firmware **declares this PTZ variant unsupported**, and there is **no software fix** — [all other candidates refuted](docs/ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
@@ -146,14 +147,18 @@ bug you can fix in one line:
    the card on every boot and reboots if it differs, so edits made only in `/etc/jffs2` quietly
    revert. [→](docs/sd-card.md#settings-precedence)
 
-4. **A string that looks broken may be a dead path whose failure is load-bearing.** This firmware
-   is full of hard-coded sysfs paths that do not exist on this kernel build. They look like
-   obvious one-line fixes. **One of them was "fixed", and it broke IR-cut control that had worked
-   for weeks** — the failing path was legacy, and its silent failure was what kept the working
-   path in charge. Before correcting a wrong-looking path, establish that it is **the path
-   actually being taken**, not merely that it is wrong. On this camera the boring question — *does
-   this feature currently work?* — has been worth more than any amount of disassembly.
-   [→](docs/ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback)
+4. **A string that looks broken may be a dead path whose failure is load-bearing.**
+   `libre_anyka_app` writes a sysfs node that does not exist on this kernel build. That is a bug
+   by inspection, and fixing it was obviously correct. **It broke IR-cut control that had worked
+   for weeks** — because the app's day/night loop had been failing silently since install, and
+   that silence was the only reason manual control had the pin to itself. Repairing the path woke
+   a second writer that reverts every manual toggle.
+
+   **Before repairing a wrong-looking path, establish what currently depends on it failing.** The
+   conflict had even been predicted in these docs and dismissed as hypothetical — *because the
+   loop had never been observed to act.* It had never acted because the path was broken, and the
+   next step was to fix the path. **"Never observed" is only evidence while the conditions that
+   prevented it hold.** [→](docs/ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control)
 
 ## Credits
 

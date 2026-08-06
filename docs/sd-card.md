@@ -45,24 +45,42 @@ switching that has never worked**.
 | `/sounds/` created | Where `ctl`'s `play` and `sounds` commands look |
 | Missing `]` in `Factory/config.sh` | [Upstream's bracket bug](#-latent-bug-in-factoryconfigsh), which stops the sensor symlink ever being recreated |
 | `cgi-bin/header` hardened | Closes the [pre-auth root RCE](web-ui.md#the-fix) on port 80. **Not** kernel-specific — applies unconditionally |
-| IR-cut node detection | See below |
 
-> ⛔ **Do not add a `libplat_drv.so` patch to this card. It has been tried and it is a
-> regression.**
+**Automatic day/night IR-cut switching is deliberately NOT among them** — see below.
+
+> ⛔ **Do not add a `libplat_drv.so` patch to this card, and do not turn the `libre_anyka_app`
+> patch back on by default.**
 >
 > This warning previously said the opposite — that `ptz_daemon` "has the same bug" and a card
 > should probably patch it too. **Retracted.** Manual IR-cut control through the daemon
 > (`set_ir_cut`, which is what Home Assistant drives) **already works**, and it does not go
-> through sysfs at all. Rewriting the `gpio-`prefixed strings in that library **stopped the
-> solenoid clicking on a live camera** and had to be rolled back.
+> through sysfs at all.
 >
-> The card ships **three** fixes and no more: `libre_anyka_app`, `cgi-bin/header`, and the
-> settings. [The full story](ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+> The card ships **two** binary fixes and no more: `cgi-bin/header`, and the settings/`ctl`
+> changes. [The full story](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
 
-### 🔑 One card works in any of these cameras
+### ⛔ Automatic day/night IR-cut is off by default, and turning it on breaks manual control
 
-**This is the property that makes the tool trustworthy with a bag of cameras, and it is
-deliberate.**
+**`--ir-cut-daynight` opts in. Do not use it on a camera anybody drives by hand.**
+
+On a 2023-build camera the stock `libre_anyka_app` writes a sysfs node that does not exist, so its
+automatic day/night switching has **never** worked. Correcting that path makes those writes land —
+and the app's day/night loop then **reverts every manual toggle** at its next evaluation. JP's
+Home Assistant switch had worked for weeks; with the patch applied the filter *"toggles then goes
+back to the position it was before."*
+
+**There is no arbitration anywhere in this firmware.** On a 2023 build you get automatic day/night
+**or** reliable manual control, not both.
+
+**Stock is the right default**, because on this camera the automatic feature is worth very little:
+[both LED rings are dark](ptz.md#lights--neither-ring-lights), so there is no working IR
+illumination for a night mode to switch to. [Full story](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
+
+### 🔑 The per-boot selection: one card works in any of these cameras
+
+**This machinery is retained and still correct — it is only dormant while the patch is off.** It
+is what makes the tool trustworthy with a bag of cameras, and it is what `--ir-cut-daynight`
+switches on.
 
 `libre_anyka_app` hard-codes the sysfs path it uses to move the IR-cut filter, and the two
 vendor kernel builds disagree about that path:
@@ -107,16 +125,18 @@ Four properties follow, and they are the point:
 The patched binary ships at
 [`reference/patches/libre_anyka_app.node-ircut_a`](../reference/patches/), with its offset, bytes
 and md5 [documented there](../reference/patches/README.md). The tool **verifies the md5 before
-installing** and refuses on a mismatch.
+installing** and refuses on a mismatch — but **only installs it at all under
+`--ir-cut-daynight`.**
 
-> ⚠️ **Verified applied — effect NOT yet validated.** On the live camera the patched binary is
-> running, its md5 matches, and `strings` confirms the corrected path with `IR_LED` untouched.
-> **But the day/night code path has not been exercised**: it was applied at 09:00 in stable
-> daylight, when the app has no reason to switch. A watcher is capturing the first real
-> transition.
+> ❌ **RETRACTED: "verified applied — effect not yet validated."** This block used to say the
+> patch was correct and running and merely awaiting its first day/night transition. **The
+> transition came, and it broke manual IR-cut control.** The effect is now validated and it is
+> **not** the effect that was wanted.
 >
-> **Read this as "the binary is correct and running", not "day/night switching is fixed."** This
-> project has been caught by exactly that gap more than once.
+> The wording was careful and it was still not careful enough: "the binary is correct and running"
+> was true, and it quietly implied the only open question was *whether* the feature would work —
+> when the live question was **what else would change when it did.** A patch awaiting validation
+> is not a neutral state; it is a change whose consequences have not happened yet.
 
 > ⚠️ **The discriminator is `ircut_b`, not `ircut_a`.** Both would work, but `ircut_b` exists
 > **only** in the 2023 build — verified by decompressing the 2022 kernel and counting

@@ -322,7 +322,7 @@ returns a few bytes.
 | `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` — ✅ **this works**, and is the path Home Assistant drives |
 | `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
-| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — the reads are **real**, [see below](#the-status-command-works). ❔ But whether `ircut_a` still tracks the filter when the *daemon* moves it is [an open question](ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback) |
+| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — the reads are **real**, [see below](#the-status-command-works). ❔ But whether `ircut_a` still tracks the filter when the *daemon* moves it is [an open question](ptz.md#-retracted-ir-cut-control-through-the-daemon-is-broken) |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
 | `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
 

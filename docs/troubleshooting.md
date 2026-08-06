@@ -69,6 +69,21 @@ not merely similar.** Six consecutive fetches of an unchanging scene came back a
 **Pace your requests**, and **verify frames are actually distinct** — compare bytes or hashes,
 do not assume two fetches are two frames.
 
+### The IR-cut filter in one table
+
+Everything you need before touching it, because getting any of these wrong has cost time:
+
+| | |
+|---|---|
+| `ircut_a=1` | filter **IN** → **normal colour** (daytime position) |
+| `ircut_a=0` | filter **OUT** → **magenta / pink cast** (IR-pass) |
+| Transition time | **4–8 s.** Allow **≥10 s** before measuring — sampling at 2–4 s guarantees a false negative |
+| Green fraction, filter IN | **≈ 1.06 – 1.39** |
+| Green fraction, filter OUT | **≈ 0.45 – 0.90** |
+| Best instrument | **A human hearing the solenoid click.** Beats every image metric |
+| Chromatic test is blind when | **the scene has little IR** — under blue-dominant indoor light the filter can swing with almost no colour change |
+| Symptom: *toggles then reverts* | The vendor app's day/night loop is fighting you — [see ptz.md](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control) |
+
 ### Measuring the IR-cut filter: the best instrument is your ears
 
 > 🔑 **Before reaching for any image metric: go and listen.** The filter is a solenoid and it
