@@ -182,12 +182,63 @@ echo "1" > /sys/user-gpio/IR_LED
 are gated by something else — most likely the photoresistor-driven day/night circuit rather than
 the pin alone. Unresolved.
 
-## Speaker
+## Speaker — audio out works
 
-`SPK_PA` is the speaker power amplifier and reads `0`. Nothing in this project has driven audio
-**out** of the camera yet; upstream's
-[`ak_adec_demo`](../reference/sd-card-hack/anyka_hack/ak_adec_demo/) is the starting point, and
-`SPK_PA` would be the enable to raise first.
+The camera can play audio out of its built-in speaker using the stock
+`/usr/bin/ak_adec_demo` decoder. Two things have to be right:
+
+```sh
+echo 1 > /sys/user-gpio/SPK_PA                       # 1. enable the amplifier
+ak_adec_demo 16000 1 mp3 /mnt/sounds/doorbell.mp3    # 2. decode and play
+```
+
+**`SPK_PA` is the speaker power amplifier and sits at `0` on a cold boot.** Without raising it
+the decoder runs happily, reports no error, and you hear nothing. This is the single most
+confusing part of getting audio out.
+
+Over HTTP this is `command=play&file=<name>`, which does both steps for you — see
+[web-ui.md](web-ui.md#sound-playback).
+
+### ⚠️ The sample rate is an argument, not a property of the file
+
+```
+usage: ak_adec_demo [sample rate] [channel num] [type] [audio file path]
+support type: [mp3/amr/aac/g711a/g711u/pcm]
+```
+
+**`ak_adec_demo` does not read the sample rate out of the file — it uses the number you pass.**
+Get it wrong and the clip plays at the wrong speed and pitch, with no error.
+
+Upstream's README suggests `ak_adec_demo 41100 1 mp3 ...`, and that value is wrong twice over:
+`41100` is a typo for `44100`, and it is the wrong rate for a 16 kHz file regardless. Feeding a
+16 kHz clip to a `41100` decoder plays it roughly **2.5× too fast**, which makes speech
+unintelligible and sounds exactly like a corrupt file.
+
+The convention in this project is therefore to **standardise every clip to 16 kHz mono MP3** and
+hard-code `16000 1` at the call site, so there is no per-file rate to get wrong:
+
+```sh
+ffmpeg -i input.mp3 -ac 1 -ar 16000 -af "volume=0.3" /mnt/sounds/output.mp3
+```
+
+### ⚠️ There is no working volume control
+
+`ak_adec_demo`'s volume control does not work, and the speaker is **far too loud** at default —
+loud enough to make the plastic casing resonate. There is no runtime fix.
+
+**Attenuate the file before you upload it.** `volume=0.3` is a reasonable starting point and
+upstream went as low as `volume=0.1` for indoor use.
+
+### Practical notes
+
+* **Background it, and detach it.** A clip played from a CGI request must outlive the request,
+  or it is killed when the CGI process exits. `setsid ... </dev/null >/dev/null 2>&1 &` is what
+  `ctl` uses.
+* **Keep clips on the SD card**, in `/mnt/sounds/`. They will technically fit in `/etc/jffs2`,
+  but that partition has [about 8 KB free](hardware.md#flash-layout).
+* The decoder also handles `amr`, `aac`, `g711a`, `g711u` and `pcm`.
+* Playback is one-way. There is no intercom path, because [the microphone is a separate,
+  always-on capture](#-the-microphone-cannot-be-muted) with no mixing.
 
 ## ⚠️ The microphone cannot be muted
 

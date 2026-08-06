@@ -126,6 +126,25 @@ ptz:
 Note the camera has **no zoom** and no continuous-motion start/stop — moves are discrete 10°
 steps — so the start/stop pattern above collapses to a single call per press.
 
+## Playing sounds through the camera
+
+The camera can play MP3s out of its built-in speaker, which makes it usable as an announcement
+or deterrent endpoint from HA — a `rest_command` per clip, or one parameterised by name:
+
+```yaml
+rest_command:
+  anyka_play:
+    url: "http://192.168.1.20/cgi-bin/ctl?token={{ token }}&command=play&file={{ clip }}"
+    method: get
+```
+
+Clips live in `/mnt/sounds/` on the SD card and must be **16 kHz mono, pre-attenuated** — the
+decoder ignores the file's own sample rate and has no working volume control. Both traps, and
+the `ffmpeg` one-liner that avoids them, are in
+[ptz.md](ptz.md#speaker--audio-out-works). `command=sounds` lists what is available.
+
+The same token caveat as PTZ applies — see [above](#alternative-http-instead-of-telnet).
+
 ## ⚠️ Audio is always live
 
 The microphone cannot be muted at the camera. Muting in the HA player or dropping the audio

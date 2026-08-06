@@ -23,7 +23,7 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
 | ⚠️ IR-cut filter | Controllable, but [drifts back on its own](docs/ptz.md#ir-cut-filter) |
 | ❌ White / IR LEDs | Not yet driveable from GPIO |
-| ❌ Speaker | Not yet used |
+| ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
 | ❌ Clock | No RTC battery, and NTP is firewalled — [stays at 1969](docs/troubleshooting.md#the-cameras-clock-stays-at-1969) |
 
 ## Working configuration

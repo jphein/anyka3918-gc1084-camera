@@ -260,16 +260,17 @@ The page also renders an endpoint card advertising `rtsp://<ip>:554/vs0` as Main
 > Install to `/mnt/anyka_hack/web_interface/www/cgi-bin/ctl`, mode `755`.
 
 ```
-GET /cgi-bin/ctl?token=<t>&command=<cmd>
+GET /cgi-bin/ctl?token=<t>&command=<cmd>[&file=<name>]
 ```
 
-Returns `text/plain`: `OK`, or `ERR notoken` / `ERR auth` / `ERR cmd`.
+Returns `text/plain`. Responses are `OK`, the output of a query command, or one of
+`ERR notoken` / `ERR auth` / `ERR cmd` / `ERR file` / `ERR nofile`.
 
 It exists because **the stock `/cgi-bin/webui` takes 0.2–1.0 s per request.** Two reasons: every
 request sources `header`, whose URL-decoder is a per-character shell loop spawning subshells —
 brutal on a 400 MHz ARM926 — and then it renders the entire control page just to write one line
-to a FIFO. `ctl` does neither. It parses two known parameters, writes one whitelisted line, and
-returns three bytes.
+to a FIFO. `ctl` does neither. It parses three known parameters, dispatches on a whitelist, and
+returns a few bytes.
 
 | `command=` | Effect |
 |---|---|
@@ -281,15 +282,54 @@ returns three bytes.
 | `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` |
 | `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` |
 | `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` |
+| `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
+| `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
 
 Note it uses the **daemon command names directly** (`left`, `init_ptz`) rather than the stock
-UI's abbreviations (`ptzl`, `ptzinit`), and it exposes LED and `status` commands the stock UI has
-no way to reach.
+UI's abbreviations (`ptzl`, `ptzinit`), and it exposes LED, `status`, `sounds` and `play`
+commands the stock UI has no way to reach.
 
 **It does not source `header`, so it is not affected by the injection described above** — it
-matches `token=*` and `command=*` with `case`, never interpolates the command into a shell
-command, and rejects anything not on the whitelist. That makes `ctl` the right thing to point
-automation at.
+matches `token=*`, `command=*` and `file=*` with `case`, dispatches the command through a
+whitelist, and never interpolates the command into a shell command. That makes `ctl` the right
+thing to point automation at.
+
+#### Sound playback
+
+```
+GET /cgi-bin/ctl?token=<t>&command=play&file=doorbell
+```
+
+`play` is the one command that takes caller-supplied data (`file=`) and puts it into a path, so
+it is validated hard before use:
+
+```sh
+case "$f" in
+  ""|*[!A-Za-z0-9_-]*) echo "ERR file"; exit 0 ;;
+esac
+```
+
+**Bare name only.** No dots, no slashes, no extension — anything outside `[A-Za-z0-9_-]` is
+rejected, so `../`, absolute paths and command substitution cannot survive the check. The
+directory (`/mnt/sounds/`) and the `.mp3` suffix are supplied by `ctl`, never by the caller. A
+name that passes validation but does not exist returns `ERR nofile`.
+
+The handler then raises `SPK_PA` (the speaker amplifier, which is `0` on a cold boot — without
+it the decoder runs and you hear nothing) and launches the decoder detached, so the clip
+outlives the CGI request rather than being killed when it exits:
+
+```sh
+setsid ak_adec_demo 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
+```
+
+> ⚠️ **The `16000` is a hard-coded sample rate, and it must match the file.** `ak_adec_demo`
+> takes the rate as an argument and does **not** read it from the MP3, so a mismatch plays at the
+> wrong speed and pitch with no error. Every clip in `/mnt/sounds/` is therefore standardised to
+> **16 kHz mono**. Upstream's README suggests `41100`, which is both a typo for `44100` and wrong
+> for a 16 kHz file — that combination plays speech about 2.5× too fast.
+>
+> There is also **no working volume control**, so clips must be attenuated before upload.
+> Full detail in [ptz.md](ptz.md#speaker--audio-out-works).
 
 > ⚠️ It is not a fix for the stock CGIs. `webui`, `system`, `settings`, `settings_submit.sh`,
 > `events`, `video`, `del_video.sh` and `pwd_change` sit in the same directory and remain
