@@ -354,6 +354,50 @@ interesting the problem is.
   same people, so nothing in the system ever disagreed with itself. A firmware
   that always says `OK` is internally consistent and externally useless. Expect
   the vendor's own success signals to be decorative until proven otherwise.
+
+- **Agreement is not corroboration when the instrument is broken.** The rule above
+  catches an instrument returning **the same thing for everything**. This one
+  catches an instrument returning **the right thing for no reason** — and it is
+  nastier, because the usual tell is gone:
+
+  | Rule | Catches | Tell |
+  |---|---|---|
+  | uniform result across varied inputs | an instrument returning the same thing for everything | implausible sameness |
+  | **agreement without corroboration** | an instrument returning the right thing for nothing | **none — it looks like success** |
+
+  2026-08-06: `luna-volume` timed ffmpeg's read of a live stream with busybox
+  `date +%s%N`. **Busybox does not support `%N`**, so the timer returned
+  `wall=0 ms` for a 15-second fetch *and* a 30-second one. The conclusion it
+  produced was *"the fetch is 10× faster than realtime."*
+
+  **That conclusion was directionally correct.** The fetch *is* faster than
+  realtime — there is a ~10 s Icecast burst buffer, later measured properly at
+  6.6× for a 5 s chunk. **The broken timer agreed with the truth.**
+
+  > **Nothing would have looked wrong until the segments failed to line up** — at
+  > which point the search would have started at the segment muxer, several layers
+  > from the fault, **with the timer's authority behind the wrong model.** And the
+  > right answer for the wrong reason still gives the wrong *magnitude*, so the
+  > buffers would have been sized off a number that never measured anything.
+
+  **So: a measurement confirming what you expected is not evidence the instrument
+  works.** Validate it against an input whose answer you know **independently of
+  the hypothesis** — a known-duration fetch, a file of known size, a delay you
+  introduced yourself. **Confirmation is the case where checking feels least
+  necessary and is most valuable.**
+
+  Second instance, same family and the same day: a `ps` parse that **counted
+  regex matches rather than lines**, against a path
+  (`/mnt/anyka_hack/ak_adec_demo/ak_adec_demo`) containing the matched string
+  **twice**. One running player read as two. The numbers were wrong and
+  *internally consistent*, so nothing looked off.
+
+  A third lives [under the liveness rule](#improvement-backlog) rather than here,
+  because it is a *source* rather than an instrument: BusyBox `ftpd`'s `--help`
+  claiming *"Anonymous FTP server"* on a build with authentication compiled in.
+  **The common shape across all three is the instrument failing while looking
+  fine** — and only the first rule in this pair has a symptom you can see.
+
 - **A repo copy and the deployed file are two different things.** The repo `ctl`
   had eight comment lines the camera's copy did not. Editing the device copy and
   committing it would have silently deleted them. Diff before you overwrite, and
