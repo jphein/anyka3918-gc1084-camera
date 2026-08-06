@@ -338,3 +338,37 @@ is free": app CPU did not stay flat when a client attached.
 
 Observer overhead: the sampler ran at 10 s intervals, ~0.5 s each, ≈5 % duty present in
 every phase equally. Absolute figures include it; the deltas do not.
+
+## ⚠️ `ERR auth` means CONTENTION, not a dead camera
+
+The camera holds **exactly one** token, in `/tmp/token.txt`. Any successful login overwrites
+it, instantly invalidating everyone else's. This is not theoretical and not confined to HA:
+while taking the baseline above, two calls came back `ERR auth` **because JP was pressing
+buttons in the dashboard at the same time.** It happens on plain reads, under entirely normal
+use.
+
+So any poller must treat `ERR auth` as **"re-read the token and retry"**, never as a camera
+fault:
+
+```python
+if body.strip() == 'ERR auth':
+    token = reread_token()      # someone else logged in
+    retry()
+```
+
+**Getting this wrong is worse than it sounds.** A tile that renders "camera offline" because
+another poller logged in points whoever debugs it at the network, the camera, or the SD card
+— none of which are the problem. The camera is fine and answering in 0.1 s.
+
+Two ways to avoid it entirely:
+
+- **Go through `anyka_http.py`**, which holds a `flock` for the whole login+command sequence
+  so callers queue instead of racing. **Any new HA polling should use this rather than
+  opening its own HTTP path.**
+- **Don't mint a token at all** where the data allows it. The snapshot endpoint on port 3000
+  and RTSP need no login, so health and stream measurements can sidestep the contention
+  completely — `nebula-inventory`'s stream measurement was built this way deliberately.
+
+Note the interaction with polling frequency: **more pollers means more logins means more
+contention**, so this is a second argument for the conservative interval, independent of CPU
+cost. Four pollers at 60 s is four token overwrites a minute.
