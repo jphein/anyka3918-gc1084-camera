@@ -1,0 +1,28 @@
+SOC: ANYKA AK3918EN080 v200
+WIFI: REALTEK 8188FTV
+[802.11bgn USB 2.0 Network Interface Controller ]
+there is a separate pcb antenna, the external antenna is completely fake
+FLASH: BoyaMicro 25Q64ESSIG [8MB]
+STEPPER DRIVER: ULN2003L
+IMAGE_SENSOR: H63
+
+[root@anyka /etc/jffs2]$ strings isp_h63.conf
+3.007_1215
+12.29 3DNR Denoise sharp
+1.5
+denoise sharp
+4.11 blc rgbgamma wdr exp yueffect,awb
+2020.3.13 modify again fit H63 reg 0
+2020.3.12
+2020.1.19 modify for h63
+2020.1.19 modify for h63
+8.24 blc awb wdr
+4.27 3DNR denoise WB
+4.12 denoise DPC
+5.12 EXP BLC CCM
+8.4 denoise wdr yz
+8.24 blc awb wdr sharp
+9.8 wdr ae
+3.007_1215
+1215  changes night_wb
+

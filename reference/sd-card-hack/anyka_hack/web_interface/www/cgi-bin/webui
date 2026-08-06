@@ -1,0 +1,132 @@
+#!/bin/sh
+#
+if [[ -f /etc/jffs2/www/index.html ]]; then
+    source /etc/jffs2/www/cgi-bin/header
+else
+    source /mnt/anyka_hack/web_interface/www/cgi-bin/header
+fi
+if [[ -f /tmp/token.txt ]] && [[ "$token" == "$(readline 1 /tmp/token.txt)" ]]; then
+source /etc/jffs2/gergesettings.txt
+ipadd=`ip route get 1 | awk '{print $NF;exit}'`
+if [[ "$ptz_invert" == 1 ]]; then
+  right='l'
+  left='r'
+  up='d'
+  down='u'
+else
+  right='r'
+  left='l'
+  up='u'
+  down='d'
+fi
+
+cat <<EOT
+<!DOCTYPE html>
+<html>
+<head>
+<title>Camera - WebUI</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="topnav">
+  <a class="active" href="/cgi-bin/webui?token=$token">Home</a>
+  <a href="/cgi-bin/settings?token=$token">Settings</a>
+  <a href="/cgi-bin/system?token=$token">System</a>
+  <a href="/cgi-bin/events?token=$token">Events</a>
+  <a href="/cgi-bin/login">Exit</a>
+</div>
+<section>
+
+<div class="card">
+<h2>Camera Controls</h2>
+<img id="snapshot" src="http://$ipadd:3000/preview.jpeg"/>
+<br>
+<br>
+<button onclick="window.location.href='webui?token=$token&command=ptzinit'" id="home">Init_PTZ</button>
+<br>
+<br>
+<table style="margin: 0px auto;">
+    <tr align="center">
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$left$up'">&#11017;</button></td>
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$up'">&#11014;</button></td>
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$right$up'">&#11016;</button></td>
+    </tr>
+    <tr align="center">
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$left'">&#11013;</button></td>
+        <td>PTZ</td>
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$right'">&#10145;</button></td>
+    </tr>
+    <tr align="center">
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$left$down'">&#11019;</button></td>
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$down'">&#11015;</button></td>
+        <td><button onclick="window.location.href='webui?token=$token&command=ptz$right$down'">&#11018;</button></td>
+    </tr>
+</table>
+<br>
+</div>
+
+<div class="card">
+<h2>Endpoints</h2>
+RTSP stream Main: rtsp://$ipadd:554/vs0
+<br>
+RTSP stream Sub: rtsp://$ipadd:554/vs1
+<br>
+Snapshot: http://$ipadd:3000/snapshot.jpeg
+<br>
+</div>
+
+</section>
+
+<script>
+setInterval(function() { document.getElementById("snapshot").src = "http://$ipadd:3000/" + Math.round(Math.random()*100000) + ".jpeg"; }, 300);
+</script>
+
+</body>
+</html>
+EOT
+
+ if [ "$command" = "irinit" ]; then
+  echo "init_ir" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "iron" ]; then
+  echo "set_ir_cut 1" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "iroff" ]; then
+  echo "set_ir_cut 0" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzinit" ]; then
+  echo "init_ptz" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzu" ]; then
+  echo "up" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzd" ]; then
+  echo "down" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzl" ]; then
+  echo "left" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzr" ]; then
+  echo "right" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzru" ]; then
+  echo "right_up" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzrd" ]; then
+  echo "right_down" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzlu" ]; then
+  echo "left_up" > /tmp/ptz.daemon
+ fi
+ if [ "$command" = "ptzld" ]; then
+  echo "left_down" > /tmp/ptz.daemon
+ fi
+else
+    if [[ -f /etc/jffs2/www/index.html ]]; then
+        source /etc/jffs2/www/cgi-bin/footer
+    else
+        source /mnt/anyka_hack/web_interface/www/cgi-bin/footer
+    fi
+fi

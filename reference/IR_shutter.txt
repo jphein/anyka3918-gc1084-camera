@@ -1,0 +1,9 @@
+IR shutter/filter operation (the thing that makes the CLICK sound)
+This is different from the IR LEDs, the LEDs are automaticly controlled by a photoresistor
+
+from https://github.com/Nemobi/Anyka.git get the demo executables (/bin) and the libraries
+load libraries with (wherever you put them):
+LD_LIBRARY_PATH=/mnt/anyka_hack/oldcam/lib:/mnt/anyka_hack/oldcam/usr/lib
+use the IR shutter:
+./ak_drv_ir_demo -s 1
+or 0

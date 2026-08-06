@@ -1,0 +1,67 @@
+#!/bin/sh
+
+if [[ -f /etc/jffs2/www/index.html ]]; then
+    source /etc/jffs2/www/cgi-bin/header
+else
+    source /mnt/anyka_hack/web_interface/www/cgi-bin/header
+fi
+if [[ -f /tmp/token.txt ]] && [[ "$token" == "$(readline 1 /tmp/token.txt)" ]]; then
+#import settings
+source /etc/jffs2/gergesettings.txt
+message_banner=""
+
+if [[ -f /mnt/anyka_hack/web_interface/www/index.html ]]; then
+  if [[ $md_record_sec == 0 ]]; then
+    message_banner="<div class=\"banner\">Motion recording is disabled!<br><br><button onclick=\"window.location.href='settings?token=$token'\">Turn on in Settings</button></div>"
+  fi
+
+  filelist="<div class=\"card\"><h2>Recorded Events</h2><table style=\"margin: 0px auto\"><tr>"
+  videofiles=$(ls /mnt/anyka_hack/web_interface/www/video/*.mp4)
+
+  for i in $videofiles; do
+    filename="${i//.mp4/}"
+    filename="${filename##*/}"
+    filelist="$filelist<tr><th>$filename.mp4</th>"
+    filelist="$filelist<th><button onclick=\"window.location.href='video?token=$token&file=$filename'\">View Event</button></th>"
+    filelist="$filelist<th><button onclick=\"window.location.href='del_video.sh?token=$token&file=$filename'\">Delete</button></th></tr>"
+  done
+  filelist="$filelist</table>Scan for new files with ffmpeg (stops main app to free memory while running)<br><br><button onclick=\"window.location.href='video?token=$token&scan=true'\">Run FFMPEG</button><br><br></div>"
+
+else
+  message_banner="<div class=\"banner\">No SD card Inserted!<br><br><button onclick=\"window.location.href='webui?token=$token'\"> Back </button></div>"
+  filelist=""
+fi
+
+cat <<EOT
+<!DOCTYPE html>
+<html>
+<head>
+<title>Camera - WebUI</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/cgi-bin/webui?token=$token">Home</a>
+  <a href="/cgi-bin/settings?token=$token">Settings</a>
+  <a href="/cgi-bin/system?token=$token">System</a>
+  <a class="active" href="/cgi-bin/events?token=$token">Events</a>
+  <a href="/cgi-bin/login">Exit</a>
+</div>
+
+<section>
+$message_banner
+$filelist
+
+</section>
+</body>
+</html>
+EOT
+else
+    if [[ -f /etc/jffs2/www/index.html ]]; then
+        source /etc/jffs2/www/cgi-bin/footer
+    else
+        source /mnt/anyka_hack/web_interface/www/cgi-bin/footer
+    fi
+fi

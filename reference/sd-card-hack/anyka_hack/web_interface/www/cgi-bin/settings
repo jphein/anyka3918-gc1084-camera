@@ -1,0 +1,148 @@
+#!/bin/sh
+
+if [[ -f /etc/jffs2/www/index.html ]]; then
+    source /etc/jffs2/www/cgi-bin/header
+else
+    source /mnt/anyka_hack/web_interface/www/cgi-bin/header
+fi
+if [[ -f /tmp/token.txt ]] && [[ "$token" == "$(readline 1 /tmp/token.txt)" ]]; then
+#import settings
+source /etc/jffs2/gergesettings.txt
+
+select_sensor=""
+for i in $(ls /usr/modules/sensor*.ko); do
+  if [[ "$i" == "$sensor_kern_module" ]]; then
+    select_sensor="$select_sensor<OPTION SELECTED>$i"
+  else
+    select_sensor="$select_sensor<OPTION>$i"
+  fi
+done
+
+image_upside_down=$(echo "$extra_args" | grep ' -u')
+if [[ ${#image_upside_down} -gt 1 ]]; then
+  image_upside_down=1
+else
+  image_upside_down=0
+fi
+
+if [[ ${extra_args:3:1} -gt 1 ]] && [[ ${extra_args:3:1} -lt 4 ]]; then
+  ir_invert=1
+else
+  ir_invert=0
+fi
+
+if [[ ${extra_args:3:1} -gt 2 ]]; then
+  day_night_invert=1
+else
+  day_night_invert=0
+fi
+
+cat <<EOT
+<!DOCTYPE html>
+<html>
+<head>
+<title>Camera - WebUI</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/cgi-bin/webui?token=$token">Home</a>
+  <a class="active" href="/cgi-bin/settings?token=$token">Settings</a>
+  <a href="/cgi-bin/system?token=$token">System</a>
+  <a href="/cgi-bin/events?token=$token">Events</a>
+  <a href="/cgi-bin/login">Exit</a>
+</div>
+
+<section>
+<div class="card">
+<form action="/cgi-bin/pwd_change">
+<input type="hidden" NAME="token" value="$token">
+<h2>WebUI Password</h2>
+new password<br>
+<input type="password" name="webui_password" size=40><br>
+confirm password<br>
+<input type="password" name="webui_conf_password" size=40><br><br>
+<input type="submit" class="button" value="Change Password">
+</form>
+</div>
+
+<div class="card">
+<form action="/cgi-bin/settings_submit.sh">
+<input type="hidden" NAME="token" value="$token">
+<h2>Network & Time</h2>
+wifi_ssid <br>
+<input type="text" name="wifi_ssid" size=40 value="$wifi_ssid"><br><br>
+wifi_password <br>
+<input type="password" name="wifi_password" size=40 value="$wifi_password"><br><br>
+
+NTP time server (can be IP or url)<br>
+<input type="text" name="time_source" size=40 value="$time_source"><br><br>
+time_zone <br>
+<input type="text" name="time_zone" size=40 value="$time_zone"><br><br>
+<input type="submit" class="button" value="Save"></form>
+</div>
+
+<div class="card">
+<form action="/cgi-bin/settings_submit.sh">
+<input type="hidden" NAME="token" value="$token">
+<input type="hidden" NAME="ir_invert" value="0">
+<input type="hidden" NAME="day_night_invert" value="0">
+<input type="hidden" NAME="image_upside_down" value="0">
+<h2>Sensor & Image</h2>
+Camera image sensor kernel module <SELECT NAME="sensor_kern_module" SIZE=1>$select_sensor</SELECT><br><br>
+Preview image_width <br>
+<input type="text" name="image_width" size=40 value="$image_width"><br><br>
+Preview image_height <br>
+<input type="text" name="image_height" size=40 value="$image_height"><br><br>
+Upside Down image (rotate 180 degrees) <input type="checkbox" name="image_upside_down" value="1" $(if [ 1 == $image_upside_down ]; then echo 'checked'; fi)><br><br>
+Day/Night mode invert (black&white vs colour image) <input type="checkbox" name="day_night_invert" value="1" $(if [ 1 == $day_night_invert ]; then echo 'checked'; fi)><br><br>
+IR filter invert (image looks pink if set wrong) <input type="checkbox" name="ir_invert" value="1" $(if [ 1 == $ir_invert ]; then echo 'checked'; fi)><br><br>
+<input type="submit" class="button" value="Save"></form>
+</div>
+
+<div class="card">
+<form action="/cgi-bin/settings_submit.sh">
+<input type="hidden" NAME="token" value="$token">
+<input type="hidden" NAME="run_ftp" value="0">
+<input type="hidden" NAME="run_telnet" value="0">
+<input type="hidden" NAME="run_web_interface" value="1">
+<input type="hidden" NAME="run_ptz_daemon" value="0">
+<input type="hidden" NAME="ptz_invert" value="0">
+<input type="hidden" NAME="ptz_init_on_boot" value="0">
+<input type="hidden" NAME="run_libre_anyka" value="0">
+<h2>Applications</h2>
+FTP (File Transfer Protocol) [default 1] <input type="checkbox" name="run_ftp" value="1" $(if [ 1 == $run_ftp ]; then echo 'checked'; fi)><br>
+Telnet [default 1] <input type="checkbox" name="run_telnet" value="1" $(if [ 1 == $run_telnet ]; then echo 'checked'; fi)><br>
+ptz_daemon camera movement [default 1] <input type="checkbox" name="run_ptz_daemon" value="1" $(if [ 1 == $run_ptz_daemon ]; then echo 'checked'; fi)><br>
+Invert camera movement <input type="checkbox" name="ptz_invert" value="1" $(if [ 1 == $ptz_invert ]; then echo 'checked'; fi)><br>
+Home the camera ptz at bootup [default 0] <input type="checkbox" name="ptz_init_on_boot" value="1" $(if [ 1 == $ptz_init_on_boot ]; then echo 'checked'; fi)><br>
+Libre-Anyka-App (RTSP, snapshot and motion trigger recording) [default 1] <input type="checkbox" name="run_libre_anyka" value="1" $(if [ 1 == $run_libre_anyka ]; then echo 'checked'; fi)><br>
+Motion recording in seconds [default 0 to disable] <input type="text" name="md_record_sec" value="$md_record_sec" size=3 maxlength=3><br>
+<input type="submit" class="button" value="Save"></form>
+</div>
+
+<div class="card">
+<form action="/cgi-bin/settings_submit.sh">
+<input type="hidden" NAME="token" value="$token">
+<input type="hidden" NAME="rootfs_modified" value="0">
+<input type="hidden" NAME="run_ipc" value="0">
+<h2>Advanced</h2>
+This camera has modified rootfs that does not launch anyka_ipc <input type="checkbox" name="rootfs_modified" value="1" $(if [ 1 == $rootfs_modified ]; then echo 'checked'; fi)><br>
+Run anyka_ipc [default 0] <input type="checkbox" name="run_ipc" value="1" $(if [ 1 == $run_ipc ]; then echo 'checked'; fi)><br><br>
+<input type="submit" class="button" value="Save"></form>
+</div>
+
+
+</section>
+</body>
+</html>
+EOT
+else
+    if [[ -f /etc/jffs2/www/index.html ]]; then
+        source /etc/jffs2/www/cgi-bin/footer
+    else
+        source /mnt/anyka_hack/web_interface/www/cgi-bin/footer
+    fi
+fi

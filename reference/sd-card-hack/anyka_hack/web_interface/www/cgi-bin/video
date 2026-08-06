@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+
+if [[ -f /etc/jffs2/www/index.html ]]; then
+    source /etc/jffs2/www/cgi-bin/header
+else
+    source /mnt/anyka_hack/web_interface/www/cgi-bin/header
+fi
+if [[ -f /tmp/token.txt ]] && [[ "$token" == "$(readline 1 /tmp/token.txt)" ]]; then
+if [[ "$scan" == "true" ]]; then
+sh /mnt/anyka_hack/ffmpeg/wrap_mp4.sh
+cat <<EOT
+<html>
+    <head>
+        <meta http-equiv="refresh" content="0; url=/cgi-bin/events?token=$token" />
+    </head>
+    <body>
+        <a href="/cgi-bin/events?token=$token">WebUI</a>
+    </body>
+</html>
+EOT
+else
+cat <<EOT
+<!DOCTYPE html>
+<html>
+<head>
+<title>Camera - WebUI</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="topnav">
+  <a href="/cgi-bin/webui?token=$token">Home</a>
+  <a href="/cgi-bin/settings?token=$token">Settings</a>
+  <a href="/cgi-bin/system?token=$token">System</a>
+  <a class="active" href="/cgi-bin/events?token=$token">Events</a>
+  <a href="/cgi-bin/login">Exit</a>
+</div>
+
+<section>
+
+<div class="card">
+<h2>$file.mp4</h2>
+<video controls width="600">
+  <source src="/video/$file.mp4" type="video/mp4" />
+</video>
+<br>
+</div>
+</section>
+
+</body>
+</html>
+EOT
+fi
+else
+    if [[ -f /etc/jffs2/www/index.html ]]; then
+        source /etc/jffs2/www/cgi-bin/footer
+    else
+        source /mnt/anyka_hack/web_interface/www/cgi-bin/footer
+    fi
+fi

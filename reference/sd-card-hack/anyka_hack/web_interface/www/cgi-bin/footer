@@ -1,0 +1,10 @@
+cat <<EOT
+<html>
+    <head>
+        <meta http-equiv="refresh" content="0; url=/cgi-bin/login" />
+    </head>
+    <body>
+        <a href="/cgi-bin/login">WebUI</a>
+    </body>
+</html>
+EOT

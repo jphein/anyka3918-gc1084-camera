@@ -1,0 +1,49 @@
+#!/bin/sh
+
+if [[ -f /etc/jffs2/www/index.html ]]; then
+    source /etc/jffs2/www/cgi-bin/header
+else
+    source /mnt/anyka_hack/web_interface/www/cgi-bin/header
+fi
+if [[ -f /tmp/token.txt ]] && [[ "$token" == "$(readline 1 /tmp/token.txt)" ]]; then
+
+message_banner=""
+if [[ ${#webui_password} -gt 3 ]]; then
+  if [[ "$webui_password" == "$webui_conf_password" ]]; then
+    message_banner="<div class=\"banner\">Password change success<br><br><button onclick=\"window.location.href='login'\">Return to Login</button></div>"
+    random="$(dd if=/dev/urandom bs=30 count=1)"
+    salt=$random$RANDOM
+    echo "$salt$webui_password" | md5sum >/etc/jffs2/webui.hash
+    echo "$salt">>/etc/jffs2/webui.hash
+  else
+    message_banner="<div class=\"banner\">Passwords too short or do not match!<br><br><button onclick=\"window.location.href='webui?token=$token'\"> Back </button></div>"
+  fi
+else
+  message_banner="<div class=\"banner\">Passwords too short or do not match!<br><br><button onclick=\"window.location.href='webui?token=$token'\"> Back </button></div>"
+fi
+
+cat <<EOT
+<!DOCTYPE html>
+<html>
+<head>
+<title>Camera - WebUI</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<section>
+$message_banner
+</section>
+
+</body>
+</html>
+EOT
+
+else
+    if [[ -f /etc/jffs2/www/index.html ]]; then
+        source /etc/jffs2/www/cgi-bin/footer
+    else
+        source /mnt/anyka_hack/web_interface/www/cgi-bin/footer
+    fi
+fi

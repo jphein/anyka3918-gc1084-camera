@@ -1,0 +1,31 @@
+#!/bin/bash
+
+readline() {
+  linetoread=$1
+  file=$2
+  sed $linetoread'q;d' $file
+}
+#https://www.freecodecamp.org/news/url-encoded-characters-reference/
+QUERY_STRING="${QUERY_STRING//&/ }"
+query_out=""
+for element in $QUERY_STRING; do
+  splitelement="${element//%/ %}"
+  for i in $splitelement; do
+    #query_out="$query_out"
+    if [[ ${i:0:1} == "%" ]]; then
+      query_out="$query_out"$(printf "\x${i:1:2}")$(echo -n "${i:3}")
+    else
+      query_out="$query_out$i"
+    fi
+  done
+  query_out="$query_out "
+done
+QUERY_STRING="$query_out"
+
+for i in $QUERY_STRING; do
+  eval $i
+done
+
+
+echo "Content-type: text/html"
+echo ""

@@ -1,0 +1,914 @@
+U-Boot 2013.10.0-AK_V2.0.04 (Nov 14 2022 - 15:04:58)
+
+DRAM:  64 MiB
+8 MiB
+Create flash partition table init OK!
+ANYKA SDHC/MMC4.0: 0
+Load Env CRC OK!
+In:    serial
+Out:   serial
+Err:   serial
+
+Hit any key to stop autoboot:  0
+
+
+SF: 1417200 bytes @ 0x31000 Read: OK
+## Booting kernel from Legacy Image at 81808000 ...
+   Image Name:   Linux-3.4.35
+   Image Type:   ARM Linux Kernel Image (uncompressed)
+   Data Size:    1417136 Bytes = 1.4 MiB
+   Load Address: 81808000
+   Entry Point:  81808040
+   Verifying Checksum ... OK
+   XIP Kernel Image ... OK
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+Anyka Linux Kernel Version: 2.5.04
+Booting Linux on physical CPU 0
+Linux version 3.4.35 (zhoujiahui@szfirsvr) (gcc version 4.8.5 (anyka (gcc-4.8.5 + binutils-2.24 + ulcibc-0.9.33.2)(20170223)) ) #1 Mon Nov 14 15:03:51 CST 2022
+CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00053177
+CPU: VIVT data cache, VIVT instruction cache
+Machine: Cloud39EV2_AK3918E80PIN_MNBD
+Memory policy: ECC disabled, Data cache writeback
+ANYKA CPU AK3918 (ID 0x20150200)
+Built 1 zonelists in Zone order, mobility grouping on.  Total pages: 10160
+Kernel command line: console=ttySAK0,115200n8 root=/dev/mtdblock4 rootfstype=squashfs init=/sbin/init mem=64M memsize=64M
+PID hash table entries: 256 (order: -2, 1024 bytes)
+Dentry cache hash table entries: 8192 (order: 3, 32768 bytes)
+Inode-cache hash table entries: 4096 (order: 2, 16384 bytes)
+Memory: 40MB = 40MB total
+Memory: 36436k/36436k available, 4524k reserved, 0K highmem
+Virtual kernel memory layout:
+    vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+    fixmap  : 0xfff00000 - 0xfffe0000   ( 896 kB)
+    vmalloc : 0xc3000000 - 0xff000000   ( 960 MB)
+    lowmem  : 0xc0000000 - 0xc2800000   (  40 MB)
+    modules : 0xbf000000 - 0xc0000000   (  16 MB)
+      .text : 0xc0008000 - 0xc03a2000   (3688 kB)
+      .init : 0xc03a2000 - 0xc03bc000   ( 104 kB)
+      .data : 0xc03bc000 - 0xc03e0cf8   ( 148 kB)
+       .bss : 0xc03e0d1c - 0xc0401bc8   ( 132 kB)
+SLUB: Genslabs=13, HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+NR_IRQS:95
+sched_clock: 32 bits at 12MHz, resolution 83ns, wraps every 357913ms
+AK39 console driver initial
+console [ttySAK0] enabled
+Calibrating delay loop... 199.06 BogoMIPS (lpj=995328)
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 512
+CPU: Testing write buffer coherency: ok
+Setting up static identity map for 0x81ad6520 - 0x81ad6578
+devtmpfs: initialized
+NET: Registered protocol family 16
+On-chip L2 memory initialized
+AK39 clocks: CPU 400MHz, MEM 200MHz, ASIC 100MHz
+Anyka platform share gpio locks initialize.
+bio: create slab <bio-0> at 0
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+i2c-ak39 i2c-ak39: Unable to achieve desired frequency 384KHz. Lowest achievable 390KHz
+i2c-ak39 i2c-ak39: i2c-0: AK39 I2C adapter
+Linux video capture interface: v2.00
+cfg80211: Calling CRDA to update world regulatory domain
+Switching to clocksource ak_timer5 cs
+NET: Registered protocol family 2
+IP route cache hash table entries: 1024 (order: 0, 4096 bytes)
+TCP established hash table entries: 2048 (order: 2, 16384 bytes)
+TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+TCP: Hash tables configured (established 2048 bind 2048)
+TCP: reno registered
+UDP hash table entries: 256 (order: 0, 4096 bytes)
+UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+NET: Registered protocol family 1
+RPC: Registered named UNIX socket transport module.
+RPC: Registered udp transport module.
+RPC: Registered tcp transport module.
+RPC: Registered tcp NFSv4.1 backchannel transport module.
+squashfs: version 4.0 (2009/01/31) Phillip Lougher
+exFAT: Version 1.2.9
+jffs2: version 2.2. © 2001-2006 Red Hat, Inc.
+msgmni has been set to 71
+io scheduler noop registered
+io scheduler cfq registered (default)
+AK39xx uart driver init, (c) 2013 ANYKA
+ak39-uart.0: ttySAK0 at MMIO 0x20130000 (irq = 10) is a AK39
+ion: failed to create debug files.
+brd: module loaded
+loop: module loaded
+ch422_init
+ch422_init HHHHHLLL
+check CH422
+ch422_is_exist:0
+aw9523b init
+aw9523b_init: add i2c device at 0x58 aw9523b
+aw9523b_probe()
+enter aw9523b_probe*************************
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_write data=0x10, dummy=0xff
+aw9523b_write fail!! dummy!=data
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_probe successed
+AK Motor Driver (c) 2013 ANYKA
+init the ak-motor device success.
+init the ak-motor device success.
+@@@ [akpcm_init]: enter @@@
+@@@ [akpcm_probe]: enter @@@
+akpcmL0->ak39_codec_probe enter...
+akpcm probe: mic on
+akpcm_probe: OK
+
+akisp_init
+Start to init Anyka SPI Flash...
+Start to init Anyka partition table...
+AK SPI Driver, (c) 2012 ANYKA
+akpi regs: SPICON:00000152, SPISTA:00000015, SPIINT:00000000.
+ak-spi ak-spi: master is unqueued, this is deprecated
+ak_spi setup the master.
+pre-scaler=2 (wanted 20Mhz, got 16Mhz)
+ak spiflash probe enter.
+pre-scaler=2 (wanted 20Mhz, got 16Mhz)
+ak_spi_setupxfer,con:00000252.
+akspi flash ID: 0x00684017
+ak-spiflash spi0.0: BY25Q64ASSIG (8192 Kbytes)
+FHA:partition lib version: V1.1.06
+
+FHA:spiflash init
+
+FHA:boot block num offset:427
+FHA:Sflash_Get_Partition_Startpage g_boot_len:752
+mtd_part[0]:
+name = KERNEL
+size = 0x180000
+offset = 0x31000
+mask_flags = 0x1
+
+mtd_part[1]:
+name = MAC
+size = 0x1000
+offset = 0x1b1000
+mask_flags = 0x1
+
+mtd_part[2]:
+name = ENV
+size = 0x1000
+offset = 0x1b2000
+mask_flags = 0x1
+
+mtd_part[3]:
+name = A
+size = 0x100000
+offset = 0x1b3000
+mask_flags = 0x1
+
+mtd_part[4]:
+name = B
+size = 0x480000
+offset = 0x2b3000
+mask_flags = 0x1
+
+mtd_part[5]:
+name = C
+size = 0xaf000
+offset = 0x733000
+mask_flags = 0x1
+
+Creating 6 MTD partitions on "spi0.0":
+0x000000031000-0x0000001b1000 : "KERNEL"
+0x0000001b1000-0x0000001b2000 : "MAC"
+0x0000001b2000-0x0000001b3000 : "ENV"
+0x0000001b3000-0x0000002b3000 : "A"
+0x0000002b3000-0x000000733000 : "B"
+0x000000733000-0x0000007e2000 : "C"
+Init AK SPI Flash finish.
+akspi master initialize success, use for DMA mode.
+AK39E_MAC Ethernet Driver, V1.1
+input: akgpio-keys as /devices/platform/akgpio-keys/input/input0
+AK MCI Driver (c) 2010 ANYKA
+akmci ak_mci: pdev->name:ak_mci request gpio irq ret = 0, irq=36
+akmci ak_mci: Mci Interface driver.mmc0. using l2dma, sw IRQ. detect mode:GPIO detect.
+TCP: cubic registered
+NET: Registered protocol family 17
+lib80211: common routines for IEEE802.11 drivers
+/home/zhoujiahui/nfs/anyka/anykav200/D011ap_20200511/kernel/drivers/rtc/hctosys.c: unable to open rtc device (rtc0)
+VFS: Mounted root (squashfs filesystem) readonly on device 31:4.
+devtmpfs: mounted
+Freeing init memory: 104K
+mount all file system...
+start telnet......
+starting mdev...
+**************************
+    Love Linux ! ! !
+**************************
+200+0 records in
+200+0 records out
+102400 bytes (100.0KB) copied, 0.038270 seconds, 2.6MB/s
+aksensor_module_init
+id 65535
+welcome to file system
+[root@anyka ~]$ default log level=4
+******** cmd server has running! ******
+[main:200] Success to create TCP socket.
+[main:234] WHITE_LED store:0
+Waiting for connect......
+close white led, whiteLightNegativeFlag = 0
+ifconfig: SIOCGIFFLAGS: No such device
+default log level=4
+*****hello daemon*******
+[1;33m[watchdog_enable:228] watchdog timeout = 8(s)
+[m[feed_watchdog:179] thread id: 426
+start ipc service......
+start ipc service......
+start net service......
+[daemon_pth_func:684] thread id: 435
+[32m[00:00:00.000|  info|   MEM  ] [0mMemory Pool 4095KB.
+
+default log level=4
+	 V2.7.05_build@Jan  6 2023_16:07:26
+##--AudioFilter Version V1.13.09--
+  support:  EQ,  RESAMPLE,  ASLC,
+--AudioCodec Version V1.16.00_svn5418--
+
+  support:  MP3 decode,  MP3 encode,  WMA(32bit) decode,  APE decode,  FLAC decode,  PCM decode,  ADPCM decode,  ADPCM encode,  AAC decode,  AAC encode,  VORBIS decode,  RA8 decode,  AC3 decode,  G711 decode,  G711 encode,  SPEEX_WB decode,  SPEEX_WB encode,
+
+
+[0;35m
+[ak_config_init_ini:1199] compatible old anyka_cfg.ini, record_mode = 2, sd_record_md = 0
+
+[m[0;35m
+[ak_config_init_ini:1256] Fix /etc/jffs2/anyka_cfg.ini!!!
+
+[m[0;32;32m01-01 08:00:11.261333   428   428 D yi_hwconfig_init(192) strLine = HW=1221231550211001800100000000000000000000000000100000000000000000
+ len=68
+[m
+[ak_vi_match_sensor:938] config_file: /etc/jffs2/isp_h63.conf
+[1;33m[isp.conf]version: 3.007_1215, sensor id: 0xa63, style id: 0
+[m[isp.conf]modify time: 2020-12-15 13:43:00
+[check_file:347] check isp cfg: /etc/jffs2/isp_h63.conf OK
+[1;33m[match_sensor:399] ak_vi_match_sensor OK
+[m[1;33m[ak_vi_open:979] register device, dev type: 0
+[mnew device
+[vi_register_device:774] new dev=0x525a50
+[1;33m
+----- libakuio.so V2.1.00 -----
+[m[libakuio][/dev/ion] kernel config reserve mem size: 25165824, 0x1800000
+
+[libakuio]ION: alloc 25165824 bytes for process 428
+[libakuio]ION: yield 5 for iad 0x4e191c
+
+--------------- pmem info ---------------
+    PMEM_GET_TOTAL_SIZE: 25165824 bytes
+    PMEM_GET_PHYS: 0x80000000
+    pmem.vaddr: 0xb52bf000
+--------------- info End ---------------
+
+####akuio pmem init succSet Frame Height = 0
+
+ess###
+
+ispsdk_lib version:V3.1.00
+--- AK_ISP_sdk_init g_fd=8 ---
+hight light:
+	frame_rate=20 max_exp_time=1125 low_light_gain=16
+low light:
+	frame_rate=15 max_exp_time=1500 light_gain=5
+hight light fps: 20
+[1;33m[isp_set_sensor_fps:1871] set seSet Frame Height = 1125
+
+nsor fps: 20
+[m[1;33m[set_fps:185] set fps:20 ok
+[mregisterak_camera_set_parm pcid:1
+ vi device ok, dev_count=1
+[1;ak_camera_set_parm pcid:1, ch2w:640, ch2h:360
+33m[ak_vi_open:989] register device OK, pdev: 0x525a50
+[m[1;33m[vi_new_user:577] now user_flgSet Frame Height = 1500
+
+=0, user_ref=1
+[m[load_def_awb_step:205] get awb_attr ok, auto_awb_step:10
+hight light:
+	frame_rate=20 max_exp_time=1125 low_light_gain=16
+low light:
+	frame_rate=15 max_exp_time=1500 light_gain=5
+hight light fps: 20
+[1;33m[isp_set_sensor_fps:1871] set sensor fps: 20
+[m[1;33m[change_fps_pthread:714] thread id: 448
+[m[1;33m[set_fps:185] set fps:20 ok
+[minit CROP succeedded! reset to CROP[1280, 720]
+[1;33m[isp_set_sensor_fps:1871] set sensor fps: 15
+[m[init_vi:339] capture fps: 15
+
+video input info:
+	main_w[1280], main_h[720], sub_w[640], sub_h[360]
+
+[1;33m[init_video:439] start capture ...
+[m[1;33m[malloc_capture_buffers:115] ion_mem: 0xb5643000, temp: 0x80384000
+[m[1;33m[malloc_capture_buffers:122] n_buffers: 0, start: 0xb5643000, length: 2306048
+[m[1;33m[malloc_capture_buffers:122] n_buffers: 1, start: 0xb5876000, length: 2306048
+[m[1;33m[malloc_capture_buffers:122] n_buffers: 2, start: 0xb5aa9000, length: 2306048
+[m[1;33m[malloc_capture_buffers:122] n_buffers: 3, start: 0xb5cdc000, length: 2306048
+[m[malloc_capture_buffers:128] set buffer size: 2306048 ok
+[1;33m[isp_vi_capture_on:719] stream on, drop first 4 frames
+[m[1;33m[ak_rb_init:37] init rb_size=8192 ring buffer OK
+[m[init_pcm_adc:1351] frame interval: 100,. frame size: 3200
+[1;33m[ak_ai_open:1543] ai version libplat_ai V2.9.01
+[m[ak_ai_set_adc_volume:1887] set volume 8
+[1;33m[pcm_adc_set_volume:1051] set DEV volume 7
+[m[ak_ai_set_aslc_volume:1930] set volume 0
+##--AudioFilter Version V1.13.09, type:11--
+## aslc setMileStone:
+(0, 0), (20000, 20000), (32767, 32700),
+## times: 2, 1, 1300
+## aslc silence: level=0, smpcnt=800
+## sr:16000, ch:1, bitsPerSmp:16, maxLenin:0, jointCh:0
+## ASLC OPEN OK ena:1, lookAheadLen:32
+## aslc setMileStone:
+(0, 0), (3, 3), (10, 10), (32768, 32768), (32768, 32768),
+## times: 6, 3, 300
+## ASLC SET OK, ena:1, lookAheadLen:96
+[1;33m[ak_ai_set_frame_interval:1841] audio frame_size=2048
+[m[1;31m
+[init_ai:519] audio_in frame interval=64
+[m[1;33m[init_audio:565] init audio in OK
+[m[ak_ao_set_dac_volume:1113] set volume 6
+[1;33m[pcm_dac_set_volume:766] set DEV volume 5
+[m##--AudioFilter Version V1.13.09, type:11--
+## aslc setMileStone:
+(0, 0), (20000, 20000), (32767, 32700),
+## times: 2, 1, 1300
+## aslc silence: level=0, smpcnt=800
+## sr:16000, ch:2, bitsPerSmp:16, maxLenin:0, jointCh:2
+## ASLC OPEN OK ena:1, lookAheadLen:32
+[dac_set_aslc:388] aslc volume = 0
+## aslc setMileStone:
+(0, 0), (104, 33), (328, 328), (26029, 32768), (32768, 32768),
+## times: 6, 3, 300
+## ASLC SET OK, ena:1, lookAheadLen:96
+[ak_ao_set_aslc_volume:1160] set aslc volume 0
+[dac_set_aslc:388] aslc volume = 0
+## aslc setMileStone:
+(0, 0), (104, 33), (328, 328), (26029, 32768), (32768, 32768),
+## times: 6, 3, 300
+## ASLC SET OK, ena:1, lookAheadLen:96
+[ak_ao_set_aslc_volume:1160] set aslc volume 0
+[1;33m[init_audio:571] init audio out OK
+[m[1;33m[init_decode_input:154] decode type=4: AAC
+[m[1;33m[init_decode_input:176] sample_rate=16000, channel_num=1, sample_bits=16
+[m--AudioCodec Version V1.16.00_svn5418--
+
+## ChipIdval = 0x20150200
+
+## CHIP OK
+## warn: setting streamlen(20480) is less than default(32768)
+
+## len_buf_in=20480, inbufminlen=6144, mType=4
+
+_SD_AAC_Open cmmb_adts_flag = 0
+## AAC+ OPEN OK
+
+_SD_Decode_Open OK
+[1;33m[ak_adec_open:578] audio decode output, m_ulSize=20480, m_ulDecDataSize=0
+[m[1;33m[ak_adec_open:581] m_SampleRate=16000, m_Channels=1, m_BitsPerSample=16
+[m[1;33m[ak_adec_open:583] decode buffer free size=20479
+[m[ak_adec_request_stream:894] request 0x561460
+[ak_adec_request_stream:916] user status change to STATUS_RESERVED
+[write_pcm_thread:354] thread id: 449
+	--- write_pcm_thread start processing ---
+[write_pcm_thread:374] sleep..., decode buffer remain=0
+[ak_csrv_cmd_init_server:456] server init ok, max nr: 5
+[ak_csrv_cmd_init_server:464] listenning...
+[ak_ai_set_adc_volume:1887] set volume 8
+[0;35m
+[cmd_srv_th:325] use 12 for cmd server sock
+[m[0;35m
+[cmd_srv_accept_th:370] use 12 for cmd server accept sock
+[m[1;33m[pcm_adc_set_volume:1051] set DEV volume 7
+[m[ak_ai_set_aslc_volume:1930] set volume 0
+## aslc setMileStone:
+[cmd_srv_accept_th:373] This thread enter, id: 453
+[cmd_srv_th:328] This thread enter, id: 452
+(0, 0), (3, 3), (10, 10), (32768, 32768), (32768, 32768),
+## times: 6, 3, 300
+## ASLC SET OK, ena:1, lookAheadLen:96
+[ak_ao_set_dac_volume:1113] set volume 6
+[1;33m[pcm_dac_set_volume:766] set DEV volume 5
+[m[dac_set_aslc:388] aslc volume = 4
+## aslc setMileStone:
+(0, 0), (104, 33), (328, 1305), (6538, 32768), (32768, 32768),
+## times: 6, 3, 300
+## ASLC SET OK, ena:1, lookAheadLen:96
+[ak_ao_set_aslc_volume:1160] set aslc volume 4
+# /usr/share/audio_file/common/nothing.aac
+
+# /usr/share/audio_file/common/poweron.aac
+
+[1970/01/01 08:00:12][ak_misc.c: ak_misc_set_video_day_night(): 974] now set to day
+gpio-ircut_a store:1
+[isp_switch:152] switching isp mode -> day
+[1;33m[isp.conf]version: 3.007_1215, sensor id: 0xa63, style id: 0
+[m[isp.conf]modify time: 2020-12-15 13:43:00
+[check_file:347] check isp cfg: /etc/jffs2/isp_h63.conf OK
+hight light:
+	frame_rate=20 max_exp_time=1125 low_light_gain=16
+low light:
+	frame_rate=15 max_exp_time=1500 light_gain=5
+hight light fps: 20
+[1;33m[isp_set_sensor_fps:1871]Set Frame Height = 1125
+
+ set sensor fps: 20
+[m[1;33m[set_fps:185] set fps:20 ok
+[mhight light:
+	frame_rate=20 max_exp_time=1125 low_light_gain=16
+>60, sjf:4294938521, ul:7
+low light:
+	frame_rate=15 max_exp_time=1500 light_gain=5
+hight light fpsSet Frame Height = 1125
+
+: 20
+[1;33m[isp_set_sensor_fps:1871] set sensor fps: 20
+[m[1;33m[set_fps:185] set fps:20 ok
+[m[load_def_awb_step:205] get awb_attr ok, auto_awb_step:10
+IR_LED store:0
+[write_pcm_thread:376] wakeup...
+samplerate = 16000
+
+channel    = 1
+
+bitrate    = 0
+
+sbrEnabled = 0
+
+[1;33m[ak_adec_get_frame:756] m_SampleRate=16000, m_Channels=2,@@@ [print_event_string:144]: event-1: open @@@
+ m_BitsPerSample=16
+[m[1;33m[set_dac_param:202] dac ioctl set sample: 16000
+[m## aslc: len_in=128, bpspl=16, ch=2, tmpwp=0, looklen=96, sz=128
+[1;33m[ak_adec_notice_stream_end:835] called, decode free size=16566
+[m## aslc: len_in=2048, bpspl=16, ch=2, tmpwp=32, lookle@@@ [print_event_string:150]: event-3: dac start @@@
+n=96, sz=608
+## realloc 4864
+[1;33m[ak_adec_notice_stream_end:835] called, decode free size=494
+[m[reload_config_awb_step:225] get awb_attr ok, cur auto_awb_step:Set Frame Height = 1500
+
+10, set to step:10
+[1;33m[need_set_fps:640] change sensor fps, new_fps:15, current gain:30
+[m[1;33m[isp_set_sensor_fps:1871] set sensor fps: 15
+[m[1;33m[set_fps:185] set fps:15 ok
+[m[0;32;32m01-01 08:00:15.723897   428   465 D timer_thread(880) g_auto_reboot_interval=604800
+[m
+[photosensitive_switch_th_ex:318] Thread start, id: 464
+[0;32;32m01-01 08:00:15.777922   428   428 D yi_sd_space_get(695) check_sd_exist not find tf card!
+[m
+evnet file /mnt/alarm_event.db not exsit.
+[0;32;32m01-01 08:00:15.779361   428   428 D config_yi_cfg(728) config_yi_cfg is start
+[m
+########MT Lib V1.0.05########
+#########################ptz is 2##############
+[mt_init:960] dana mt control start
+[1970/01/01 08:00:15][platform_manager.c: ak_yi_init(): 305] yi_cfg_init SUCCESS !!!
+[0;32;32m01-01 08:00:15.785748   428   428 D GET_YI_DID(2618) GET_YI_DID get yi.conf
+[m
+[mt_ctrl_thread:105] thread id: 472
+[0;32;32m01-01 08:00:15.794218   428   428 D judge_bindkey(330) country:China,region_id:1,language:0,timezone:8[m
+[0;32;32m01-01 08:00:15.794859   428   428 D GetBindkey_Chk_Wifi(2182)  GetBindkey_Chk_Wifi ssid: , PSK: 123456789 bindkey: ().size(0)
+[m
+[0;32;32m01-01 08:00:15.795293   428   428 D GetBindkey_Chk_Wifi(2194) GetBindkey_Chk_Wifi() set led_event = LED_BIND_DISCONNECT(0x22)
+[m
+utc_time: 1638933395
+[2023/01/06 16:08:00][ak_misc.c: ak_misc_set_video_day_night(): 974] now set to day
+[0;32;32m01-06 16:08:00.13394   428   473 D stop_ap(293) stop_ap: ...
+[m
+# killall hostapd 2>gpio-ircut_a store:1
+/dev/null
+
+[0;32;32m01-06 16:08:00.14796   428   474 D qrcode_thread(1542) waiting AP mode start...
+
+[m
+# killall hostapd_ssv6x5x 2>/dev/null
+
+# killall hostapd_atmb 2>/dev/null
+
+[2023/01/06 16:08:00][platform_manager.c: ak_yi_init(): 310] GetBindkey_Chk_Wifi SUCCESS !!!
+my ak_drv_ptz_open
+# killall udhcpd 2>/dev/null
+
+[0;32;32m01-06 16:08:00.33810   428   478 D sw_thread_t(1862) sw_thread_t start..
+[m
+[0;32;32m01-06 16:08:00.34109   428   478 D sw_thread_t(1871) waiting AP mode start...
+
+[m
+[2023/01/06 16:08:00][ak_yi_qrcode.c: net_chk_thread(): 1068] net_chk_thread start...
+# route del default gw 192.168.10.1
+
+[0;32;32m01-06 16:08:00.45382   428   428 D yi_others_ptz_init(453) ret = 0 get_wifi_config_status=0
+[m
+[get_motor_param:584] thread id: 428
+# ipaddr del 192.168.10.1 dev wlan0
+
+[get_motor_param:595] get_motor_param-595 angle2step steps: 4096
+[0;32;32m01-06 16:08:00.72762   428   477 D sw_thread(1782) sw_thread start
+
+[m
+[1;33m[check_decode_finished:247] decode finished, remain is 0
+[m[1;33m[check_decode_finished:247] decode finished, remain is 0
+[m[write_pcm_thread:374] sleep..., decode buffer remain=0
+[isp_switch:152] switching isp mode -> day
+[1;33m[isp.conf]version: 3.007_1215, sensor id: 0xa63, style id: 0
+[m[isp.conf]modify time: 2020-12-15 13:43:00
+[check_file:347] check isp cfg: /etc/jffs2/isp_h63.conf OK
+hight light:
+	frame_rate=20 max_exp_time=1125 low_light_gain=16
+low light:
+	frame_rate=15 max_exp_time=1500 light_gain=5
+hight light fps: 20
+[1;33m[isp_set_sensor_fps:1871]Set Frame Height = 1125
+
+ set sensor fps: 20
+[mroute: SIOCDELRT: No such proces>60, sjf:4294938903, ul:7
+s
+[1;33m[set_fps:185] set fps:20 ok
+[mhight light:
+	frame_rate=20 max_exp_time=1125 low_light_gain=16
+low light:
+	frame_rate=15 max_exp_time=1500 light_gain=5
+hight light fps: 20
+[1;33m[isp_set_sensor_fps:1871]Set Frame Height = 1125
+
+ set sensor fps: 20
+[m[1;33m[set_fps:185] set fps:20 ok
+[mIR_LED store:0
+ipaddr: can't find device 'wlan0'
+[switch_lighting_led:130] switch_lighting_led : 0
+[switch_lighting_led:171] misc_ctrl.led_enable repeat
+[photosensitive_switch_th_ex:508] switch_lighting_led 0[0;32;32m01-06 16:08:03.61877   428   473 D ap_thread(1684) ak_config_get_sys_wifi ap_pswd:12345678
+[m
+[0;32;32m01-06 16:08:03.62201   428   473 D start_ap(279) start_ap: ssid(CAM_FZ33SJ221011), pwd(12345678) ...
+[m
+rmmod: can't unload 'rtl8188fu':wifi_en store:1
+ unknown symbol in module, or unknown parameter
+rmmod: can't unload 'otg_hs': unknown symbol in module, or unknown parameter
+[1;33m[need_set_fps:640] changeSet Frame Height = 1500
+
+ sensor fps, new_fps:15, current gain:30
+[m[1;33m[isp_set_sensor_fps:1871] set sensor fps: 15
+[m[1;33m[set_fps:185] set fps:15 ok
+[mrmmod: can't unload 'rtl8188fu':wifi_en store:1
+ unknown symbol in module, or unknown parameter
+rmmod: can't unload 'otg_hs': unknown symbol in module, or unknown parameter
+wifi_en store:1
+[get_motor_param:610] get_motor_param-610 rg=0
+get_motor_param-619 g_h_max_hit=360
+[get_motor_param:630] get_motor_param-630 MaxHit=360, steps:4096
+[get_motor_param:634] get_motor_param-634 Revised MaxHit=360
+get_motor_param-645
+set_turn_position_info-310 motor->dg_cur=0 degree=180
+set_turn_position_info-330 ptz mid h_cur_pos=180
+ak_drv_ptz_set_h_cur_pos-163 h_cur_pos=180
+get_motor_param-647
+get_motor_param-649
+get_motor_param-656
+get_motor_param-660
+[get_motor_param:584] thread id: 428
+[get_motor_param:595] get_motor_param-595 angle2step steps: 1393
+[get_motor_param:610] get_motor_param-610 rg=0
+get_motor_param-627 g_v_max_hit=139
+[get_motor_param:630] get_motor_param-630 MaxHit=139, steps:1393
+[get_motor_param:634] get_motor_param-634 Revised MaxHit=139
+get_motor_param-645
+set_turn_position_info-310 motor->dg_cur=0 degree=69
+set_turn_position_info-334 ptz mid v_cur_pos=69
+ak_drv_ptz_set_v_cur_pos-173 v_cur_pos=69
+get_motor_param-647
+get_motor_param-653
+get_motor_param-656
+get_motor_param-660
+[0;32;32m01-06 16:08:08.324234   428   428 D yi_others_ptz_init(523) have ptz_check_self
+[m
+[0;32;32m01-06 16:08:08.324506   428   428 D yi_others_ptz_init(527) h_maxhit=360
+[m
+[0;32;32m01-06 16:08:08.324727   428   428 D yi_others_ptz_init(531) v_maxhit=139
+[m
+[motor_turn_thread:676] thread id: 708
+[motor_turn_thread:676] thread id: 707
+left_degree= 175,up_degree = 65
+ak_drv_ptz_turn_to_pos-1061
+check_dg-826 akmotor[0].dg_cur=180 akmotor[1].dg_cur=69
+check_dg-835 clkwise=0 cmd_data.dg=5
+ak_drv_ptz_turn_to_pos-1063
+check_dg-826 akmotor[0].dg_cur=180 akmotor[1].dg_cur=69
+check_dg-835 clkwise=0 cmd_data.dg=4
+ak_drv_ptz_turn_to_pos-1073
+set_turn_position_info-316 motor->dg_cur=69 degree=4
+set_turn_position_info-334 ptz mid v_cur_pos=65
+ak_drv_ptz_set_v_cur_pos-173 v_cur_pos=65
+motor_turn_thread-713
+set_turn_position_info-316 motor->dg_cur=180 degree=5
+set_turn_position_info-330 ptz mid h_cur_pos=175
+ak_drv_ptz_set_h_cur_pos-163 h_cur_pos=175
+motor_turn_thread-703
+[0;32;32m01-06 16:08:08.401311   428   428 D yi_others_ptz_init(759) yi ptz control start
+[m
+[0;32;32m01-06 16:08:08.401593   428   428 D yi_others_ptz_init(766) ak_drv_ptz_set_speed PTZ_DEV_H  PTZ_DEV_V 28
+[m
+[0;32;32m01-06 16:08:08.406425   428   709 D yi_ptz_ctrl_thread(41) thread id: 709
+[m
+[2023/01/06 16:08:08][platform_manager.c: ak_yi_init(): 314] yi_others_ptz_init SUCCESS !!!
+[2023/01/06 16:08:08][av_function.c: av_function(): 1275] av_function start
+
+     Given Memory: 0xb95c8 - 0x2b95c8
+
+  Allocation Area: 0xb9720 - 0x2b95c0
+
+            Usage: 3456/2096800 0.1%
+
+ Allocated Blocks: 12
+
+      Free Blocks: 1
+
+    Relative Area: @00000000H - @001ffea0H
+
+
+
+    +---------------+
+
+    |###############| @00000000H - @000002d8H 728  akae_qworm.c:1129
+
+    |###############| @000002d8H - @00000310H 56  akae_stack.c:112
+
+    |###############| @00000310H - @00000358H 72  akae_mutex.c:119
+
+    |###############| @00000358H - @00000630H 728  akae_qworm.c:1129
+
+    |###############| @00000630H - @00000668H 56  akae_stack.c:112
+
+    |###############| @00000668H - @000006b0H 72  akae_mutex.c:119
+
+    |###############| @000006b0H - @00000998H 744  akae_qworm.c:1129
+
+    |###############| @00000998H - @000009d0H 56  akae_stack.c:112
+
+    |###############| @000009d0H - @00000a18H 72  akae_mutex.c:119
+
+    |###############| @00000a18H - @00000d00H 744  akae_qworm.c:1129
+
+    |###############| @00000d00H - @00000d38H 56  akae_stack.c:112
+
+    |###############| @00000d38H - @00000d80H 72  akae_mutex.c:119
+
+    |               | @00000d80H - @001ffea0H 2093344
+
+    +---------------+
+
+                Total @00000000H - @001ffea0H 3456
+
+
+
+[2023/01/06 16:08:08][av_function.c: av_function(): 1292] yi_video_init main start
+
+[1;33m[yi_venc_h264_init:528] main channel net...
+[m[ak_venc_open:1839] init enc_grp=1, enc_mode=0
+[1;33m[set_h264_encode_param:374] main profile
+[mH.264 params:
+	w=1280, h=720, qpMin=28, qpMax=48,bps=819200, gop=40, fps=20
+
+
+--VIDAK39--Enc AK39 Encoder Lib V1.10.08--
+
+
+
+[set_channel_rc:550] CBR video mode: 80
+[set_encode_br_mode:509] set chn 0 br: CBR, 2
+[ak_venc_open:1921] allocating type=1, enc_mode=1, enc_handle: 0x588a90
+
+[1;33m[ak_venc_set_method:2425] set chn 1 encode method: 0
+[m[1;33m[yi_venc_stream_init:485] request_stream main_ch enter
+[m[1;33m[ak_venc_request_stream:2552] user's id=0, req_ref=1, grp_type=1, enc_mode=1
+[m[ak_venc_request_stream:2554] vi_handle=0x526760, enc_handle=0x588a90
+[1;33m[ak_venc_request_stream:2563] encode_frames=20, record.fps=20, capture_frames=15
+[m[1;33m[ak_venc_request_stream:2577] new_handle=0x589aa0, grp_type=1, enc_mode=2, req_grp_nr=1
+[m[ak_venc_request_stream:2584] init thread list
+[capture_thread:1416] start to capture, thread id: 713
+[1;33m[capture_thread:1421] capture thread sleep...
+[m[start_service_work:1777] create capture_thread, tid=3012641984
+[encode_thread:1684] start to encode, thread id: 714
+[start_service_work:1781] create encode_thread, tid=3012437184
+[1;33m[capture_thread:1424] capture thread wakeup...
+[m[capture_encode_frame:1363] cap_run=1, req_grp_nr=1
+[1;33m[isp_vi_get_frame:842] capture on --> real get frame time=12558
+[m[1;31m
+[ak_vi_get_frame:1470] get frame failed
+[m[start_service_work:1789] service start
+
+[ak_venc_request_stream:2591] grp_type=1, request OK, enc_mode=2
+[1;33m[isp_vi_get_frame:842] capture on --> real get frame time=12571
+[m[1;31m
+[ak_vi_get_frame:1470] get frame failed
+[m[0;32;32m01-06 16:08:08.500096   428   428 D yi_venc_stream_init(503) request_stream main_ch net OK
+
+[m
+[2023/01/06 16:08:08][av_function.c: av_function(): 1300] yi_video_init sub start
+
+[1;33m[yi_venc_h264_init:543] sub channel net...
+[m[ak_venc_open:1839] init enc_grp=2, enc_mode=0
+[1;33m[set_h264_encode_param:374] main profile
+[m[0;32;32m01-06 16:08:08.505062   428   715 D yi_live_video_thread(573) thread id: 715
+[m
+[1;33m[ak_venc_set_fps:2159] set chn[1] fps to : 15
+[mH.264 params:
+	w=640, h=360, qpMin=28, qpMax=48,bps=409600, gop=40, fps=20
+
+
+--VIDAK39--Enc AK39 Encoder Lib V1.10.08--
+
+
+
+[1;33m[isp_vi_get_frame:842] capture on --> real get frame time=12584
+[m[1;31m
+[ak_vi_get_frame:1470] get frame failed
+[m[set_encode_fps:521] set 1 chnannel fps: 15
+[0;32;32m01-06 16:08:08.514349   428   715 D yi_live_video_thread(584) ak_venc_get_fps=15
+[m
+[0;32;32m01-06 16:08:08.514691   428   715 D yi_live_video_thread(587) chn=0, sleep...
+[m
+[0;32;32m01-06 16:08:08.514942   428   715 D yi_live_video_thread(589) chn=0, wakeup...
+[m
+[smooth_ts:1201] init smooth_index=363
+[set_channel_rc:550] CBR video mode: 80
+[set_encode_br_mode:509] set chn 0 br: CBR, 2
+[ak_venc_open:1921] allocating type=2, enc_mode=1, enc_handle: 0x589d38
+
+[1;33m[ak_venc_set_method:2425] set chn 2 encode method: 0
+[m[1;33m[yi_venc_stream_init:485] request_stream main_ch enter
+[m[1;33m[ak_venc_request_stream:2552] user's id=0, req_ref=1, grp_type=2, enc_mode=1
+[m[ak_venc_request_stream:2554] vi_handle=0x526760, enc_handle=0x589d38
+[1;33m[ak_venc_request_stream:2563] encode_frames=20, record.fps=20, capture_frames=15
+[m[1;33m[ak_venc_request_stream:2577] new_handle=0x589c90, grp_type=2, enc_mode=2, req_grp_nr=2
+[m[ak_venc_request_stream:2591] grp_type=2, request OK, enc_mode=2
+[0;32;32m01-06 16:08:08.562380   428   428 D yi_venc_stream_init(503) request_stream main_ch net OK
+
+[m
+[2023/01/06 16:08:08][av_function.c: av_function(): 1309] yi_ain_init start
+
+[1;33m[ak_aenc_open:1242] aenc version libmpi_aenc V2.3.02
+[m--AudioCodec Version V1.16.00_svn5418--
+
+## ChipIdval = 0x20150200
+
+## CHIP OK
+[0;32;32m01-06 16:08:08.569075   428   716 D yi_live_video_thread(573) thread id: 716
+[m
+[1;33m[ak_venc_set_fps:2159] set chn[2] fps to : 15
+[m[set_encode_fps:521] set 2 chnannel fps: 15
+[0;32;32m01-06 16:08:08.577663   428   716 D yi_live_video_thread(584) ak_venc_get_fps=15
+[m
+[0;32;32m01-06 1@@@ [print_event_string:144]: event-1: open @@@
+6:08:08.578070   428   716 D yi_live_video_thread(587) chn=1, sleep...
+[m
+[smooth_ts:1201] init smooth_index=364
+sr(16000), ich(1), och(1), bitrate(32000)
+[0;32;32m01-06 16:08:08.920547   428   716 D yi_live_video_thread(589) chn=1, wakeup...
+[m
+[ak_aenc_request_stream:1591] set encode frame interval=64
+[frame_buffer_init:580] index=0, pcm_frame_len=2048
+[aenc_rb_init:223] init rb_size=20480 ring buffer OK
+[1;33m[pcm_set_aec_agc:325] cur@@@ [print_event_string:144]: event-1: open @@@
+_aec_switch=0, prepare_flag=1
+@@@ [open_aec:654]: aec=0, nr=1, agc=1 @@@
+[m[1;33m[pcm_set_aec_agc:339] *@@@ [open_aec_lib:615]: AEC open success, version:Echo Version V1.2.04 @@@
+** enable NR&AGC ***
+[m@@@ [print_event_string:147]: event-2: adc start @@@
+[1;33m[ak_aenc_request_stream:1642] init group_index=0, user=0x58b210, req_nr=0, ref=1
+[m[capture_pcm_thread:1262] thread id: 723
+[2023/01/06 16:08:09][av_function.c: av_function(): 1318] yi_others_alarm_init start
+
+[audio_encode_thread:1126] thread id: 725
+[read_pcm_thread:1084] thread id: 724
+[capture_pcm_thread:1272] sleep...
+[capture_pcm_thread:1274] wakup...
+[read_pcm_thread:1088] sleep...
+[read_pcm_thread:1091] wakeup, encode_len=2048
+[1;33m[read_pcm_thread:1099] aenc_ctrl.read_flag=1
+[m[0;32;32m01-06 16:08:09.53319   428   726 D yi_live_ain_thread(388) audio in sleep...
+[m
+[0;32;32m01-06 16:08:09.55605   428   726 D yi_live_ain_thread(390) audio in sleep... wakeup...
+[m
+[2023/01/06 16:08:09][av_function.c: av_function(): 1357] init_record_file start
+
+[1;33m[mem_pool_init:279] init memory pool, total node number=50400
+[m## aslc: len_in=2048, bpspl=16, ch=1, tmpwp=0, looklen=96, sz=1120
+[1;33m[mem_pool_init:282] node size=4233600
+[m[1;33m[mem_pool_init:283] dir size=70560
+[m[2023/01/06 16:08:09][av_function.c: av_function(): 1361] yi_osd_init start
+
+[ak_osd_set_font_file:242] channel=1, font size=16
+[get_font_data_from_file:89] fd:14 byte:32
+[1;33m[read_pcm_data:1176] we had dropped the first 384 ms audio data
+[m[1;33m[check_work_scene_changed:1451] current work scene=0, indoor
+[m[1;33m[mark_ts_to_data:1103] *** we get the first audio, ts=25250, time=415 ***
+
+[mwifi_en store:0
+[1;33m[check_work_scene_changed:1451] current work scene=0, indoor
+[m[ak_osd_ex_init_env:462] ak_osd_set_font_file OK
+[ak_osd_init:715] ch:0 x:0 y:0 w:0 h:0fontS:32 res_w:1280 res_h:720
+[ak_osd_init:715] ch:1 x:0 y:0 w:0 h:0fontS:16 res_w:640 res_h:360
+[ak_osd_ex_init_env:468] ak_osd_init OK
+[set_osd_buffer:51] chn=0, ak_osd_get_max_rect OK, max_w: 1280 max_h: 720
+[ak_osd_set_rect:782] xstart: 0 ystart: 0 w: 1280 h: 64
+[1;33m[ak_osd_set_rect:810] x:0, y:0, w:1280, h:64
+[m[request_osd_mem:627] ch0 p_osd_buffer:0xb6316238
+[request_osd_dma_mem:287] alloc osd dma.dma: 0x81061238 size: 40960 w: 1280 h: 64
+chn=0, ak_osd_set_rect OK
+[set_osd_buffer:51] chn=1, ak_osd_get_max_rect OK, max_w: 640 max_h: 360
+[ak_osd_set_rect:782] xstart: 0 ystart: 0 w: 640 h: 32
+[1;33m[ak_osd_set_rect:810] x:0, y:0, w:640, h:32
+[m[request_osd_mem:627] ch1 p_osd_buffer:0xb632a238
+[request_osd_dma_mem:287] alloc osd dma.dma: 0x8106da38 size: 10240 w: 640 h: 32
+chn=1, ak_osd_set_rect OK
+[1;33m[yi_osd_init:203] yi osd start
+
+[m[2023/01/06 16:08:10][av_function.c: av_function(): 1367] record_ctrl_init start
+
+
+--------------------------------------------------------------------------------
+iconv_open: Invalid argument
+[1;31m
+[ak_osd_ex_disp_name:340] utf8_to_gb2312code fail!
+[m	 entering record_ctrl_init
+	 2023-01-06 16:08:10, yi_cfg.sd_record_md: alarm record
+[1;33m[yi_osd_thread:154] create thread --> disp osd time=25
+[m
+[longjiacheng]----------audio_type:(4)
+[venc_handle_init:581] group 1's handle has already opened
+[ak_venc_open:1839] init enc_grp=1, enc_mode=2
+[ak_venc_open:1845] add user ...
+[1;33m[ak_aenc_open:1242] aenc version libmpi_aenc V2.3.02
+[m[record_ctrl_init:1168] alarm.pre_time=2, alarm.stop_time=60
+[video_record_main:1551] thread id: 751
+[video_stream_thread:681] thread id: 752
+[audio_stream_thread:513] thread id: 753
+[2023/01/06 16:08:10][av_function.c: av_function(): 1373] yi_tf_replay start
+
+[1;33m[yi_tf_replay:1228] yi_tf_replay thread start
+
+[m[1;31m
+[ak_venc_set_fps:2149] invalid handle
+[m[video_stream_thread:686] ak_venc_set_fps error
+[audio_stream_thread:515] become sleep...
+[video_record_main:1553] become sleep...
+[record_ctrl_main:991] thread id: 754
+[0;32;32m01-06 16:08:10.192286   428   755 D tf_replay_thread(1190) ak_thread_sem_wait sleep...
+[m
+[2023/01/06 16:08:10][av_function.c: av_function(): 1376] av_function end
+
+[2023/01/06 16:08:10][platform_manager.c: ak_yi_init(): 321] av_function SUCCESS !!!
+[2023/01/06 16:08:10][platform_manager.c: ak_yi_init(): 325] ak_dvr_replay_init SUCCESS !!!
+[0;32;32m01-06 16:08:10.206530   428   428 D yi_cloud_init(2638) for_p2p_s.ap_conf.is_on is true
+[m
+[0;32;32m01-06 16:08:10.206866   428   428 D yi_oss_init(1059) for_p2p_s.ap_conf.is_on is true yi_oss_init exit!!!
+[m
+[2023/01/06 16:08:10][platform_manager.c: ak_yi_init(): 338] yi_oss_init SUCCESS !!!
+==== start_p2p ========
+
+[replay_main:383] thread id: 756
+==== unbinded ===>> start all day record ======
+
+[longjicaheng].AkSetRecordMode mode: 1
+[1;31m
+[record_ctrl_set_mode:1097] argument fail. new_mode: 1
+[m[2023/01/06 16:08:10][platform_manager.c: ak_yi_init(): 345] yi_p2p SUCCESS !!!
+[main:1571] ipc main thread id: 428
+[2023/01/06 16:08:10][yi_p2p.c: yi_p2p(): 261] HELLO YI P2P
+[0;32;32m01-06 16:08:10.259772   428   758 D init(217) .....
+[m
+anyka_ipc:yi_p2p.c:459: PPPP_API Version: 0xD2030401 210.3.4.1
+
+[2023/01/06 16:08:10][ak_yi_qrcode.c: net_chk_thread(): 1126] Can not find wlan0 1/5
+
+[0;32;32m01-06 16:08:10.445121   428   758 D yi_p2p(315) p2p listen license:(ABCDEF),test_tnp_did:(T206800-553389-21011)
+[m
+[2023/01/06 16:08:10][yi_p2p.c: state_statistics(): 172] p2p state_statistics start..
+
+speaker_thread start
+event count: 1
+[2023/01/06 16:08:21][ak_yi_qrcode.c: net_chk_thread(): 1176]  waiting wifi on link...  0/12
+[ak_net_get_mac:441] mac addr: e0:75:26:ac:6c:5c
+[0;32;32m01-06 16:08:26.261863   428   473 D ap_thread(1695) waiting dev get ip ......:(192.168.10.1)
+[m
+====yi_sdk yi_ap_listen_start =====
+
+[1;33m[ak_aenc_open:1242] aenc version libmpi_aenc V2.3.02
+[m[ak_aenc_request_stream:1591] set encode frame interval=64
+[frame_buffer_init:580] index=5, pcm_frame_len=2048
+[1;33m[ak_aenc_request_stream:1642] init group_index=5, user=0x59bae8, req_nr=0, ref=1
+[m[1;31m
+[vi_to_channel2:348] frame rollback, pre_ts=43450, entry->ts=43380, diff=70
+[m# /usr/share/audio_file/common/wait.aac
+
+[write_pcm_thread:376] wakeup...
+[1;33m[ak_adec_notice_stream_end:835] called, decode free size=16010
+[m[1;33m[check_decode_finished:247] decode finished, remain is 0
+[m[1;33m[check_decode_finished:247] decode finished, remain is 0
+[m[write_pcm_thread:374] sleep..., decode buffer remain=0
+[2023/01/06 16:08:32][ak_yi_qrcode.c: net_chk_thread(): 1176]  waiting wifi on link...  0/12

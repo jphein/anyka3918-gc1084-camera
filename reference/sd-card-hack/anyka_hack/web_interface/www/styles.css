@@ -1,0 +1,97 @@
+/* define the website colour scheme here [from dark to light]*/
+:root{
+  --textcolour:#ffffff;
+  --bgcolour:#909090;
+  --altbgcolour:#505050;
+  --accentcolour:#8633DD;
+  --bannercolour:#900000;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bgcolour);
+}
+
+p {
+  padding:5px 10px ;
+}
+
+th {
+  padding:5px 10px ;
+  margin: 6px 6px;
+}
+
+.banner {
+  width:40%;
+  margin: 1px auto;
+  background-color: var(--bannercolour);
+  padding-top:1vw;
+  padding-bottom:1vw;
+  border-radius: 3vw;
+}
+
+/* Add a black background color to the top navigation */
+.topnav {
+  background-color: var(--altbgcolour);
+  overflow: hidden;
+}
+
+/* Style the links inside the navigation bar */
+.topnav a {
+  float: left;
+  color: var(--textcolour);
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  font-size: 17px;
+}
+
+/* Add a color to the active/current link */
+.topnav a.active {
+  background-color: var(--accentcolour);
+  color: white;
+}
+
+.icon {
+  max-height:300px;
+  max-width:300px;
+  height:auto;
+  width:auto;
+}
+
+.title {
+  font-size:10vw;
+  color: var(--textcolour);
+  text-shadow: 0 0 5rem black;
+  transform: translateY(-30rem) translateZ(-20px) scale(3);
+}
+
+section {
+  text-align: center;
+  font-size:16px;
+  padding-top:1vw;
+  padding-bottom:4vw;
+  color: var(--textcolour);
+  background-color: var(--bgcolour);
+}
+
+.card {
+  width:90%;
+  margin: 40px auto;
+  background-color: var(--altbgcolour);
+  padding-top:1vw;
+  padding-bottom:1vw;
+  border-radius: 3vw;
+}
+
+.button {
+  padding: 4px 4px;
+  text-align: center;
+  font-size:16px;
+  outline: none;
+  color: var(--textcolour);
+  background-color: var(--accentcolour);
+  border: none;
+  border-radius: 4px;
+  margin: 6px auto;
+}
