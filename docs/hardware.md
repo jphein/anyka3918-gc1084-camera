@@ -94,8 +94,9 @@ The root filesystem is **read-only squashfs**. Anything you want to survive a re
 
 ## GPIO
 
-`/sys/user-gpio/` exposes exactly six pins. Full table, observed values and cautions are in
-[ptz.md](ptz.md#gpio-map). Summary: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24), `wifi_en` (34),
+`/sys/user-gpio/` exposes exactly six pins. Full table and cautions are in
+[ptz.md](ptz.md#gpio-map) — including that **you cannot read any of them back**; a read on an
+output pin always returns `0`. Summary: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24), `wifi_en` (34),
 `ircut_b` (41), `ircut_a` (42). **There is no microphone pin**, which is why the mic cannot be
 muted in hardware.
 
@@ -158,7 +159,7 @@ been verified correct after ~12 hours of uptime.
 
 The timezone is a different story: `gergehack.sh` passes `time_zone` straight to `export TZ=`,
 POSIX `TZ` counts hours *west* of Greenwich, and the configured value has the sign backwards. See
-[troubleshooting.md](troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless).
+[troubleshooting.md](troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service).
 
 ## Serial console
 

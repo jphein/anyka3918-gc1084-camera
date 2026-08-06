@@ -182,7 +182,7 @@ single-session-token bug in the HA integration produced exactly this symptom at 
 so the filter may never have moved. Both explanations, and the order to test them in, are in
 [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
-### The clock — NTP works, but the timezone config is wrong and only accidentally harmless
+### The clock — NTP works; the timezone was 15 hours wrong on every service
 
 **The clock syncs.** This page previously said it was stuck at 1969 with NTP firewalled; that was
 true only while `time_source` still pointed at the *old* IoT VLAN router, unreachable after the
@@ -196,7 +196,7 @@ having synced.
 The hardware fact still holds and is why `time_source` matters at all: there is a 32.768 kHz RTC
 but **no battery**, so every boot starts at the epoch and the camera depends entirely on NTP.
 
-#### ⚠️ The `time_zone` setting is wrong by 15 hours, and something else is saving you
+#### ⚠️ The `time_zone` setting was wrong by 15 hours, and `date` in a shell hid it
 
 `gergehack.sh` line 87 is a raw pass-through:
 
@@ -215,19 +215,50 @@ of Greenwich**, which is the opposite of the ISO-style sign most people expect:
 `gergesettings.txt` carries `time_zone=GMT-08:00` on **both** the card and flash — written by
 someone reading it the ISO way. Taken literally that is UTC+8, i.e. **15 hours off**.
 
-**The clock nonetheless displays correctly, by accident.** `/etc/jffs2/time_zone.sh` contains
-`export TZ=GMT+07:00` — the correct POSIX form — and `anyka_ipc.sh` sources that file before
-launching the app. That is the same file the telnet exploit hooks.
+**And `date` at a telnet prompt showed the correct time throughout**, which is the part worth
+dwelling on. Reading `TZ` out of `/proc/<pid>/environ` for every running process:
 
-Per upstream's [`hack-process.md`](../reference/hack-process.md), **`time_zone.sh` is overwritten
-by the vendor app every time it syncs time with the cloud server.** This camera can no longer
-reach that server, because the camera VLAN is default-deny to the WAN. So a correct value is
-being **frozen in place by the firewall**. Restore cloud access, or reset flash, and
-`gergesettings` takes over and the clock jumps 15 hours.
+```
+  457  ptz_daemon_dyn     TZ=GMT-08:00      <-- 15 hours wrong
+  496  app_restarter.s    TZ=GMT-08:00      <-- 15 hours wrong
+ 6847  run_libre_anyka    TZ=GMT-08:00      <-- 15 hours wrong
+ 6852  libre_anyka_app    TZ=GMT-08:00      <-- the RTSP server. 15 hours wrong.
+       telnet shell       TZ=GMT+07:00      <-- correct, and the only one
+```
 
-> **Evidence classes, since they differ here.** The running `ntpd`, the matching clocks, and both
-> `gergesettings.txt` copies are **directly observed**. That the vendor app rewrites
-> `time_zone.sh` comes from **upstream's write-up**, not from anyone watching it happen.
+> ⚠️ **Every process that does real work was 15 hours out. The single process holding the
+> correct value was the login shell — exactly where a human checks the clock and concludes
+> everything is fine.**
+>
+> Anyone debugging timestamps on recorded video, on files written by `libre_anyka_app`, or in
+> ptz-daemon logs would have been chasing a phantom, with `date` cheerfully confirming the clock
+> was right. If you take one thing from this section: **on this camera, `date` in your shell is
+> not evidence about any other process.** Check `/proc/<pid>/environ`.
+
+#### Two process trees, not two competing values
+
+The obvious worry is that `/etc/jffs2/time_zone.sh` (which holds `export TZ=GMT+07:00`) fights
+`gergehack.sh`'s `export TZ=$time_zone`, and that one of them "wins" at boot. **It does not work
+that way, and the `/proc` readout above settles it without a reboot.**
+
+`TZ` is inherited per process. `gergehack.sh` exports it into everything *it* launches —
+`ptz_daemon`, `libre_anyka_app`, `app_restarter`. `time_zone.sh` reaches only its own tree, which
+is `telnetd`, and therefore your shell. **Neither overrides the other; which value a process sees
+depends only on which tree started it.**
+
+So `time_zone.sh` never protected anything that mattered. The "correct value frozen in place by
+the firewall" was only ever freezing it for interactive logins.
+
+That file is still left alone deliberately — it is the file the telnet exploit hooks, and
+breaking it would risk the hack's entry path for no real gain. Per upstream's
+[`hack-process.md`](../reference/hack-process.md), it is also overwritten whenever the vendor app
+syncs time with the cloud, which this camera cannot reach.
+
+> **Evidence classes, since they differ here.** The per-process `TZ` values, both
+> `gergesettings.txt` copies, the running `ntpd`, the matching clocks, and the test output below
+> are **directly observed**. That `anyka_ipc.sh` sources `time_zone.sh`, and that the vendor app
+> rewrites it, come from **upstream's write-up** — though the shell being the one process holding
+> `GMT+07:00` is consistent with it.
 
 #### ✅ Fixed — use a DST-aware POSIX string
 
@@ -260,19 +291,24 @@ shell assignment, and there are no spaces to word-split on.
 > byte-identical with `diff` afterwards — because `gergehack.sh` diffs the two on every boot and,
 > on any difference, copies card→flash **and reboots**.
 
-#### ⚠️ Two timezones are in play, deliberately
+> ⚠️ **Applied, but not yet active.** `gergehack.sh` reads `gergesettings.txt` only at boot, so
+> the running processes still carry `TZ=GMT-08:00` and will until the camera restarts. The `date`
+> output above was produced by setting `TZ` inline in a shell — it proves the *string* works on
+> this libc, not that the services have picked it up. Confirm with `/proc/<pid>/environ` after
+> the next reboot, not with `date`.
 
-The fix above does **not** make the whole camera agree with itself.
+#### What is left over, once the fix is active
 
-`/etc/jffs2/time_zone.sh` still contains `export TZ=GMT+07:00`, and `anyka_ipc.sh` sources it, so
-the **vendor app's process tree keeps the old value** while `gergehack.sh`'s tree gets the
-DST-aware one. That file was left alone on purpose: it is the file the telnet exploit hooks, and
-breaking it would risk the hack's entry path for a cosmetic gain.
+The two trees still disagree, but the disagreement inverts and shrinks dramatically:
 
-Net effect is strictly better than before — a 15-hour error became at most a 1-hour one, confined
-to the vendor app's tree, and only after the November transition. But it is **not uniform**, so
-if you compare timestamps between the web UI and the ptz daemon and see an hour's difference,
-this is why. Do not go hunting.
+| | Before | After next boot |
+|---|---|---|
+| Services (`libre_anyka_app`, `ptz_daemon`, …) | `GMT-08:00` — **15 h wrong** | `PST8PDT,M3.2.0,M11.1.0` — correct, DST-aware |
+| Telnet shell | `GMT+07:00` — correct | `GMT+07:00` — correct until November, then 1 h out |
+
+So the residual error moves off the services and onto the interactive shell, and shrinks from 15
+hours to at most one. If you notice `date` disagreeing with a service timestamp by an hour after
+the November transition, that is this — not a fault. Do not go hunting.
 
 None of this affects Home Assistant, which timestamps its own frames. It affects the camera's own
 logs and any filename it generates.

@@ -109,7 +109,7 @@ Two consequences of living on the cams VLAN:
   copies had to change. Once they did, **NTP works**: `ntpd` runs and the clock has been verified
   correct after ~12 hours of uptime on a battery-less RTC. An earlier note here claimed the clock
   was stuck at 1969; that was true only while `time_source` pointed at the unreachable router.
-  See [`../../docs/troubleshooting.md`](../../docs/troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless)
+  See [`../../docs/troubleshooting.md`](../../docs/troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service)
   for the separate — and still live — timezone-sign bug.
 * The copy of `gergesettings.txt` in this directory is the **card's** version and still says
   `time_source=192.168.8.1`. Update it before rebuilding a card.

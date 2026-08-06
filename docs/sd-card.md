@@ -102,7 +102,7 @@ It does the same for `gergehack.sh` itself.
 > reverted it on the next boot, leaving NTP pointed at an unreachable address. It was only fixed
 > for good once **both** copies were changed. The docs then spent a while asserting the clock
 > could not sync, long after it could — see
-> [troubleshooting.md](troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless).
+> [troubleshooting.md](troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service).
 
 So:
 

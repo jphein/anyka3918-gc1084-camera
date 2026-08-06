@@ -26,7 +26,7 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ❌ White LEDs | Present in hardware (4 on the ring) but not driveable. The vendor firmware **disables them on PTZ units like this one** — [three candidate causes](docs/ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
 | ❌ GPIO readback | **Reads always return `0`** regardless of the driven level — [state cannot be read back at all](docs/ptz.md#-you-cannot-read-gpio-state-back-every-readback-is-meaningless) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
-| ✅ Clock | NTP syncs. No RTC battery, so it boots to 1969 and depends on it — and the [`time_zone` setting is wrong by 15 hours, saved only by an accident](docs/troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless) |
+| ✅ Clock | NTP syncs. No RTC battery, so it boots to 1969 and depends on it. The timezone was **15 hours wrong on every service** while `date` in a shell looked fine — [now fixed](docs/troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service) |
 
 ## Working configuration
 
