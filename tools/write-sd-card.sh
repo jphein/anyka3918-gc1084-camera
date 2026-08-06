@@ -365,6 +365,62 @@ if [ "$STOCK" -eq 0 ]; then
     sed -i 's|if \[ ! -e "\$FILE"; then|if [ ! -e "$FILE" ]; then|' "$CONFIG_SH"
   fi
 
+  # --- 5b. restore the isp_*.conf symlink on every boot.
+  #
+  # FIXING THE BRACKET ABOVE IS NOT ENOUGH, and that is the whole point of this
+  # block. Upstream's guard tests the WRONG FILE:
+  #
+  #     FILE="/mnt/isp_gc1084.conf"
+  #     if [ ! -e "$FILE" ]; then  tar -xzf ... ; ln -s ... /etc/jffs2/ ;  fi
+  #
+  # It tests the TARGET, on the card, to decide whether to create the SYMLINK,
+  # in flash. Those are two different questions and the answer to the first is
+  # almost always "it exists" - so whenever the symlink alone goes missing, the
+  # condition is false and it is never recreated. Repairing the bracket makes
+  # the broken guard run correctly; it does not make it ask the right thing.
+  #
+  # And the symlink does go missing, routinely: /usr/sbin/update.sh's
+  # update_ispconfig() is an UNGUARDED `rm -rf /etc/jffs2/isp*.conf` that runs
+  # on every firmware update - including one that flashes nothing. Without this,
+  # any successful update costs video permanently. See docs/firmware-update.md.
+  #
+  # Inserted BEFORE gergehack.sh rather than appended after it, unlike the
+  # IR-cut and identity hooks: gergehack.sh insmods the sensor module and starts
+  # the video app, so a repair that ran afterwards would be one boot too late.
+  #
+  # Globs over whatever the card actually carries instead of hardcoding
+  # isp_gc1084.conf - the bag is not all one sensor, and a hardcoded name would
+  # be silently correct here and silently wrong on an H63 board.
+  #
+  # Tests before linking rather than `ln -sf` unconditionally: /etc/jffs2 is a
+  # 64 KB partition at 88% full, and an unconditional relink would burn a jffs2
+  # write on every boot of every camera forever to fix something that is almost
+  # never broken.
+  if grep -q 'isp_\*.conf' "$CONFIG_SH" 2>/dev/null; then
+    echo "==> isp symlink repair already present in Factory/config.sh"
+  else
+    echo "==> adding the isp symlink repair to Factory/config.sh"
+    ISP_REPAIR='
+# restore any isp_*.conf symlink that update.sh'"'"'s update_ispconfig() deleted.
+# Upstream'"'"'s guard above tests the target on the card, not the symlink, so it
+# never fires for this. See docs/firmware-update.md.
+for f in /mnt/isp_*.conf; do
+  [ -e "$f" ] || continue
+  [ -e "/etc/jffs2/${f##*/}" ] || ln -s "$f" /etc/jffs2/
+done
+'
+    awk -v block="$ISP_REPAIR" '
+      /^\/etc\/jffs2\/gergehack\.sh$/ && !done { print block; done = 1 }
+      { print }
+    ' "$CONFIG_SH" > "$CONFIG_SH.new" && mv "$CONFIG_SH.new" "$CONFIG_SH"
+    grep -q 'isp_\*.conf' "$CONFIG_SH" || {
+      warn "isp symlink repair was NOT inserted - Factory/config.sh has no bare"
+      warn "  /etc/jffs2/gergehack.sh line to anchor to. Insert it by hand."
+      NOTES+=("isp symlink repair MISSING from Factory/config.sh - a firmware update")
+      NOTES+=("  would cost this camera its video permanently. See docs/firmware-update.md.")
+    }
+  fi
+
   # --- 6. assert the vendor app on this card is the STOCK binary.
   #
   # This is a guard, not a fix: if someone patches the backup (or restores an
