@@ -279,8 +279,8 @@ returns a few bytes.
 | `init_ptz` | Home both axes |
 | `init_ir` | Initialise the IR-cut driver |
 | `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` |
-| `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` |
-| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` |
+| `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
+| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — works, [verified after dark](ptz.md#-ir-leds-work) |
 | `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
 | `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
@@ -436,6 +436,16 @@ setInterval(function() {
 Frames are 640×360 JPEG, ~32 KB. Paths that do not end in `.jpeg` are not answered with a 404 —
 **the connection is dropped** (curl reports exit `000`, no HTTP status). Bare `/` behaves the
 same way.
+
+> ⚠️ **This server is fragile. Only ever speak HTTP to it.** A bare TCP connect — a socket opened
+> and closed without a valid request — **takes it down** until `libre_anyka_app` restarts. RTSP on
+> 554 keeps serving throughout, so it reads as a camera fault rather than as something the prober
+> did.
+>
+> In practice that means: no port scans on a schedule, no TCP-only uptime checks, no availability
+> monitor pointed at 3000. Use `curl -fsS -o /dev/null http://<ip>:3000/snapshot.jpeg`, which is
+> both safe and a stronger check, since a returned frame proves the encoder is alive. Details in
+> [troubleshooting.md](troubleshooting.md#finding-the-camera).
 
 ## Other listening ports
 

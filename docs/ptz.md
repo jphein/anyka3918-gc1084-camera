@@ -151,36 +151,83 @@ The 60-second delay lets the video pipeline come up first. For drift while runni
 
 ## GPIO map
 
-`/sys/user-gpio/` exposes exactly six pins — verified by directory listing, not inferred:
+`/sys/user-gpio/` exposes exactly six pins. The names come from a directory listing; the pin
+numbers were decoded from the **kernel image on this camera** (`mtd1` dumped from the live
+device), not from upstream:
 
-| Pin | Meaning | Observed value |
-|---|---|---|
-| `IR_LED` | Infrared illuminator LEDs | `1` |
-| `SPK_PA` | **Speaker** power amplifier (output side) | `0` |
-| `WHITE_LED` | White floodlight LED | `0` |
-| `ircut_a` | IR-cut filter, coil A | `1` |
-| `ircut_b` | IR-cut filter, coil B | `0` |
-| `wifi_en` | WiFi enable | `0` |
+| Pin | GPIO | Meaning | Writing it does something? |
+|---|---|---|---|
+| `IR_LED` | 6 | Infrared illuminator LEDs | ✅ **yes — measured** |
+| `SPK_PA` | 7 | **Speaker** power amplifier (output side) | ✅ yes — required for [audio out](#speaker--audio-out-works) |
+| `WHITE_LED` | 24 | White LEDs on the ring | ❌ **no — see below** |
+| `wifi_en` | 34 | WiFi enable | ❌ no observable effect |
+| `ircut_b` | 41 | IR-cut filter, coil B | ❌ no observable effect |
+| `ircut_a` | 42 | IR-cut filter, coil A | ✅ yes — flips the filter |
+| `motor_switch` | −1 | — | no `/sys` node at all (negative pin) |
+
+**The table self-validates.** The three pins that measurably do something — `IR_LED` (6),
+`SPK_PA` (7), `ircut_a` (42) — are exactly the three that turned out to matter in testing, which
+is good evidence the decode is correct rather than a plausible-looking guess.
+
+> ⚠️ **Do not quote upstream's GPIO numbers for this camera.** They are a genuinely different
+> kernel build: `ircut_b` (41) exists here and is **absent** from the upstream firmware image,
+> which instead has a prefixed `gpio-ircut_a` and a `motor_switch`. Numbers from Gerge's images
+> do not transfer.
 
 Two cautions:
 
 * **`wifi_en` reads `0` on a camera whose WiFi is working.** Do not assume it is a live enable
   line, and do not write to it hoping to reset the radio.
-* `ircut_a` and `ircut_b` are the two coils of a latching solenoid. Driving them incoherently is
-  not obviously safe; prefer `set_ir_cut`.
+* `ircut_a` and `ircut_b` are nominally the two coils of a latching solenoid, but only `ircut_a`
+  does anything measurable. Prefer `set_ir_cut` over either.
 
 ## Lights
 
-The white LED and the IR LEDs have not been made to work by writing GPIO:
+The LED ring holds **4 infrared and 4 white LEDs**. They behave completely differently.
+
+### ✅ IR LEDs work
 
 ```sh
-echo "1" > /sys/user-gpio/WHITE_LED
-echo "1" > /sys/user-gpio/IR_LED
+echo 1 > /sys/user-gpio/IR_LED
 ```
 
-`IR_LED` already reads `1` while the illuminator is not obviously on, which suggests the LEDs
-are gated by something else — most likely the photoresistor-driven day/night circuit rather than
-the pin alone. Unresolved.
+Confirmed by measurement, which is the only honest way to test an emitter you cannot see:
+average frame luma rose on every on/off pair (119→124, then 101→119). **Test after dark** — in
+daylight the change is swamped and you will wrongly conclude it is dead.
+
+### ❌ White LEDs do not light, and the pin is not the problem
+
+The hardware is there — 4 white LEDs on the ring — but nothing lights them from
+`/sys/user-gpio/`:
+
+```sh
+echo 1 > /sys/user-gpio/WHITE_LED    # write succeeds, dmesg logs "WHITE_LED store:1", no light
+```
+
+Measured dead: frame luma **159 / 157 / 157** across on / off / on. `ircut_b`, the only other
+untested pin, is likewise dead (**119 / 119 / 125** against a 120 baseline).
+
+**The leading explanation — strong, but not yet proven:**
+
+`WHITE_LED` is **GPIO 24, a plain SoC pin**. Meanwhile `/sys/bus/i2c/devices/` on this camera
+contains **`0-0058`**, and **0x58 is the default address of the AW9523B** — a 16-channel I/O
+expander whose channels are *constant-current LED sink drivers*, which is exactly the part you
+would use to drive an LED ring. `hw.conf` reads `HW=1115111751205…` with
+`whiteLightNegativeFlag=0`.
+
+So the white LEDs most likely hang off the **AW9523B at I2C 0x58**, while the kernel driver's
+table points `WHITE_LED` at an unrelated SoC GPIO. That fits every observation: the write
+succeeds, the driver logs it, a pin genuinely toggles, and no light appears.
+
+**If that is right, this is a driver/I2C problem, not a pin-number problem** — no amount of
+hunting for the "correct" GPIO will fix it. The next step is talking to the expander directly.
+
+> **Two dead ends, already closed off — do not repeat them.** Both squashfs partitions were
+> extracted and searched: the **vendor's own app has no other route either.** Its only path to
+> the white LEDs is the same `/sys/user-gpio/WHITE_LED` node — no PWM, no `/sys/class/leds`, no
+> `/dev/mem`, no ioctl. Reverse-engineering the stock firmware lands exactly where you already
+> are. Separately, `write_gpio` / `read_gpio` look promising and are not: they only store a
+> hardware-ID string in `gpio.conf` and configure nothing.
 
 ## Speaker — audio out works
 

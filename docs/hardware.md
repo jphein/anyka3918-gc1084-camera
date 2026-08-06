@@ -95,8 +95,20 @@ The root filesystem is **read-only squashfs**. Anything you want to survive a re
 ## GPIO
 
 `/sys/user-gpio/` exposes exactly six pins. Full table, observed values and cautions are in
-[ptz.md](ptz.md#gpio-map). Summary: `IR_LED`, `SPK_PA`, `WHITE_LED`, `ircut_a`, `ircut_b`,
-`wifi_en`. **There is no microphone pin**, which is why the mic cannot be muted in hardware.
+[ptz.md](ptz.md#gpio-map). Summary: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24), `wifi_en` (34),
+`ircut_b` (41), `ircut_a` (42). **There is no microphone pin**, which is why the mic cannot be
+muted in hardware.
+
+Pin numbers were decoded from **this camera's own kernel** (`mtd1` dumped from the live device).
+They do **not** match upstream's firmware image, which is a different build — `ircut_b` exists
+here and not there. Of the six, only `IR_LED`, `SPK_PA` and `ircut_a` have a measurable effect.
+
+## I2C
+
+`/sys/bus/i2c/devices/` contains **`0-0058`**. **0x58 is the AW9523B's default address** — a
+16-channel I/O expander with constant-current LED sink drivers. This is the most likely home of
+the white LEDs, which do not respond to their nominal GPIO; see
+[ptz.md](ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem).
 
 ## Clock
 

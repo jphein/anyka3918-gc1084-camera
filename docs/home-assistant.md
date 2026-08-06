@@ -126,6 +126,37 @@ ptz:
 Note the camera has **no zoom** and no continuous-motion start/stop — moves are discrete 10°
 steps — so the start/stop pattern above collapses to a single call per press.
 
+## Health sensors
+
+`sensor.anyka_cam_health` and `binary_sensor.anyka_cam_online` track whether the camera is
+actually serving, rather than trusting the camera entity's state (which reads `idle` either way).
+
+> ⚠️ **The port-3000 probe must be a real HTTP GET.** A bare TCP connect **kills the snapshot
+> server** — an early version of this check was taking down the very thing it was monitoring, and
+> the symptom (RTSP fine, snapshots dead) looks like a camera fault rather than a monitoring
+> fault.
+>
+> ```sh
+> curl -fsS -o /dev/null http://192.168.1.20:3000/snapshot.jpeg
+> ```
+>
+> A GET is also the better check: it proves the encoder is producing frames, not merely that
+> something is listening. Same rule applies to uptime monitors and recurring port scans — see
+> [troubleshooting.md](troubleshooting.md#finding-the-camera).
+
+Keep the poll interval slow — these sensors are part of the load budget too.
+
+## Speech to text — the mic feeds Whisper
+
+The camera's always-on microphone works end to end into Home Assistant's speech-to-text
+pipeline, so the audio track is usable for voice events and not just monitoring.
+
+> ⚠️ **HA's STT API needs raw PCM, not a WAV file** — despite the API advertising `format=wav`.
+> Posting a WAV container returns **HTTP 415**. Strip the header and send the raw samples.
+
+Given [the mic cannot be muted](ptz.md#-the-microphone-cannot-be-muted), treat this as a
+capability the camera has whether or not you use it, and site the camera accordingly.
+
 ## Playing sounds through the camera
 
 The camera can play MP3s out of its built-in speaker, which makes it usable as an announcement

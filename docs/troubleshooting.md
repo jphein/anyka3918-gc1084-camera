@@ -12,6 +12,24 @@ nmap -n -Pn -p 3000,554 --open 192.168.1.0/24
 Port 3000 is the better fingerprint of the two — plenty of things speak RTSP, almost nothing
 else serves JPEGs on 3000.
 
+> ⚠️ **A bare TCP connect kills the port-3000 server.** Opening a socket and closing it without
+> sending a valid HTTP request takes the snapshot server down until `libre_anyka_app` restarts —
+> RTSP on 554 keeps working, which makes it look like a partial failure rather than something
+> you did.
+>
+> That is exactly what a port scan does, so **scan once to find the camera and then stop**. Never
+> put port 3000 in a recurring scan, an availability monitor, or an uptime checker. To test
+> liveness, issue a **real HTTP GET** instead — it is also a better test, because it proves the
+> encoder is producing frames rather than just that something is listening:
+>
+> ```sh
+> curl -fsS -o /dev/null http://192.168.1.20:3000/snapshot.jpeg && echo alive
+> ```
+>
+> This has already bitten us: an early version of the Home Assistant health check was doing a
+> bare TCP connect to port 3000 and killing the server it was supposed to be monitoring. See
+> [home-assistant.md](home-assistant.md#health-sensors).
+
 Once found, give it a **DHCP reservation**. These cameras have no UI for a static address and
 nothing to tell you the address changed.
 
@@ -109,14 +127,30 @@ Restarting `libre_anyka_app` is the obvious move, but **a full reboot is the mor
 one** — it clears sockets stuck in `TIME_WAIT` and the memory fragmentation that a restart under
 pressure inherits.
 
-Why the snapshot server specifically fails to come back is **not confirmed**. Two plausible
-explanations, neither tested:
+Why the snapshot server specifically ends up dead has **one confirmed cause and two unproven
+hypotheses.** Take the confirmed one first, because it is the one you are most likely to be
+doing to yourself:
 
-* **Bind failure.** If port 3000 was still held from the previous process and the binary does not
-  set `SO_REUSEADDR`, the bind fails while the app carries on and still serves RTSP. This fits
-  the observed "554 yes, 3000 no" shape.
-* **Memory.** At 3.6 MB free, a JPEG encode buffer allocated at snapshot-server startup could
-  simply fail, with the app continuing without that listener.
+* **✅ Confirmed — a bare TCP connect kills it.** Opening a socket to port 3000 and closing it
+  without a valid HTTP request takes the server down, while RTSP on 554 survives. Port scans,
+  TCP-only health checks and uptime monitors all do exactly this. See
+  [Finding the camera](#finding-the-camera).
+
+The two hypotheses below were written to explain the "554 yes, 3000 no" shape *before* the
+bare-connect behaviour was known. **Both are now less load-bearing** — a plain TCP probe explains
+the same shape without invoking either — but neither is ruled out, and neither fully explains the
+observed incident, where the whole process restarted (its PID changed) rather than just losing a
+listener:
+
+* **Bind failure (untested).** If port 3000 was still held from the previous process and the
+  binary does not set `SO_REUSEADDR`, the bind fails while the app carries on serving RTSP. The
+  watchdog's 20-second poll restarts well inside the usual 60-second `TIME_WAIT` window, which
+  would make this reachable.
+* **Memory (untested).** At 3.6 MB free, a JPEG encode buffer allocated at snapshot-server
+  startup could fail, with the app continuing without that listener.
+
+If you only remember one thing: **stop probing port 3000 with anything that is not an HTTP GET**,
+then see whether the problem recurs at all.
 
 ### The watchdog only catches death, not hangs
 
