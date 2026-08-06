@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Main | `rtsp://10.0.10.20:554/vs0` — h264 **1280×720** @20 fps, PCM A-law 8 kHz |
-| Sub | `rtsp://10.0.10.20:554/vs1` — h264 640×360 @20 fps, PCM A-law 8 kHz |
-| Still | `http://10.0.10.20:3000/snapshot.jpeg` — ~32 KB JPEG, 640×360 |
+| Main | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @20 fps, PCM A-law 8 kHz |
+| Sub | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @20 fps, PCM A-law 8 kHz |
+| Still | `http://192.168.1.20:3000/snapshot.jpeg` — ~32 KB JPEG, 640×360 |
 
 None of these use authentication. `/vs2` returns 404.
 
@@ -84,7 +84,7 @@ Now that the [web UI's API](web-ui.md) is documented, PTZ can also be driven ove
 ```yaml
 rest_command:
   anyka_ptz:
-    url: "http://10.0.10.20/cgi-bin/webui?token={{ token }}&command={{ command }}"
+    url: "http://192.168.1.20/cgi-bin/webui?token={{ token }}&command={{ command }}"
     method: get
 ```
 
@@ -135,7 +135,7 @@ Details and the evidence are in [ptz.md](ptz.md#-the-microphone-cannot-be-muted)
 ## Scope
 
 Of the ~3 cameras originally set up, **only this one** was ever in Home Assistant. The other HA
-cameras are unrelated: two Hikvisions on `10.0.10.x`, three `video.cgi` MJPEG cams, and an
+cameras are unrelated: two Hikvision cameras on the camera VLAN, three `video.cgi` MJPEG cams, and an
 iCam365 over ONVIF.
 
 ## See also

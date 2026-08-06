@@ -6,7 +6,7 @@ The **port-3000 snapshot server plus the `/vs1` path is the `libre_anyka_app` si
 is the most reliable way to find one of these on a network:
 
 ```sh
-nmap -n -Pn -p 3000,554 --open 10.0.10.0/24
+nmap -n -Pn -p 3000,554 --open 192.168.1.0/24
 ```
 
 Port 3000 is the better fingerprint of the two — plenty of things speak RTSP, almost nothing
@@ -34,7 +34,7 @@ nothing to tell you the address changed.
 
 The camera was offline from **2026-04-28** to **2026-08-05**. It hardcodes `wifi_ssid=iot` in
 `gergesettings.txt`, and on that date an "iot prefix delete" change removed the `iot` and
-`iot-office` SSIDs, consolidating onto `jplovescl` (same VLAN, **same PSK** — only the name
+`iot-office` SSIDs, consolidating onto `my-home-ssid` (same VLAN, **same PSK** — only the name
 changed). The camera was hunting for a network that no longer existed.
 
 > ⚠️ **This failure mode is nearly invisible, and that is the lesson worth keeping.** A station
@@ -50,14 +50,14 @@ Pinned to the exact date because the AP still had its pre-change backups:
 `/etc/config/wireless.pre-iot-prefix-delete-2026-04-28` contained `option ssid 'iot'` and
 `option ssid 'iot-office'`.
 
-Fixed by adding an `iot` SSID on the **north-office** AP (`10.0.6.101`) mirroring `jplovescl` —
+Fixed by adding an `iot` SSID on one **access point** (`192.168.1.2`) mirroring `my-home-ssid` —
 `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key — bridged to a new
-`network.cams` interface on `br-lan.10`, the **cams VLAN**. VLAN 10 was already tagged on that
+`network.cams` interface on `br-lan.CAMVLAN`, the **camera VLAN**. That VLAN was already tagged on that
 AP's trunk, so only the interface definition was missing. Configs were backed up on the AP at
 `/root/backups/`.
 
 The longer-term choice is either to keep that mirror SSID, or to edit `gergesettings.txt` to say
-`wifi_ssid=jplovescl` and drop the mirror. Note that editing it means editing the **card** —
+`wifi_ssid=my-home-ssid` and drop the mirror. Note that editing it means editing the **card** —
 see [sd-card.md](sd-card.md#settings-precedence).
 
 ### ⚠️ Moving VLANs requires a camera reboot
@@ -134,14 +134,14 @@ and what has *not* been tested are all in [ptz.md](ptz.md#-the-filter-drifts-bac
 
 ### The camera's clock stays at 1969
 
-Cloud access is firewalled on the cams VLAN, and NTP to `10.0.10.1` also fails
-(`ntpd -q -p 10.0.10.1` times out), so `time_source` never syncs. There is no RTC battery, so
+Cloud access is firewalled on the cams VLAN, and NTP to `192.168.1.1` also fails
+(`ntpd -q -p 192.168.1.1` times out), so `time_source` never syncs. There is no RTC battery, so
 every boot starts at the epoch.
 
 Only affects the camera's own timestamps; Home Assistant supplies its own. Allow UDP 123 from
 the cams zone to the router if you want it fixed.
 
-Note the camera's `time_source` currently reads `10.0.8.1` — the *old* IoT VLAN router — on both
+Note the camera's `time_source` currently reads `192.168.8.1` — the *old* IoT VLAN router — on both
 the card and in flash, because a flash-only edit was reverted by the card. Fixing it means
 editing the card.
 

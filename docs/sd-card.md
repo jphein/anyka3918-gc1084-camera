@@ -98,8 +98,8 @@ It does the same for `gergehack.sh` itself.
 > The card always wins.
 >
 > This is not theoretical — it already happened here. `time_source` was edited in flash from
-> `10.0.8.1` to `10.0.10.1` after the camera moved to the cams VLAN. Both copies now read
-> `10.0.8.1`: the flash edit was reverted from the card. (An earlier note in
+> `192.168.8.1` to `192.168.1.1` after the camera moved to the cams VLAN. Both copies now read
+> `192.168.8.1`: the flash edit was reverted from the card. (An earlier note in
 > `reference/sd-card-original/README.md` recorded the intended value; the camera disagrees.)
 
 So:

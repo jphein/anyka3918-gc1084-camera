@@ -32,13 +32,13 @@ Verified against a live camera on **2026-08-05**.
 
 | | |
 |---|---|
-| Address | `10.0.10.20` — cams VLAN (VLAN 10), alongside the Hikvisions |
+| Address | `192.168.1.20` — the camera VLAN, alongside the other cameras |
 | DHCP | Static reservation `anyka-cam1`, so the address cannot be recycled |
 | SSID | `iot` (2.4 GHz only) |
-| Main stream | `rtsp://10.0.10.20:554/vs0` — h264 **1280×720** @20 fps + PCM A-law |
-| Sub stream | `rtsp://10.0.10.20:554/vs1` — h264 640×360 @20 fps + PCM A-law |
-| Snapshot | `http://10.0.10.20:3000/snapshot.jpeg` — ~32 KB JPEG, no auth |
-| Web UI | `http://10.0.10.20/` — default password `webui` |
+| Main stream | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @20 fps + PCM A-law |
+| Sub stream | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @20 fps + PCM A-law |
+| Snapshot | `http://192.168.1.20:3000/snapshot.jpeg` — ~32 KB JPEG, no auth |
+| Web UI | `http://192.168.1.20/` — default password `webui` |
 | Telnet | Port 23, root login |
 | FTP | Port 21, root login, **writable over `/`** — turn it off unless needed |
 
@@ -50,7 +50,7 @@ only — they do not constrain `/vs0`.
 Find one on your network — the port-3000 snapshot server is the best fingerprint:
 
 ```sh
-nmap -n -Pn -p 3000,554 --open 10.0.10.0/24
+nmap -n -Pn -p 3000,554 --open 192.168.1.0/24
 ```
 
 Grab a frame, no credentials needed:

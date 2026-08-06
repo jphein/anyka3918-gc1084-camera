@@ -20,11 +20,16 @@ mountable image).
 From `anyka_hack/gergesettings.txt` (WiFi password redacted). The values that differ from
 upstream's defaults are the interesting ones:
 
+> **Note on identifiers.** Addresses, SSIDs and hostnames throughout this repo have been
+> replaced with generic RFC1918 equivalents (`192.168.1.x`, `my-iot-ssid`, "the access point").
+> The structure and the story are exactly as they happened; only the names are stand-ins. This
+> applies to the vendored `anyka_hack/gergesettings.txt` in this directory too.
+
 | Setting | Value | Note |
 |---|---|---|
-| `wifi_ssid` | `iot` | See the WiFi section below — this is what broke. |
+| `wifi_ssid` | `my-iot-ssid` | See the WiFi section below — this is what broke. |
 | `sensor_kern_module` | `/mnt/sensor_gc1084.ko` | **The fix for the sensor mismatch.** Upstream defaults to `/usr/modules/sensor_h63.ko`, the wrong sensor. Pointing it at the `.ko` on the SD card is how this camera works. |
-| `time_source` | `10.0.8.1` | The camera lived on the IoT VLAN (VLAN 8). |
+| `time_source` | `192.168.8.1` | The camera lived on the IoT VLAN. |
 | `rootfs_modified` | `0` | Upstream default is `1`. |
 | `run_ipc` | `0` | Stock `anyka_ipc` cloud daemon stays off. |
 | `image_width`/`image_height` | `640` / `360` | Sub-channel resolution. |
@@ -60,19 +65,19 @@ root README's snippet. Fix it in both if you rebuild the card.
 ## The WiFi problem that took this camera offline
 
 `wifi_ssid=iot`, but as of 2026-08-05 **no access point on the property broadcast `iot`** — all
-12 APs were checked. The SSID had been renamed to `jplovescl` (same VLAN 8, and verified to use
+access points were checked. The SSID had been renamed to `my-home-ssid` (same VLAN, and verified to use
 the **same PSK**), so the camera was looking for a network that no longer existed. That is why
 it never even attempted 802.11 association and no AP logged a failed auth from it.
 
-Pinned to the exact date: north-office still has the pre-change backups, and
+Pinned to the exact date: the access point still has the pre-change backups, and
 `/etc/config/wireless.pre-iot-prefix-delete-2026-04-28` contains `option ssid 'iot'` and
 `option ssid 'iot-office'`. So the SSID was removed on **2026-04-28**, and the camera has been
 offline since.
 
-Resolved by adding an `iot` SSID on the **north-office** AP (`10.0.6.101`) as a mirror of
-`jplovescl` — `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key —
-bridged to a new `network.cams` interface on `br-lan.10`, the **cams VLAN**, so the camera now
-sits with the Hikvisions at `10.0.10.20` and inherits that VLAN's cloud-egress blocking. VLAN 10
+Resolved by adding an `iot` SSID on one **access point** (`192.168.1.2`) as a mirror of
+`my-home-ssid` — `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key —
+bridged to a new `network.cams` interface on `br-lan.CAMVLAN`, the **cams VLAN**, so the camera now
+sits with the other cameras at `192.168.1.20` and inherits that VLAN's cloud-egress blocking. That VLAN
 was already tagged on the AP's trunk; only the interface definition was missing. Prior configs
 are backed up on the AP at `/root/backups/wireless-backup-20260805-preiot.conf` and
 `/root/backups/network-backup-20260805-precams.conf`.
@@ -80,10 +85,10 @@ are backed up on the AP at `/root/backups/wireless-backup-20260805-preiot.conf` 
 Two consequences of living on the cams VLAN:
 
 * `time_source` was updated in the camera's flash copy (`/etc/jffs2/gergesettings.txt`) from
-  `10.0.8.1` to `10.0.10.1`. It still doesn't sync — NTP to the router is blocked from that
+  `192.168.8.1` to `192.168.1.1`. It still doesn't sync — NTP to the router is blocked from that
   zone — so the camera clock reads 1969. Harmless for HA, which timestamps its own frames.
 * The copy of `gergesettings.txt` in this directory is the **card's** version and still says
-  `time_source=10.0.8.1`. Update it before rebuilding a card.
+  `time_source=192.168.8.1`. Update it before rebuilding a card.
 
 The longer-term choice is either to keep that mirror SSID, or to edit `gergesettings.txt` to say
-`wifi_ssid=jplovescl` and drop the mirror.
+`wifi_ssid=my-home-ssid` and drop the mirror.
