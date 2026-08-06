@@ -21,8 +21,8 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ WiFi | 2.4 GHz only |
 | ✅ Web UI | Port 80, PTZ pad and live preview — [but see the security warning](#-security) |
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
-| ✅ IR-cut filter | Manual control works, from Home Assistant and by hand — the solenoid audibly clicks. Send [`init_ir` first](docs/ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot); nothing does it at boot |
-| ⛔ Automatic day/night | **Deliberately disabled.** The vendor app's day/night loop can be repaired on a 2023 build — and it then **reverts every manual toggle**, because there is no arbitration on that pin. [Why we chose manual](docs/ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control) |
+| ✅ IR-cut filter | Works — manually. **Write `/sys/user-gpio/ircut_a` directly**; that is what `ctl` and the Home Assistant switch now do. [Every vendor route is dead](docs/ptz.md#-one-write-works-every-vendor-route-is-dead-and-they-die-in-the-same-place), and a boot-time write keeps it out of the magenta position |
+| ❌ Automatic day/night | **Not fixable on this board**, and not for want of patching: the driver's ambient input is `gpio-rf_feed`, a pin this hardware does not route, and its fallback ADC reads a constant. [Do not spend a day on it](docs/ptz.md#-automatic-daynight-is-not-fixable-on-this-board) |
 | ❌ IR LEDs | Pin and pad both toggle correctly, but **the ring is dark** — confirmed with a phone that demonstrably sees another camera's emitters. [Why is still open](docs/ptz.md#-ir-confirmed-dark) |
 | ❌ White LEDs | Present in hardware (4 on the ring) but dark. The **pad demonstrably swings** and nothing lights, the vendor firmware **declares this PTZ variant unsupported**, and there is **no software fix** — [all other candidates refuted](docs/ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
@@ -147,18 +147,20 @@ bug you can fix in one line:
    the card on every boot and reboots if it differs, so edits made only in `/etc/jffs2` quietly
    revert. [→](docs/sd-card.md#settings-precedence)
 
-4. **A string that looks broken may be a dead path whose failure is load-bearing.**
-   `libre_anyka_app` writes a sysfs node that does not exist on this kernel build. That is a bug
-   by inspection, and fixing it was obviously correct. **It broke IR-cut control that had worked
-   for weeks** — because the app's day/night loop had been failing silently since install, and
-   that silence was the only reason manual control had the pin to itself. Repairing the path woke
-   a second writer that reverts every manual toggle.
+4. **A string that looks broken may be a dead path whose failure is load-bearing.** These
+   binaries are full of hard-coded sysfs paths that do not exist on this kernel. They are bugs by
+   inspection and they look like one-line fixes.
 
-   **Before repairing a wrong-looking path, establish what currently depends on it failing.** The
-   conflict had even been predicted in these docs and dismissed as hypothetical — *because the
-   loop had never been observed to act.* It had never acted because the path was broken, and the
-   next step was to fix the path. **"Never observed" is only evidence while the conditions that
-   prevented it hold.** [→](docs/ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control)
+   **One was fixed, and it broke the IR-cut filter.** `libplat_drv.so`'s driver stats *two* node
+   names to decide its mode: neither present → disabled; **one** → write-and-hold, which is right
+   for this board; **both** → a 10 ms pulse meant for a latching solenoid this camera does not
+   have. Correcting **both** strings tipped it from *disabled* straight into *pulse*, so every
+   command released the pin and parked the filter in magenta. **Renaming one string would have
+   worked. Renaming both broke it** — the more thorough fix was the harmful one, and no normal
+   engineering instinct protects against that.
+
+   **Before repairing a wrong-looking path, establish (a) that it is actually executed and (b)
+   what currently depends on it failing.** [→](docs/ptz.md#-root-cause-the-libplat_drvso-patch-tipped-the-driver-into-a-mode-for-other-hardware)
 
 ## Credits
 

@@ -34,8 +34,8 @@ sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
 
 ### What gets fixed
 
-Without these, a fresh card boots a camera with a **15-hour-wrong clock** and **day/night IR-cut
-switching that has never worked**.
+Without these, a fresh card boots a camera with a **15-hour-wrong clock**, a **live pre-auth root
+RCE**, and an **IR-cut filter stuck in the magenta position**.
 
 | Fix | Why |
 |---|---|
@@ -45,42 +45,40 @@ switching that has never worked**.
 | `/sounds/` created | Where `ctl`'s `play` and `sounds` commands look |
 | Missing `]` in `Factory/config.sh` | [Upstream's bracket bug](#-latent-bug-in-factoryconfigsh), which stops the sensor symlink ever being recreated |
 | `cgi-bin/header` hardened | Closes the [pre-auth root RCE](web-ui.md#the-fix) on port 80. **Not** kernel-specific — applies unconditionally |
+| Boot-time IR-cut write in `Factory/config.sh` | Puts the filter in the non-magenta position 60 s into every boot. **JP relies on this**, and it was missing from the backup — [detail](ptz.md#the-boot-time-mitigation-is-user-relied-on-behaviour) |
 
-**Automatic day/night IR-cut switching is deliberately NOT among them** — see below.
+**Exactly one binary is patched: `cgi-bin/header`.** It earns its place by closing a live remote
+root hole, and it is kernel-agnostic. Everything else on the card is stock.
 
-> ⛔ **Do not add a `libplat_drv.so` patch to this card, and do not turn the `libre_anyka_app`
-> patch back on by default.**
+> ⛔ **Do not add a `libplat_drv.so` patch, and do not re-enable the `libre_anyka_app` one.**
 >
-> This warning previously said the opposite — that `ptz_daemon` "has the same bug" and a card
-> should probably patch it too. **Retracted.** Manual IR-cut control through the daemon
-> (`set_ir_cut`, which is what Home Assistant drives) **already works**, and it does not go
-> through sysfs at all.
+> This warning has said several wrong things and is now on firm ground. It once said `ptz_daemon`
+> "has the same bug" and a card should patch it too — **retracted**, that binary never runs. It
+> then said the app patch should merely default to off — **also retracted**, it is confirmed inert
+> and shipping it buys nothing while costing a whole detection scheme.
 >
-> The card ships **two** binary fixes and no more: `cgi-bin/header`, and the settings/`ctl`
-> changes. [The full story](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
+> [The full story](ptz.md#-root-cause-the-libplat_drvso-patch-tipped-the-driver-into-a-mode-for-other-hardware).
 
-### ⛔ Automatic day/night IR-cut is off by default, and turning it on breaks manual control
+### ⛔ No binary IR-cut patch ships. Two were tried; neither belongs on a card.
 
-**`--ir-cut-daynight` opts in. Do not use it on a camera anybody drives by hand.**
+| Patch | Verdict |
+|---|---|
+| `libre_anyka_app` (`gpio-ircut_a` → `ircut_a`) | **Confirmed inert.** It repairs the *write* end while the *sense* end stays broken in a different, unpatched `libplat_drv.so`, so the day/night thread bails before reaching any write |
+| `ptz/lib/libplat_drv.so` (both names + `ir-led`) | **A regression.** Renaming *both* ircut names tips the driver into a 2-line pulse mode meant for a latching solenoid; this board's filter is hold-to-engage, so every command parked it **out** (magenta) |
 
-On a 2023-build camera the stock `libre_anyka_app` writes a sysfs node that does not exist, so its
-automatic day/night switching has **never** worked. Correcting that path makes those writes land —
-and the app's day/night loop then **reverts every manual toggle** at its next evaluation. JP's
-Home Assistant switch had worked for weeks; with the patch applied the filter *"toggles then goes
-back to the position it was before."*
+**Automatic day/night is not fixable on this board at all** — the sense input is `gpio-rf_feed`,
+which does not exist here, and the fallback ADC reads a constant. Nothing is lost by shipping
+stock. [Full story](ptz.md#-automatic-daynight-is-not-fixable-on-this-board).
 
-**There is no arbitration anywhere in this firmware.** On a 2023 build you get automatic day/night
-**or** reliable manual control, not both.
+**What ships instead**, and it works: `ctl` writes `/sys/user-gpio/ircut_a` directly, and
+`Factory/config.sh` puts the filter in the non-magenta position 60 s into every boot.
 
-**Stock is the right default**, because on this camera the automatic feature is worth very little:
-[both LED rings are dark](ptz.md#lights--neither-ring-lights), so there is no working IR
-illumination for a night mode to switch to. [Full story](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
+### 🔑 The per-boot selection: retained for reference, no longer used
 
-### 🔑 The per-boot selection: one card works in any of these cameras
-
-**This machinery is retained and still correct — it is only dormant while the patch is off.** It
-is what makes the tool trustworthy with a bag of cameras, and it is what `--ir-cut-daynight`
-switches on.
+**This machinery is dormant** — nothing shipped on the card is kernel-build-specific any more, so
+there is nothing to select between. **It is documented because the two design insights in it are
+good** and may be wanted again: *test the node, not the build string*, and *decide every boot, not
+once*.
 
 `libre_anyka_app` hard-codes the sysfs path it uses to move the IR-cut filter, and the two
 vendor kernel builds disagree about that path:
@@ -94,19 +92,18 @@ The stock binary writes the prefixed name, so on a 2023 camera it gets `ENOENT` 
 transition. A patched binary writes the unprefixed name — and is then wrong on a 2022 camera,
 for the same reason in reverse.
 
-So **the card carries both binaries and picks one at every boot**, by testing which node
-actually exists:
+The scheme was: **carry both binaries and pick one at every boot**, by testing which node actually
+exists:
 
 ```
 libre_anyka_app.node-ircut_a         patched  -> 2023 build
 libre_anyka_app.node-gpio-ircut_a    stock    -> 2022 build
 ```
 
-The choice is made in `run_libre_anyka_app.sh`, which this tool replaces with
-[our own version](../tools/card-overlay/anyka_hack/libre_anyka_app/run_libre_anyka_app.sh)
-(upstream's is kept beside it as `.upstream`).
+The choice was made in [our `run_libre_anyka_app.sh`](../tools/card-overlay/anyka_hack/libre_anyka_app/run_libre_anyka_app.sh),
+which is **still in the repo and no longer installed**.
 
-Four properties follow, and they are the point:
+Four properties followed, and they are why this is documented rather than deleted:
 
 * **Swapping a card between cameras is safe and self-correcting.** It re-detects on the new
   unit. A one-shot first-boot marker would have been silently wrong after a swap — which is a
@@ -122,21 +119,22 @@ Four properties follow, and they are the point:
 > binary actually depends on. Testing the node directly handles a third vendor build for free
 > and does not bet on a username.
 
-The patched binary ships at
-[`reference/patches/libre_anyka_app.node-ircut_a`](../reference/patches/), with its offset, bytes
-and md5 [documented there](../reference/patches/README.md). The tool **verifies the md5 before
-installing** and refuses on a mismatch — but **only installs it at all under
-`--ir-cut-daynight`.**
+The patched binary is kept at
+[`reference/patches/libre_anyka_app.node-ircut_a`](../reference/patches/) **for documentation
+only** — offset, bytes and md5 [are recorded there](../reference/patches/README.md). **The tool no
+longer installs it.** It does check that the card's `libre_anyka_app` is the expected stock md5
+and warns loudly if it is not, so a patched backup cannot slip onto a card unnoticed.
 
-> ❌ **RETRACTED: "verified applied — effect not yet validated."** This block used to say the
-> patch was correct and running and merely awaiting its first day/night transition. **The
-> transition came, and it broke manual IR-cut control.** The effect is now validated and it is
-> **not** the effect that was wanted.
+> ❌ **RETRACTED: "verified applied — effect not yet validated."** This block said the patch was
+> correct and running and merely awaiting its first day/night transition. **The transition never
+> came and never will** — [the day/night thread bails before reaching any
+> write](ptz.md#the-vendor-apps-daynight-loop-is-confirmed-inert), because the *sense* end of the
+> chain is broken in a different library nobody patched.
 >
-> The wording was careful and it was still not careful enough: "the binary is correct and running"
-> was true, and it quietly implied the only open question was *whether* the feature would work —
-> when the live question was **what else would change when it did.** A patch awaiting validation
-> is not a neutral state; it is a change whose consequences have not happened yet.
+> The wording was careful and still not careful enough: *"the binary is correct and running"* was
+> true, and it framed the only open question as **whether** the feature would work — when the two
+> live questions were *what else changes when it does*, and *is anything else in the chain also
+> broken?* **A patch awaiting validation is not a neutral state.**
 
 > ⚠️ **The discriminator is `ircut_b`, not `ircut_a`.** Both would work, but `ircut_b` exists
 > **only** in the 2023 build — verified by decompressing the 2022 kernel and counting

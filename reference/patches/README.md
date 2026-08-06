@@ -4,26 +4,36 @@ In-place binary patches for this camera's 2023 kernel build. Each is byte-for-by
 binary with one string rewritten; **sizes are unchanged**, so nothing moves and no relocation is
 touched.
 
-Installed onto a card by [`tools/write-sd-card.sh`](../../tools/write-sd-card.sh), which
-**verifies the md5 before installing** and refuses on a mismatch.
+> ⛔ **Exactly one of these is installed on a card: `cgi-bin-header.hardened`.** It closes a live
+> pre-auth remote root hole and is kernel-agnostic. **Every binary IR-cut patch below is kept for
+> documentation only** — one is inert, one is a regression, and
+> [`tools/write-sd-card.sh`](../../tools/write-sd-card.sh) ships neither.
 
-## `libre_anyka_app.node-ircut_a` — 🔴 **shipped, regressed, now off by default**
+## `libre_anyka_app.node-ircut_a` — ⚪ **confirmed inert, not shipped**
 
-Fixes automatic day/night IR-cut switching, which has **never worked** on the 2023 build.
+Intended to fix automatic day/night IR-cut switching, which has **never worked** on the 2023
+build. It does not, and [nothing can](../../docs/ptz.md#-automatic-daynight-is-not-fixable-on-this-board).
 
-> ### ⛔ It works. That is the problem.
+> ### ⛔ CONFIRMED INERT. Not shipped, and not worth shipping.
 >
-> Making the app's day/night writes land means **the app's day/night loop starts reverting every
-> manual IR-cut toggle** — JP's Home Assistant switch went from working-for-weeks to *"toggles
-> then goes back to the position it was before."* Rolled back on the live camera; manual control
-> restored.
+> **It repairs the *write* end of a two-ended chain while the *sense* end stays broken in a file
+> nobody patched.** The day/night thread `photosensitive_switch_th_ex` calls
+> `ak_drv_ir_get_input_level()`, which resolves into a **different** `libplat_drv.so` build
+> (`385740be…`) whose init fails the same way. It returns `-1` and the thread bails **before
+> reaching any write** — so the corrected string is never executed.
 >
-> `tools/write-sd-card.sh` **no longer installs this by default.** `--ir-cut-daynight` opts in.
-> There is no arbitration in this firmware: on a 2023 build you get automatic day/night **or**
-> reliable manual control. Given both LED rings are dark, automatic night mode has nothing to
-> switch to, so manual wins.
+> It is also **structurally harmless**: it writes via `camera_set_ir(val,path)` and
+> `ak_misc_set_video_day_night` does **one write per pin and leaves it asserted** — write-and-hold,
+> correct for this hardware. It cannot park the filter out.
 >
-> [Full story](../../docs/ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
+> **`tools/write-sd-card.sh` no longer installs it at all.** Shipping an inert patch buys nothing
+> and cost the entire per-boot node-name detection scheme that existed only to serve it.
+>
+> ❌ **RETRACTED: "this patch broke JP's IR-cut toggle."** It did not. That was
+> [`libplat_drv.so`](#libplat_drvso---the-regression-never-patch-this), and the misattribution
+> survived a rollback and two commits.
+>
+> [Full story](../../docs/ptz.md#the-vendor-apps-daynight-loop-is-confirmed-inert).
 
 | | |
 |---|---|
@@ -46,23 +56,24 @@ printf '/sys/user-gpio/ircut_a\0\0\0\0\0\0' \
 ```
 
 > ❌ **RETRACTED: "verified applied, effect NOT yet validated."** This said the patch was correct
-> and running and merely awaiting its first day/night transition. **The transition came, and it
-> broke manual IR-cut control.** The effect is validated now, and it is not the wanted one.
+> and running and merely awaiting its first day/night transition. **That transition never came and
+> never will** — the sense end of the chain is broken in a different library.
 >
-> The wording was careful and still not careful enough: *"the binary is correct and running"* was
-> true, and it framed the only open question as **whether** the feature would work — when the live
-> question was **what else changes when it does.** A patch awaiting validation is not a neutral
-> state; it is a change whose consequences have not arrived yet.
+> The wording was careful and still not careful enough. *"The binary is correct and running"* was
+> true, and it framed the only open question as **whether** the feature would work. Two better
+> questions went unasked: **what else changes when it does**, and **is anything else in this chain
+> also broken?** A patch awaiting validation is not a neutral state.
 
-> ⚠️ **This patch is kernel-build-specific.** It is *wrong* on the 2022 build, whose node really
-> is `gpio-ircut_a`. That is why the card ships both binaries and
-> [selects one per boot](../../docs/sd-card.md#-the-per-boot-selection-one-card-works-in-any-of-these-cameras) rather
-> than baking a choice in at write time.
+> ⚠️ **It is also kernel-build-specific**, and *wrong* on the 2022 build whose node really is
+> `gpio-ircut_a`. That is what the
+> [per-boot selection](../../docs/sd-card.md#-the-per-boot-selection-retained-for-reference-no-longer-used)
+> existed to handle. **That machinery is now dormant** — with nothing build-specific shipping,
+> there is nothing to select between.
 
-> ⚠️ **The file is kept, correct, and verified — the question was never whether the patch is
-> right.** It is a valid fix to a real bug. It is off by default because *repairing that bug has a
-> consequence nobody wanted.* Keep the distinction: this is not a bad patch, it is a patch whose
-> side effect costs more than its benefit on this deployment.
+> ⚠️ **The patch itself is not wrong, and that is the point worth keeping.** It correctly fixes a
+> real bug. It is simply *pointless*, because the feature it repairs is gated behind a second
+> failure nobody had looked for. **"This patch is correct" and "this patch does something" are
+> different claims**, and only the first was ever established.
 
 ## `cgi-bin-header.hardened`
 
@@ -120,22 +131,37 @@ uppercase by convention — `PATH`, `IFS`, `LD_*`, `ENV`, `BASH_ENV`, `CDPATH`.
 obvious unfinished job.** Each one is a real, visible, easily-patched wrong string. None of them
 should be patched. Read the reason before reaching for `dd`.
 
-### `libplat_drv.so` — 🔴 **tried, rolled back, never validated**
+### `libplat_drv.so` — 🔴 **THE REGRESSION. Never patch this.**
 
 This is where `ptz_daemon_dyn` gets `gpio-ircut_a`, `gpio-ircut_b` and `ir-led` from. On
-2026-08-06 those three strings were patched on the **live camera**, then rolled back to md5
-`f5769ff013d7a3094e73ee76e312cad0` during the regression hunt.
+2026-08-06 those three strings were patched on the **live camera**, which **broke the IR-cut
+filter**, and were rolled back to md5 `f5769ff013d7a3094e73ee76e312cad0`.
 
-**It was not the culprit** — that was `libre_anyka_app` — but it was never shown to *help* either.
-The daemon does not reach the filter through sysfs at all: `set_ir_cut` moves the filter while
-`/sys/user-gpio/ircut_a`'s mtime never changes, which is measured. So correcting those strings
-repairs a path nothing uses.
+**The mechanism is exact.** `ak_drv_ir_init` stats *both* ircut names and picks a mode:
 
-> **Leading hypothesis, untested and staying that way:** the daemon reaches the filter through
-> `ak_drv_ir_set_ircut`, and the sysfs strings are a legacy path failing silently and harmlessly.
+| `stat()` | Mode | Behaviour |
+|---|---|---|
+| neither | **disabled** | returns `-1`; `set_ir_cut` writes nothing |
+| **one** | **1-line** | one write, **stays asserted** — correct for this board |
+| **both** | **2-line** | `a=v; b=!v; sleep 10 ms; a=0; b=0` — a **latching-solenoid pulse** |
+
+This board's filter is **hold-to-engage on `ircut_a` alone with 4–8 s travel**. A 10 ms pulse that
+releases cannot hold it, so in 2-line mode **every command parks the filter OUT** — magenta.
+
+> ### 🎯 Renaming `gpio-ircut_b` alone caused it
+>
+> The patch renamed **both**, which jumped the driver from *disabled* past 1-line into 2-line.
+> **Renaming only `ircut_a` would have landed in 1-line mode and worked.**
+>
+> **The more thorough fix was the harmful one.** "I found two instances of the bug and fixed both"
+> is what a careful engineer does. There is no ordinary instinct that guards against a component
+> whose behaviour depends on *how many* things it can reach.
+>
+> The third edit, `ir-led` → `IR_LED`, was **dead code**: `ptz_daemon_dyn` imports no
+> `ak_drv_irled_*` symbol at all.
 
 **No patch file for this library exists in this directory, and none should be added.**
-[Full story](../../docs/ptz.md#-retracted-ir-cut-control-through-the-daemon-is-broken).
+[Full story](../../docs/ptz.md#-root-cause-the-libplat_drvso-patch-tipped-the-driver-into-a-mode-for-other-hardware).
 
 ### `ptz_daemon` (the static 2.1 MB binary) — inert
 

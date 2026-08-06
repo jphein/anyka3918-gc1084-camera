@@ -2,8 +2,7 @@
 # Write a ready-to-run Anyka AK3918 hack SD card from the backup taken 2026-08-05,
 # with this project's fixes baked in.
 #
-#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] \
-#                               [--stock] [--ir-cut-daynight]
+#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
 #
 # The card is the camera's brain: /Factory/config.sh is what the stock firmware
 # executes at boot (the SD exploit), and /mnt/anyka_hack/ holds every binary the
@@ -24,48 +23,53 @@ VOLID="8D1BDED7"
 
 # Repo root, so we can overlay files that live here rather than in the backup.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OVERLAY="$REPO/tools/card-overlay"
 CTL_SRC="$REPO/reference/sd-card-original/web_interface/ctl"
 
-# The libre_anyka_app IR-cut patch. OFF BY DEFAULT since 2026-08-06 - it is a
-# REGRESSION on a camera whose IR-cut filter is driven manually.
+# NO BINARY IR-CUT PATCH IS SHIPPED. This is deliberate and hard-won.
 #
-# The patch is correct: on a 2023 kernel the stock binary writes gpio-ircut_a,
-# which does not exist, so the app's automatic day/night switching has never
-# worked. Fixing the path makes those writes LAND - and the app's day/night loop
-# then reverts every manual toggle at its next evaluation. JP's Home Assistant
-# IR-cut switch had worked for weeks; after this patch it "toggles then goes back
-# to the position it was before". Rolled back on the live camera; manual control
-# restored.
+# Two were tried on the live camera on 2026-08-06. Both are now reverted there,
+# and neither belongs on a card:
 #
-# There is no arbitration anywhere in this firmware, so on a 2023 build you get
-# automatic day/night OR reliable manual control, not both. Stock is the right
-# default because this camera's LED rings are both dark - there is no working IR
-# illumination for a night mode to switch to. See docs/ptz.md.
+#   libre_anyka_app  (gpio-ircut_a -> ircut_a)
+#       CONFIRMED INERT by disassembly. It fixes the WRITE end of a two-ended
+#       chain while the SENSE end stays broken in a file nobody patched: the
+#       day/night thread photosensitive_switch_th_ex calls
+#       ak_drv_ir_get_input_level(), which resolves into a DIFFERENT
+#       libplat_drv.so build (385740be...) whose init fails the same way, so it
+#       returns -1 and the thread bails before reaching any write. Shipping it
+#       buys nothing and costs the whole per-boot node-name detection scheme.
 #
-# --ir-cut-daynight opts in, for a camera nobody drives by hand.
-LAA_STOCK_MD5="3458b8598ca9525a0d5e693ff5fd5d5c"   # writes gpio-ircut_a (2022 build)
-LAA_PATCH_MD5="351d54e853ee6774e50e9704986bd6b6"   # writes ircut_a      (2023 build)
-LAA_PATCH_SRC="$REPO/reference/patches/libre_anyka_app.node-ircut_a"
+#   ptz/lib/libplat_drv.so  (gpio-ircut_a/b -> ircut_a/b, ir-led -> IR_LED)
+#       A REGRESSION, with an exact mechanism. ak_drv_ir_init stats BOTH names:
+#       both fail -> driver disabled; exactly one -> 1-line mode (write and
+#       hold, correct here); both -> 2-line mode, which pulses
+#       a=v; b=!v; sleep 10ms; a=0; b=0 for a LATCHING solenoid. This board's
+#       filter is hold-to-engage on ircut_a alone with 4-8 s travel, so every
+#       command ended with the pin released and the filter parked OUT (magenta).
+#       Renaming gpio-ircut_b ALONE caused it. Renaming only ircut_a would have
+#       landed in 1-line mode and been harmless - THE MORE THOROUGH FIX WAS THE
+#       HARMFUL ONE.
+#
+# Automatic day/night is NOT FIXABLE on this board at any level: the sense input
+# is gpio-rf_feed, which does not exist here, and the fallback /sys/kernel/ain/ain0
+# is measured pinned at a constant 2999. Do not spend a day on it.
+#
+# The patched binary is kept at reference/patches/ for documentation only.
+# See docs/ptz.md and reference/patches/README.md.
+LAA_STOCK_MD5="3458b8598ca9525a0d5e693ff5fd5d5c"   # stock, and what we ship
 
-# ---------------------------------------------------------------------------
-# DO NOT ADD A libplat_drv.so PATCH HERE.
+# THE RULE BOTH OF THOSE TEACH, and the reason it is repeated in a shell script
+# rather than left in the docs: a string that looks broken may be a DEAD PATH
+# WHOSE FAILURE IS LOAD-BEARING. Every one of these binaries contains sysfs paths
+# that plainly do not exist on this kernel. They read as a backlog of one-line
+# fixes. Repairing one of them tipped a driver out of "disabled" and into a mode
+# built for hardware this board does not have.
 #
-# That library (ptz/lib/libplat_drv.so, md5 f5769ff013d7a3094e73ee76e312cad0)
-# contains gpio-ircut_a, gpio-ircut_b and ir-led, none of which exist as nodes
-# on the 2023 build. It reads as an obvious unfinished job, exactly like the
-# libre_anyka_app patch above. It was patched on the live camera on 2026-08-06,
-# never cleanly validated, and rolled back. Manual IR-cut control (set_ir_cut,
-# which is what Home Assistant drives) does not go through sysfs at all, so
-# correcting those strings fixes nothing anybody uses.
+# Before repairing a wrong-looking path, establish (a) that it is actually
+# executed and (b) WHAT CURRENTLY DEPENDS ON IT FAILING.
 #
-# THE RULE BOTH OF THESE TEACH, and the reason this comment is here rather than
-# only in the docs: a string that looks broken may be a DEAD PATH WHOSE FAILURE
-# IS LOAD-BEARING. libre_anyka_app writing a non-existent sysfs path is a bug by
-# inspection - and that silent failure was the only reason manual IR-cut control
-# worked at all. Before repairing a wrong-looking path, establish what currently
-# DEPENDS ON IT FAILING. See docs/ptz.md.
-# ---------------------------------------------------------------------------
+# The only patch on this card is the security fix below. It earns its place by
+# closing a live remote root hole, and it is kernel-agnostic.
 
 # The pre-auth root RCE fix for cgi-bin/header. UNLIKE the binary patch this is
 # NOT kernel-build-specific, so it applies unconditionally with no detection.
@@ -89,18 +93,16 @@ DEV="${1:-}"; shift || true
 SSID=""
 TIME_SOURCE=""
 STOCK=0
-DAYNIGHT=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ssid)            SSID="${2:-}"; shift 2 ;;
-    --time-source)     TIME_SOURCE="${2:-}"; shift 2 ;;
-    --stock)           STOCK=1; shift ;;
-    --ir-cut-daynight) DAYNIGHT=1; shift ;;
+    --ssid)        SSID="${2:-}"; shift 2 ;;
+    --time-source) TIME_SOURCE="${2:-}"; shift 2 ;;
+    --stock)       STOCK=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
-[ -n "$DEV" ] || die "usage: $0 /dev/sdX [--ssid NAME] [--time-source IP] [--stock] [--ir-cut-daynight]"
+[ -n "$DEV" ] || die "usage: $0 /dev/sdX [--ssid NAME] [--time-source IP] [--stock]"
 [ -b "$DEV" ] || die "$DEV is not a block device"
 [ -d "$BACKUP" ] || die "backup not found at $BACKUP"
 [ "$(id -u)" -eq 0 ] || die "must run as root (writing a raw device)"
@@ -120,11 +122,7 @@ if [ "$STOCK" -eq 1 ]; then
   echo "Mode   : --stock (backup contents only, NO project fixes)"
 else
   echo "Mode   : fixes applied (timezone, ptz_init_on_boot, ctl, RCE fix)"
-  if [ "$DAYNIGHT" -eq 1 ]; then
-    echo "IR-cut : automatic day/night ON  -- WILL revert manual toggles on a 2023 camera"
-  else
-    echo "IR-cut : manual control (stock binary; automatic day/night off)"
-  fi
+  echo "IR-cut : stock binaries + direct-GPIO ctl + boot mitigation (no binary patch)"
 fi
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
 echo
@@ -221,56 +219,52 @@ if [ "$STOCK" -eq 0 ]; then
     sed -i 's|if \[ ! -e "\$FILE"; then|if [ ! -e "$FILE" ]; then|' "$CONFIG_SH"
   fi
 
-  # --- 6. IR-cut: ship both binaries, let the launcher pick per boot
-  STOCK_BIN="$APPDIR/libre_anyka_app"
-  if [ ! -f "$STOCK_BIN" ]; then
-    warn "libre_anyka_app not found in the backup - skipping the IR-cut fix"
-    NOTES+=("IR-cut day/night fix NOT applied (binary missing from backup).")
-  else
-    got="$(md5sum "$STOCK_BIN" | cut -d' ' -f1)"
+  # --- 6. assert the vendor app on this card is the STOCK binary.
+  #
+  # This is a guard, not a fix: if someone patches the backup (or restores an
+  # older one taken while the ircut patch was applied), a card would silently
+  # ship a binary we deliberately do not ship. Loud, non-fatal, and it names the
+  # md5 so the mismatch is diagnosable.
+  if [ -f "$APPDIR/libre_anyka_app" ]; then
+    got="$(md5sum "$APPDIR/libre_anyka_app" | cut -d' ' -f1)"
     if [ "$got" != "$LAA_STOCK_MD5" ]; then
-      warn "libre_anyka_app md5 is $got, expected $LAA_STOCK_MD5"
-      warn "the backup has changed - NOT applying the IR-cut fix"
-      NOTES+=("IR-cut day/night fix NOT applied (unexpected binary in backup).")
-    else
-      echo "==> installing IR-cut node detection"
-      mv "$STOCK_BIN" "$APPDIR/libre_anyka_app.node-gpio-ircut_a"
-
-      if [ "$DAYNIGHT" -eq 0 ]; then
-        # Default. The launcher finds no patched binary and falls back to stock,
-        # which is the state the live camera was restored to.
-        echo "    stock binary only (automatic day/night OFF - the safe default)"
-        NOTES+=("Automatic day/night IR-cut switching is OFF (the default since 2026-08-06).")
-        NOTES+=("  -> MANUAL IR-cut control works: Home Assistant, ctl?command=ircut_on, set_ir_cut.")
-        NOTES+=("  -> Enabling it (--ir-cut-daynight) makes the vendor app REVERT manual toggles.")
-        NOTES+=("  -> There is no arbitration in this firmware; you get one or the other.")
-      elif [ ! -f "$LAA_PATCH_SRC" ]; then
-        warn "--ir-cut-daynight requested but no patched binary at $LAA_PATCH_SRC"
-        NOTES+=("--ir-cut-daynight had no patched binary to install; card falls back to stock.")
-      else
-        pgot="$(md5sum "$LAA_PATCH_SRC" | cut -d' ' -f1)"
-        if [ "$pgot" != "$LAA_PATCH_MD5" ]; then
-          warn "patched binary md5 is $pgot, expected $LAA_PATCH_MD5 - NOT installing it"
-          NOTES+=("Patched IR-cut binary REJECTED on md5 mismatch; card falls back to stock.")
-        else
-          install -m 755 "$LAA_PATCH_SRC" "$APPDIR/libre_anyka_app.node-ircut_a"
-          echo "    both builds installed - launcher will detect per boot"
-          warn "--ir-cut-daynight: the vendor app will REVERT manual IR-cut toggles on a 2023 camera"
-          NOTES+=("AUTOMATIC DAY/NIGHT IS ON, and it BREAKS manual IR-cut control on a 2023 build.")
-          NOTES+=("  -> symptom: the filter toggles, then goes back within the app's loop interval.")
-          NOTES+=("  -> Home Assistant's switch.anyka_cam_ir_cut_filter will not hold. See docs/ptz.md.")
-        fi
-      fi
-
-      # our launcher does the detection; keep upstream's for reference
-      if [ -f "$OVERLAY/anyka_hack/libre_anyka_app/run_libre_anyka_app.sh" ]; then
-        mv "$APPDIR/run_libre_anyka_app.sh" "$APPDIR/run_libre_anyka_app.sh.upstream" 2>/dev/null || true
-        install -m 755 "$OVERLAY/anyka_hack/libre_anyka_app/run_libre_anyka_app.sh" \
-                       "$APPDIR/run_libre_anyka_app.sh"
-      else
-        die "overlay launcher missing at $OVERLAY - refusing to leave the card with a renamed binary and no launcher"
-      fi
+      warn "libre_anyka_app on this card is $got, expected stock $LAA_STOCK_MD5"
+      NOTES+=("libre_anyka_app is NOT the stock binary ($got).")
+      NOTES+=("  -> if this is the ircut patch, it is INERT but unwanted; see docs/ptz.md.")
     fi
+  else
+    warn "libre_anyka_app not found in the backup - the camera will have no RTSP"
+    NOTES+=("libre_anyka_app MISSING from the backup. This card will not stream.")
+  fi
+
+  # --- 7. keep the IR-cut filter out of the magenta position on every boot.
+  #
+  # JP relies on this: "we used to apply the ircut filter to fix the magenta on
+  # startup bug". It is on his live card at /Factory/config.sh, with his comment,
+  # and it was ONLY ever missing from the backup - so no card this tool has ever
+  # produced had it, and every fresh camera boots magenta and stays that way.
+  #
+  # This is a user-relied-on behaviour, not a workaround we invented. Do not drop
+  # it because it looks like a hack; it is the ONLY automatic IR-cut action that
+  # works on this board (see docs/ptz.md - automatic day/night is unfixable here,
+  # the sense input the vendor driver wants does not exist on this hardware).
+  #
+  # The 60 s delay is deliberate: gergehack.sh and the module loads have to finish
+  # before /sys/user-gpio/ is populated.
+  #
+  # Appending puts it at line 33, which is exactly where it sits on JP's live card
+  # - the backup's config.sh is 30 lines, +blank +comment +command. That match is
+  # a useful check on two things at once: the placement is right, and gergehack.sh
+  # RETURNS rather than blocking (otherwise JP's own line would never have run).
+  if grep -q 'user-gpio/ircut_a' "$CONFIG_SH" 2>/dev/null; then
+    echo "==> boot-time IR-cut mitigation already present in Factory/config.sh"
+  else
+    echo "==> adding the boot-time IR-cut mitigation to Factory/config.sh"
+    cat >> "$CONFIG_SH" <<'IRCUT'
+
+# keep the IR cut filter in the non-pink position on every boot
+(sleep 60; echo 1 > /sys/user-gpio/ircut_a) &
+IRCUT
   fi
 fi
 
@@ -304,9 +298,13 @@ echo "    gergehack.sh against the camera's flash copies on EVERY boot; if they"
 echo "    differ it copies card -> flash and REBOOTS. So editing only"
 echo "    /etc/jffs2/gergesettings.txt over telnet silently reverts next boot."
 echo "    Change settings on the card, or edit both copies together."
-echo "  * This card works in ANY of these cameras. The IR-cut binary is chosen"
-echo "    at every boot from which /sys/user-gpio node exists, so swapping the"
-echo "    card between units is safe and self-correcting."
+echo "  * This card works in ANY of these cameras. Nothing on it is specific to a"
+echo "    kernel build - the only patch is cgi-bin/header, which is kernel-agnostic."
+echo "  * IR-cut: MANUAL ONLY, and that is the correct configuration. ctl writes"
+echo "    /sys/user-gpio/ircut_a directly, and Factory/config.sh sets the filter to"
+echo "    the non-magenta position 60s into every boot. Automatic day/night is NOT"
+echo "    fixable on this board - the sense input the vendor driver wants does not"
+echo "    exist here. See docs/ptz.md before trying."
 echo "  * The card sets the root password from Factory/config.sh on every boot."
 echo "  * sensor_kern_module points at the GC1084 module ON THIS CARD. If the new"
 echo "    camera has a different image sensor, video will not come up until that"

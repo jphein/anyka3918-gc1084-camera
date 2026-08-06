@@ -71,13 +71,28 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 `packages/anyka_camera.yaml` in the `ha` repo and call a helper deployed to
 `/config/scripts/anyka_ptz.py`, which writes to the camera's `/tmp/ptz.daemon` FIFO over telnet.
 
-`switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live, and **it works** — `command_on`
-runs `anyka_http.py ircut on` → `ctl?command=ircut_on` → `set_ir_cut 1` at the daemon. JP has
-driven it this way for weeks; the solenoid audibly clicks.
+`switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live, and **it works — since
+2026-08-06.** `command_on` runs `anyka_http.py ircut on` → `ctl?command=ircut_on`, and `ctl` now
+**writes `/sys/user-gpio/ircut_a` directly.**
 
-> ⛔ **If this switch stops holding — the filter toggles and then goes back — somebody enabled
-> automatic day/night.** That is the vendor app's loop reverting you, and it is what the
-> `libre_anyka_app` IR-cut patch turns on. The known-good binaries are:
+Verified through the button itself, 14 s settle, distinct frame hashes: green fraction `0.659`
+(magenta) → `1.019` (normal).
+
+> #### ❌ RETRACTED: "it has worked for weeks"
+>
+> An earlier version of this page said this switch had worked reliably for weeks through the ptz
+> daemon. **It never worked through that route at all.** `ctl` used to write `set_ir_cut` into the
+> daemon's FIFO, and the daemon's `ak_drv_ir_init` stats the *prefixed* `gpio-ircut_*` names,
+> which do not exist on this build — so it returned `-1` and `set_ir_cut` bailed before writing.
+>
+> **Nothing reported it**, because `camera_set_ircut` unconditionally returns `0`. `ctl` said
+> `OK`, `command_state` honestly read an unchanged pin, and it presented as **a flaky switch
+> rather than a dead code path.** That is the single most expensive shape of bug on this device.
+
+> ⛔ **If this switch stops working, check for a patched `libplat_drv.so` first.** Renaming its
+> `gpio-ircut_a` **and** `gpio-ircut_b` strings tips the driver into a 10 ms pulse mode built for
+> a latching solenoid, and this filter is hold-to-engage — so every command **parks it in
+> magenta**. Known-good binaries:
 >
 > | File | Good md5 |
 > |---|---|
@@ -85,26 +100,24 @@ driven it this way for weeks; the solenoid audibly clicks.
 > | `ptz/lib/libplat_drv.so` | `f5769ff013d7a3094e73ee76e312cad0` (**original**) |
 >
 > Restore and restart. **Leave `cgi-bin/header` patched** (`934ce4814d4fc90edec82275769986c5`) —
-> it is the RCE fix and is unrelated.
-> [Why](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control).
->
-> **Distinguish the two failure shapes before touching anything:** *toggles then reverts* is the
-> day/night loop; *never moves at all* is something else entirely.
+> it is the RCE fix, and it is unrelated to any of this.
+> [Why](ptz.md#-root-cause-the-libplat_drvso-patch-tipped-the-driver-into-a-mode-for-other-hardware).
 
-> ⚠️ **After a power cycle, send `init_ir` before expecting the switch to work.** Nothing runs it
-> at boot — `ptz_init_on_boot=1` homes the *PTZ axes* only.
-> [Detail](ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot).
+> ⚠️ **`init_ir` is not the fix, and a previous version of this page said it was.** It is required
+> before `set_ir_cut` and it does not help, because `init_ir` is what calls the initialisation
+> that fails. **Nothing runs it at boot either** — `ptz_init_on_boot=1` homes the *PTZ axes* only.
+> The working answer is the direct write `ctl` now does.
 
 > ⚠️ **If that switch reads `off` when you set it `on`, suspect the integration before the
 > hardware.** The camera holds [one session token at a time](web-ui.md#the-token), so concurrent
 > polls invalidate each other and the helper exits non-zero — which surfaces as a switch flipping
 > itself off. That bug was live here and produced exactly this symptom.
 >
-> Reading GPIO state back from the camera **does** work, so a stateful switch is fine; an earlier
-> version of this page wrongly said otherwise. ❔ **But note an open question:** `command_state`
-> reads `/sys/user-gpio/ircut_a`, and the daemon moves the filter *without writing sysfs*. Whether
-> that read still tracks the filter when the daemon drives it is **not established**. See
-> [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
+> ✅ **The state read is now unambiguously meaningful, and an open question closes with it.** This
+> page wondered whether `command_state`'s read of `/sys/user-gpio/ircut_a` still tracked the
+> filter when something else drove it. **`ctl` now writes that exact node**, so command and state
+> refer to the same pin by construction. The question is gone rather than answered — the
+> configuration that made it hard no longer exists.
 
 Command semantics, the mandatory `init_ptz` homing step, and the IR-cut caveats are in
 [ptz.md](ptz.md).

@@ -318,7 +318,7 @@ returns a few bytes.
 | `up` `down` `left` `right` | Relative move, 10° |
 | `left_up` `right_up` `left_down` `right_down` | Relative diagonal |
 | `init_ptz` | Home both axes |
-| `init_ir` | Initialise the IR-cut driver. **Required before `ircut_on`/`off`, and nothing runs it at boot** — [detail](ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot) |
+| `init_ir` | Initialise the IR-cut driver. **Required before `ircut_on`/`off`, and nothing runs it at boot** — [detail](ptz.md#-retracted-set_ir_cut-through-the-daemon-and-it-worked-for-weeks) |
 | `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` — ✅ **this works**, and is the path Home Assistant drives |
 | `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
