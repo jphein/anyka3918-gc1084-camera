@@ -2,8 +2,14 @@
 # Write a ready-to-run Anyka AK3918 hack SD card from the backup taken 2026-08-05,
 # with this project's fixes baked in.
 #
-#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP]
+#   sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid)
+#                                        [--time-source IP]
 #                                        [--unit-name "Front Door"] [--stock]
+#
+# The SSID decision is REQUIRED - see the block below. This header showed it as
+# optional for a while, contradicting the tool's own usage string two hundred
+# lines down; a comment that disagrees with the code it heads is worse than no
+# comment, because it is read first and trusted.
 #
 # The card is the camera's brain: /Factory/config.sh is what the stock firmware
 # executes at boot (the SD exploit), and /mnt/anyka_hack/ holds every binary the

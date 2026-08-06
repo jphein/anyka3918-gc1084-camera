@@ -10,7 +10,8 @@ these cameras, cloning cards is the normal workflow.
 ## Writing a card
 
 ```sh
-sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP] [--stock]
+sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) \
+                            [--time-source IP] [--unit-name "Front Door"] [--stock]
 ```
 
 [`tools/write-sd-card.sh`](../tools/write-sd-card.sh) writes a ready-to-run card from the
@@ -31,7 +32,12 @@ sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) [--time-source 
 | `--ssid NAME` | Rewrites `wifi_ssid=`. **Does not change the PSK.** |
 | `--keep-ssid` | Accept the backup's baked-in SSID. **One of these two is required** — see below |
 | `--time-source IP` | Rewrites `time_source=`. Worth using — see the warning below. |
+| `--unit-name NAME` | Names this camera, e.g. `"Front Door"`. **Optional** — an unnamed camera [names itself from its own MAC at first boot](identity.md). Only takes effect on a camera that has never been named |
 | `--stock` | Writes the backup **unmodified**, with no project fixes. Escape hatch. |
+
+> **Why `--ssid` is required and `--unit-name` is not**, since the asymmetry looks arbitrary: a
+> wrong SSID **strands the camera**, and a missing name strands nothing — the camera derives one.
+> Required-ness here tracks *what happens when you omit it*, not how important the field feels.
 
 ### 🔴 The SSID decision is required, and the reason is the worst failure this hardware has
 

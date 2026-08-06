@@ -1,6 +1,7 @@
 # `/usr/sbin` update & OTA tooling — faithful device dump
 
-Dumped read-only from the live camera (`10.0.10.20`) on 2026-08-06 by `lucid-camera`.
+Dumped read-only from the live camera (`192.168.1.20` in this repo's generic addressing) on
+2026-08-06 by `lucid-camera`.
 **Nothing here was executed.** These scripts write flash; see the warning at the bottom.
 
 These files live on the **read-only squashfs root**, not the SD card, and were absent from
