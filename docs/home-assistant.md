@@ -12,13 +12,11 @@
 > against `/vs1`: **455 frames in 29.93 s of stream time = 15.20 fps**, and 455 frames in
 > 28.77 s of *wall clock* = 15.82 fps — delivering slightly ahead of its own timestamps, so
 > it is keeping up rather than lagging. ffmpeg's independent `tbr` estimate agrees at 15.17.
-> ⚠️ **That figure is for `/vs1`. `/vs0`'s *delivered* rate has not been measured.** `/vs0`
-> returned a byte-identical frame count — but per the warning below that is guaranteed by the
-> method, not observed in the device: `-t` cuts on media time, so two streams stamping at the
-> same nominal rate always return the same count. **It establishes that both streams *declare*
-> the same rate; it says nothing about what `/vs0` delivers.** 720p is 4× the pixels over
-> 2.4 GHz on a printed-circuit antenna, which is exactly where a delivered rate could fall
-> behind a declared one.
+> **That figure is `/vs1`'s.** `/vs0` returned a byte-identical frame count, but that proves
+> nothing on its own — per the warning below it is guaranteed by the method: `-t` cuts on media
+> time, so two streams stamping at the same nominal rate always return the same count. It
+> establishes only that both streams *declare* the same rate. **`/vs0`'s delivered rate was
+> measured separately** and is slightly lower and more variable — see the `/vs0` note below.
 >
 > ⚠️ Count frames; do not read `avg_frame_rate`, and do not divide by ffmpeg's `time=`.
 > That field is the **media timestamp**, not wall clock — dividing by it returns the rate the
@@ -45,11 +43,27 @@ VLAN — the name is cosmetic, the URLs inside it are current. (Not "the IoT VLA
 [ambiguous here](troubleshooting.md#-name-the-vlan-by-its-tag-never-by-a-nickname), because the
 SSID the cameras join is *named* after IoT while sitting on the camera VLAN.)
 
-> **`/vs0` is available and is 720p.** The integration currently points at `/vs1` (640×360),
-> because `image_width`/`image_height` in `gergesettings.txt` were mistaken for the only
-> published resolution. They set the **sub** channel only. Switching to `/vs0` is a free
-> resolution upgrade if the extra bitrate is acceptable over 2.4 GHz WiFi — worth testing before
-> committing, since this is a $5 camera on a printed-circuit antenna.
+> **`/vs0` is available and is 720p, and it is NOT a free upgrade — measured 2026-08-06.**
+> The integration points at `/vs1` (640×360) because `image_width`/`image_height` in
+> `gergesettings.txt` were mistaken for the only published resolution; they set the **sub**
+> channel only. This page previously called `/vs0` "a free resolution upgrade … worth testing
+> before committing". It has now been tested:
+>
+> | over 120 s | `/vs1` 640×360 | `/vs0` 1280×720 |
+> |---|---|---|
+> | bitrate | **240 kbit/s** | **1712 kbit/s** — 7.1× for 4× the pixels |
+> | delivered fps (n=3 / n=6, 25–30 s each) | 15.82 · 16.20 · 15.82 | 14.76 · 15.77 · 15.75 · 15.81 · 15.15 · 15.15 |
+> | wall/media ratio | 0.939–0.962, **always ahead of real time** | 0.962–1.030, **at or behind in half the samples** |
+>
+> So: the frame rate cost is small but **real** — `/vs0` runs slightly slower and noticeably
+> more variable, and unlike `/vs1` it sometimes fails to keep pace with its own timestamps.
+> The bandwidth cost is the decisive one: **~1.7 Mbit/s sustained over 2.4 GHz on a
+> printed-circuit antenna.** Both cameras served simultaneously still delivered full bitrate
+> (≈1.95 Mbit/s combined), so the camera can do it — the question is what the link can do.
+>
+> ⚠️ A single early `/vs0` sample read 14.76 fps and looked like a clear lag. **It did not
+> reproduce**; five further samples clustered at 15.15–15.81. Recorded because n=1 was almost
+> written up as a finding.
 
 Quality is decent. Throughput is **15.2 fps measured** (2026-08-06) — an earlier note here
 estimated "roughly 5–15 fps effective", which was directionally right and slightly
