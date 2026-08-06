@@ -47,12 +47,12 @@ Home Assistant with the [WebRTC custom card](https://github.com/AlexxIT/WebRTC) 
 > "Custom element doesn't exist". `go2rtc` is still enabled. Re-enable WebRTC before re-adding
 > the card.
 
-## ⚠️ Go easy on the polling
+## Go easy on the polling
 
-**This camera has no CPU headroom.** Three HA switches polling every 60 s, plus a live video
-stream, plus anything else touching it, is enough to push it to load 4.95 and knock the snapshot
-server off port 3000 — which then breaks HA config saves, because HA validates `still_image_url`
-before writing.
+There is not much CPU headroom on a 400 MHz single core, so keep the request rate modest. This
+is precaution rather than a fix for a measured problem — an earlier version of this page blamed
+a specific incident on HA polling, and [that was never
+demonstrated](troubleshooting.md#be-economical-with-requests).
 
 Practical limits:
 
@@ -62,7 +62,7 @@ Practical limits:
 * Point automation at [`/cgi-bin/ctl`](web-ui.md#cgi-binctl--our-fast-control-endpoint), not
   `/cgi-bin/webui` — the stock page costs 0.2–1.0 s of camera CPU per request.
 
-Full incident write-up and budget guidance: [troubleshooting.md](troubleshooting.md#-this-camera-is-trivially-overloaded).
+Budget guidance, and an honest note on what the "overload" evidence does and does not support: [troubleshooting.md](troubleshooting.md#be-economical-with-requests).
 
 ## PTZ
 
@@ -73,11 +73,16 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 
 `switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live.
 
-> ⚠️ If that switch reads `off` when you set it `on`, **suspect the readback before the
-> hardware.** The camera holds [one session token at a time](web-ui.md#the-token), so concurrent
-> polls can invalidate each other and make the helper exit non-zero — which surfaces as a switch
-> flipping itself off. That bug has bitten here before and was mistaken for the filter drifting.
-> See [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
+> ⚠️⚠️ **Do not build this switch to read its state back from the camera.**
+> [GPIO readback does not work on this device](ptz.md#-you-cannot-read-gpio-state-back-every-readback-is-meaningless)
+> — `user_gpio_show` does an input read, and an output pin's input buffer is off, so it returns
+> `0` no matter what is driven. A switch that polls its own state will report `off` forever.
+> Track desired state in HA and treat the write as fire-and-forget.
+>
+> A second, independent way to get a spurious `off`: the camera holds [one session token at a
+> time](web-ui.md#the-token), so concurrent polls invalidate each other and the helper exits
+> non-zero. Between them, these two account for the "filter drifts back" belief this project
+> carried for a while — see [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
 Command semantics, the mandatory `init_ptz` homing step, and the IR-cut caveats are in
 [ptz.md](ptz.md).

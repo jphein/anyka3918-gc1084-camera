@@ -41,8 +41,8 @@ nothing to tell you the address changed.
 | Associated, has a lease, but no ports open | Card missing or hack not running — check UART or reseat the card |
 | Ports open, RTSP 404 on every path | `libre_anyka_app` not started; check `run_libre_anyka=1` |
 | Video works, PTZ accepted but nothing moves | You sent `init`, not **`init_ptz`**. See [ptz.md](ptz.md) |
-| RTSP works but port 3000 is dead | `libre_anyka_app` restarted under load and failed to rebind. [Overload](#-this-camera-is-trivially-overloaded) — reboot it |
-| Everything slow, timeouts, HA dropping frames | You are asking too much of a 400 MHz core. [Overload](#-this-camera-is-trivially-overloaded) |
+| RTSP works but port 3000 is dead | Something opened a bare TCP connection to it. [Confirmed cause](#recovering-from-a-dead-snapshot-server) — reboot it, then stop probing port 3000 |
+| Everything slow, timeouts, HA dropping frames | Possibly request volume on a 400 MHz core — but check your own network path first. [Budget guidance](#be-economical-with-requests) |
 | Web UI redirects to login forever | Token invalid — [web-ui.md](web-ui.md#the-token) |
 | Pink/purple image | IR-cut filter position — [ptz.md](ptz.md#ir-cut-filter) |
 | A setting keeps reverting after reboot | The SD card is overwriting flash — [sd-card.md](sd-card.md#settings-precedence) |
@@ -85,27 +85,23 @@ lease, which strands it — its `udhcpc` will not re-request until the lease ren
 hours. **Reboot it over telnet while it is still reachable on the old VLAN, and flip the SSID
 during the boot.**
 
-## ⚠️ This camera is trivially overloaded
+## Be economical with requests
 
 **A 400 MHz single-core ARM926 with ~36.5 MB of usable RAM is doing H.264 encode, RTSP serving,
-JPEG snapshots, a CGI web server and motion detection at the same time.** It has no headroom.
-Treat every request to it as expensive.
+JPEG snapshots, a CGI web server and motion detection at the same time.** There is not much
+headroom, so the guidance below is cheap insurance.
 
-### It has already happened here
-
-On 2026-08-05 the camera hit **load average 4.95 with 3.6 MB RAM free**. `libre_anyka_app` died
-and was restarted, and **came back without binding port 3000** — so snapshots were dead while
-RTSP on 554 and the web UI on 80 kept working. That in turn broke a Home Assistant config save,
-because HA validates `still_image_url` before writing and got a connection failure.
-
-No single thing caused it. Four things landed on the same tiny CPU at once:
-
-* an endpoint sweep probing every port and path,
-* three HA switches polling on a 60-second timer,
-* HA pulling the video stream continuously,
-* and an `ffprobe` negotiating both RTSP streams, which is much heavier than grabbing one frame.
-
-Any one of these is fine. Together they were not.
+> **What this section does *not* claim.** An earlier version asserted the camera is "trivially
+> overloaded" and blamed a specific incident on combined load. **That was never demonstrated, and
+> two of its supports have since collapsed:** the port-3000 death turned out to have a
+> [confirmed non-load cause](#recovering-from-a-dead-snapshot-server) — a bare TCP connect — and a
+> separate apparent HA-side overload was traced to broken routing on the workstation, not to the
+> camera or to Home Assistant.
+>
+> On 2026-08-05 the camera did read **load average 4.95 with 3.6 MB free**, and `libre_anyka_app`
+> did restart without rebinding port 3000. Those readings stand. What was never established is
+> that request volume *caused* any of it. Being frugal on a 400 MHz core is still sensible — just
+> don't reason from an overload nobody measured.
 
 ### Budget guidance
 
@@ -121,11 +117,10 @@ The stock web UI's cost is not incidental: `header` URL-decodes the query string
 per-character shell loop that spawns subshells, then the page is rendered in full even when the
 request is only writing one line to a FIFO. That is the whole reason `ctl` exists.
 
-### Recovering from an overload
+### Recovering from a dead snapshot server
 
 Restarting `libre_anyka_app` is the obvious move, but **a full reboot is the more reliable
-one** — it clears sockets stuck in `TIME_WAIT` and the memory fragmentation that a restart under
-pressure inherits.
+one** — it clears sockets stuck in `TIME_WAIT` and any memory fragmentation a restart inherits.
 
 Why the snapshot server specifically ends up dead has **one confirmed cause and two unproven
 hypotheses.** Take the confirmed one first, because it is the one you are most likely to be

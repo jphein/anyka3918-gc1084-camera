@@ -23,7 +23,8 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
 | ✅ IR-cut filter | Controllable. Has been [seen to read back `off` after being set](docs/ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown) — cause unresolved, and possibly a readback bug rather than the hardware |
 | ❔ IR LEDs | GPIO 6 accepts writes, but illumination is **not yet demonstrated** — [why the obvious test is confounded](docs/ptz.md#-ir-leds--unverified) |
-| ❌ White LEDs | Present in hardware (4 on the ring) but **not driveable from the hacked kernel's GPIO interface** — [likely an I2C expander, not a pin](docs/ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
+| ❌ White LEDs | Present in hardware (4 on the ring) but not driveable. The vendor firmware **disables them on PTZ units like this one** — [three candidate causes](docs/ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
+| ❌ GPIO readback | **Reads always return `0`** regardless of the driven level — [state cannot be read back at all](docs/ptz.md#-you-cannot-read-gpio-state-back-every-readback-is-meaningless) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
 | ❌ Clock | No RTC battery, and NTP is firewalled — [stays at 1969](docs/troubleshooting.md#the-cameras-clock-stays-at-1969) |
 
@@ -82,13 +83,16 @@ Write a card for a new camera:
 sudo tools/write-sd-card.sh /dev/sdX --ssid <your-ssid>
 ```
 
-> ⚠️ **Go easy on it.** This is a 400 MHz single-core ARM926 with ~36 MB of RAM doing H.264
-> encode, RTSP, snapshots and a CGI web server at once. We pushed one to load 4.95 with a
-> handful of 60-second pollers and an endpoint sweep, and `libre_anyka_app` came back without
-> its snapshot server. Poll in minutes, not seconds, and point automation at
-> [`/cgi-bin/ctl`](docs/web-ui.md#cgi-binctl--our-fast-control-endpoint) rather than the stock
-> web UI, which costs 0.2–1.0 s of camera CPU per request.
-> [→ budget guidance](docs/troubleshooting.md#-this-camera-is-trivially-overloaded)
+> ⚠️ **Never open a bare TCP connection to port 3000** — a socket opened and closed without a
+> valid HTTP request **kills the snapshot server** until the camera restarts it. That rules out
+> recurring port scans and TCP-only uptime checks; use a real
+> `curl http://<ip>:3000/snapshot.jpeg` instead.
+>
+> More generally, go easy: this is a 400 MHz single-core ARM926 with ~36 MB of RAM doing H.264
+> encode, RTSP, snapshots and a CGI web server at once. Poll in minutes rather than seconds, and
+> point automation at [`/cgi-bin/ctl`](docs/web-ui.md#cgi-binctl--our-fast-control-endpoint)
+> rather than the stock web UI, which costs 0.2–1.0 s of camera CPU per request.
+> [→ budget guidance](docs/troubleshooting.md#be-economical-with-requests)
 
 ## ⚠️ Security
 

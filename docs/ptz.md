@@ -109,23 +109,30 @@ This works immediately but bypasses the driver.
 back as `off` — three times in one session — matching an older note that it was "stuck on the
 next day".
 
-**Everything beyond that is unresolved, and the obvious causal story is not safe to assume.**
-This was previously written up here as the filter physically drifting, probably because raw GPIO
-writes fight the owning process. That may be true, but there is a competing explanation that was
-demonstrably active at the time:
+**Everything beyond that is unresolved, and the filter is now the *least* likely part of it.**
+This was previously written up as the filter physically drifting because raw GPIO writes fight
+the owning process. Three explanations, worst-supported last:
 
-* **The filter really is reverting** — something re-asserts the IR-cut position and overwrites a
-  raw GPIO write.
-* **Nothing physical happened at all, and the *readback* was wrong.** During exactly that period
-  there was a live bug in the Home Assistant integration: the camera keeps
-  [a single session token](web-ui.md#the-token) in `/tmp/token.txt`, overwritten by every login,
-  so concurrent polls invalidated each other, the helper exited non-zero, and the switch read
-  `off` as a result. **A switch reading `off` unexpectedly is precisely what that bug
-  produced.**
+* **The readback is simply broken.**
+  [`user_gpio_show` cannot read an output pin](#-you-cannot-read-gpio-state-back-every-readback-is-meaningless)
+  — it returns `0` regardless of what is driven. A control that reads its own state back from
+  this interface will report `off` whatever you set, with no hardware involvement at all.
+* **A readback bug of a different kind.** During the same period the HA integration had a live
+  fault: the camera keeps [a single session token](web-ui.md#the-token) in `/tmp/token.txt`,
+  overwritten by every login, so concurrent polls invalidated each other, the helper exited
+  non-zero, and the switch read `off`.
+* **The filter really is reverting** — something re-asserts the position and overwrites the
+  write.
 
-The second explanation costs nothing to prefer and fits without invoking any hardware behaviour,
-so **treat "the filter drifts" as unproven**. Confirm the readback path is healthy before
-investigating the hardware.
+The first explanation needs no hardware behaviour and no timing coincidence, so **treat "the
+filter drifts" as unsupported.** The physical claim is now third in line behind two ways of
+mis-reading state.
+
+> **One honest gap.** If output reads always return `0`, the switch should have read `off`
+> *every* time, not three times. So either the state was being derived some other way, or more
+> than one of these was in play. Nobody has reconciled that, and it is worth doing before
+> declaring the question closed — it is the same shape of loose end as the changed PID in the
+> [snapshot-server story](troubleshooting.md#recovering-from-a-dead-snapshot-server).
 
 If it does turn out to be real, the leading mechanism would be that `libre_anyka_app` runs its
 own day/night state machine and re-asserts the position — a raw GPIO write being a change the
@@ -145,9 +152,10 @@ owning process does not know about. Circumstantial support:
 * The daemon exposes `init_ir` / `set_ir_cut`, implying a driver-level owner rather than a bare
   pin.
 
-**What has not been tested:** whether the readback is trustworthy once the token bug is out of
-the way; whether `set_ir_cut` holds where the GPIO write does not; and whether flipping `-i`
-between 3 and 4 changes anything. Do them in that order — the first may dissolve the other two.
+**What has not been tested:** whether the filter physically moves at all when you think it does
+— which now has to be judged **by looking at the image**, since the pin cannot be read. Then
+whether `set_ir_cut` behaves differently from a raw write, and only then whether `-i` matters.
+Do them in that order; the first may dissolve the other two.
 
 The current mitigation is a boot-time GPIO write from `/Factory/config.sh` on the SD card:
 
@@ -194,12 +202,32 @@ observable effect.
 > which instead has a prefixed `gpio-ircut_a` and a `motor_switch`. Numbers from Gerge's images
 > do not transfer.
 
-Two cautions:
+Two notes on the pins themselves:
 
-* **`wifi_en` reads `0` on a camera whose WiFi is working.** Do not assume it is a live enable
-  line, and do not write to it hoping to reset the radio.
-* `ircut_a` and `ircut_b` are nominally the two coils of a latching solenoid, but only `ircut_a`
-  does anything measurable. Prefer `set_ir_cut` over either.
+* **`ircut_b` doing nothing is expected, not broken.** 41 and 42 are an **H-bridge pair** driving
+  the IR-cut solenoid. Energising the half that pushes the filter toward where it already rests
+  produces no visible change. Prefer `set_ir_cut` over touching either directly.
+* **`wifi_en` reading `0` on a working camera means nothing** — see the readback warning
+  immediately below, which applies to every pin here.
+
+### ⚠️⚠️ You cannot read GPIO state back. Every readback is meaningless.
+
+**`user_gpio_show` performs a GPIO *input* read. On a pin configured as an output, the pad's
+input buffer is off, so it returns `0` regardless of the level actually being driven.**
+
+Consequences, and they are broad:
+
+* `cat /sys/user-gpio/anything` tells you **nothing** about that pin's state.
+* `wifi_en` reading `0` on a camera with working WiFi is not a puzzle — it is the expected
+  output of a read that cannot see anything.
+* **Do not build a Home Assistant switch, or any stateful control, that reads state back from
+  this interface.** It will report `off` no matter what you set. Track desired state in the
+  consumer instead, or drive the pin write-only and accept it is fire-and-forget.
+* [`ctl`'s `status` command](web-ui.md#-the-status-command-cannot-be-trusted) inherits this. Its
+  output is not a reading.
+
+This retires a premise several earlier conclusions leaned on. Anywhere this project previously
+reasoned from "the pin reads N", the correct reading is "we learned nothing".
 
 ## Lights
 
@@ -252,35 +280,60 @@ The hardware is there — 4 white LEDs on the ring — but nothing lights them f
 echo 1 > /sys/user-gpio/WHITE_LED    # write succeeds, dmesg logs "WHITE_LED store:1", no light
 ```
 
-Measured dead: frame luma **159 / 157 / 157** across on / off / on. `ircut_b`, the only other
-untested pin, is likewise dead (**119 / 119 / 125** against a 120 baseline).
+Measured dead: frame luma **159 / 157 / 157** across on / off / on. (This is a luma measurement,
+with all the caveats above — but here it is being used to show *nothing happened*, and a flat
+reading across a stable baseline is a much weaker claim than inferring that something did.)
 
-**The leading explanation — strong, but not yet proven:**
+Whatever the cause, **it is a driver/table problem, not a pin-number problem.** Hunting for the
+"correct" GPIO is not the fix. Three candidates, best-supported first.
 
-`WHITE_LED` is **GPIO 24, a plain SoC pin**. Meanwhile `/sys/bus/i2c/devices/` on this camera
-contains **`0-0058`**, and **0x58 is the default address of the AW9523B** — a 16-channel I/O
-expander whose channels are *constant-current LED sink drivers*, which is exactly the part you
-would use to drive an LED ring. `hw.conf` reads `HW=1115111751205…` with
-`whiteLightNegativeFlag=0`.
+#### 1. This PTZ variant was never wired for white LEDs — best supported
 
-Better still, the kernel already has a driver for it: `/proc/kallsyms` shows **`aw9523b_read`
-and `aw9523b_write`, both `EXPORT_SYMBOL`'d.** Note what kind of evidence that is — the I2C
-device node and the exported symbols are *directly observed*, not deduced from a measurement
-that could have moved for another reason.
+`anyka_ipc` carries the config key `cfg_onf_shaking_head_cam` and this log string:
 
-So the white LEDs most likely hang off the **AW9523B at I2C 0x58**, while the kernel driver's
-table points `WHITE_LED` at an unrelated SoC GPIO. That fits every observation: the write
-succeeds, the driver logs it, a pin genuinely toggles, and no light appears.
+```
+onf_shaking_head_cam not support white led
+```
 
-**If that is right, this is a driver/I2C problem, not a pin-number problem** — no amount of
-hunting for the "correct" GPIO will fix it. The next step is talking to the expander directly.
+**This camera is a shaking-head (PTZ) unit**, confirmed two independent ways: the kernel
+declares two steppers (`ak-motor0` on GPIO 19/20/10/11, `ak-motor1` on 15/14/13/23), and the app
+exposes `ptz_h_range`, `ptz_v_range` and `trace_direction`.
 
-> **Two dead ends, already closed off — do not repeat them.** Both squashfs partitions were
-> extracted and searched: the **vendor's own app has no other route either.** Its only path to
-> the white LEDs is the same `/sys/user-gpio/WHITE_LED` node — no PWM, no `/sys/class/leds`, no
-> `/dev/mem`, no ioctl. Reverse-engineering the stock firmware lands exactly where you already
-> are. Separately, `write_gpio` / `read_gpio` look promising and are not: they only store a
-> hardware-ID string in `gpio.conf` and configure nothing.
+So **the stock firmware never lit these LEDs either** — on a PTZ unit it takes the "not support"
+branch. `WHITE_LED = 24` looks **vestigial**, inherited from the non-PTZ sibling that shares this
+kernel config, and both the 2022 and 2023 vendor builds left it on 24.
+
+This also closes the "read the vendor app" idea properly, and for a better reason than before:
+it is not merely that the vendor uses the same sysfs node, it is that **there is no working code
+path to trace on this variant.** There is nothing to copy.
+
+#### 2. The AW9523B expander — possible, but weaker than it first looked
+
+`/sys/bus/i2c/devices/` contains **`0-0058`**, which names itself `AW9523B`, and `/proc/kallsyms`
+shows **`aw9523b_read` / `aw9523b_write`, both `EXPORT_SYMBOL`'d**. Those are directly observed.
+
+This was originally written up here as *strong* on the theory that the expander's
+constant-current LED sinks drive the ring. **That mechanism is wrong**, and the disproof is worth
+recording:
+
+* `aw9523b_probe` writes `0x12=0xFF` and `0x13=0xFF`. Those are the LED-mode switches, where
+  **1 = plain GPIO mode and 0 = constant-current LED mode** — so all 16 channels are configured
+  as GPIO, and the DIM registers `0x20–0x2F` are **never touched**. The vendor never uses the
+  chip's LED-driver capability at all.
+* **No pin in the 79–82 expander range appears anywhere in the image.** The highest pin used is
+  42. The expander branch in `store` is real code that nothing routes to.
+* `anyka_ipc` contains **zero** occurrences of `aw9523`, `ch422`, `i2c` or `/dev/i2c`.
+
+What survives is the weaker form: an expander GPIO feeding a MOSFET. Possible, unevidenced.
+
+#### 3. GPIO 24's pad muxed to another peripheral — unresolved
+
+A pad assigned to a different function would produce exactly this symptom: the write lands, the
+driver logs it, the pin toggles in software, and nothing reaches the LEDs. Nobody has checked the
+pinmux. **This is a perfect symptom match and the least investigated of the three.**
+
+> **A dead end already closed off.** `write_gpio` / `read_gpio` look promising and are not: they
+> only store a hardware-ID string in `gpio.conf` and configure nothing.
 
 ## Speaker — audio out works
 

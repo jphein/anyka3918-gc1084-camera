@@ -107,12 +107,27 @@ direct observation (audible speech, visibly purple image) rather than by inferen
 
 ## I2C
 
-`/sys/bus/i2c/devices/` contains **`0-0058`**. **0x58 is the AW9523B's default address** — a
-16-channel I/O expander with constant-current LED sink drivers. The kernel carries a driver for
-it too: `aw9523b_read` and `aw9523b_write` appear in `/proc/kallsyms`, both `EXPORT_SYMBOL`'d.
+`/sys/bus/i2c/devices/` contains **`0-0058`**, which names itself `AW9523B` — a 16-channel I/O
+expander. The kernel carries a driver: `aw9523b_read` and `aw9523b_write` appear in
+`/proc/kallsyms`, both `EXPORT_SYMBOL`'d.
 
-This is the most likely home of the white LEDs, which do not respond to their nominal GPIO; see
-[ptz.md](ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem).
+It was once the leading suspect for the non-working white LEDs. It is no longer: `aw9523b_probe`
+configures all 16 channels as plain GPIO rather than constant-current LED sinks, never touches
+the DIM registers, and no pin in the expander's range appears anywhere in the image. See
+[ptz.md](ptz.md#2-the-aw9523b-expander--possible-but-weaker-than-it-first-looked).
+
+## Motors
+
+The kernel declares two steppers, which is what makes this a "shaking-head" (PTZ) unit:
+
+| Motor | GPIOs |
+|---|---|
+| `ak-motor0` | 19, 20, 10, 11 |
+| `ak-motor1` | 15, 14, 13, 23 |
+
+That classification matters beyond pan/tilt — the vendor firmware disables the white LEDs on
+shaking-head units, which is [the leading explanation for why they do not
+work](ptz.md#1-this-ptz-variant-was-never-wired-for-white-leds--best-supported).
 
 ## Clock
 
