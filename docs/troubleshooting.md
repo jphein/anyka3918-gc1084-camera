@@ -177,10 +177,10 @@ Two consequences worth knowing before you rely on it:
 
 ### The IR-cut filter has been seen to read back `off`
 
-Observed three times in one session. **Check the readback path before the hardware** — a
-single-session-token bug in the HA integration produced exactly this symptom at the same time,
-so the filter may never have moved. Both explanations, and the order to test them in, are in
-[ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
+Observed three times in one session. **Suspect the integration before the hardware** — a
+single-session-token bug in HA produced exactly this symptom at the same time, and being
+intermittent it fits an intermittent report, so the filter may never have moved. Both
+explanations are in [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
 ### The clock — NTP works; the timezone was 15 hours wrong on every service
 

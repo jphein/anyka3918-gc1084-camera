@@ -279,9 +279,9 @@ returns a few bytes.
 | `init_ptz` | Home both axes |
 | `init_ir` | Initialise the IR-cut driver |
 | `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` |
-| `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
-| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#-ir-leds--unverified) |
-| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — **but the values are meaningless**, [see below](#-the-status-command-cannot-be-trusted) |
+| `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
+| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
+| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — **but the values are meaningless**, [see below](#the-status-command-works) |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
 | `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
 
@@ -294,18 +294,18 @@ matches `token=*`, `command=*` and `file=*` with `case`, dispatches the command 
 whitelist, and never interpolates the command into a shell command. That makes `ctl` the right
 thing to point automation at.
 
-#### ⚠️ The `status` command cannot be trusted
+#### The `status` command works
 
-`status` reads the three GPIO nodes and prints them. **Those reads do not work.**
+`status` reads the three GPIO nodes and prints them, and those reads are **real** —
+`user_gpio_show` returns `ak_gpio_getpin(pin)` and the value tracks what was written. You can
+build a stateful control on top of it.
 
-`user_gpio_show` in the kernel performs a GPIO *input* read, and on a pin configured as an
-output the pad's input buffer is off — so it returns `0` whatever level is actually being
-driven. `status` will happily report `ircut_a=0 white_led=0 ir_led=0` on a camera where the
-IR-cut filter is demonstrably engaged.
-
-It is not `ctl`'s fault — the underlying sysfs interface is write-only in practice — but it does
-mean **you cannot build a stateful control on top of it.** Track desired state on the consumer
-side. Full explanation in [ptz.md](ptz.md#-you-cannot-read-gpio-state-back-every-readback-is-meaningless).
+> This page briefly said the opposite. That was based on a claim about the kernel that
+> [turned out to be false when measured](ptz.md#readback-works).
+>
+> One caveat survives: whether the read reflects the **pad** or the **output latch** is
+> undetermined. For `ircut_a` that distinction is academic — you can see the image change. For
+> the LED pins it matters, because they read back correctly and still produce no light.
 
 #### Sound playback
 

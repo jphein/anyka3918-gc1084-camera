@@ -109,30 +109,32 @@ This works immediately but bypasses the driver.
 back as `off` — three times in one session — matching an older note that it was "stuck on the
 next day".
 
-**Everything beyond that is unresolved, and the filter is now the *least* likely part of it.**
-This was previously written up as the filter physically drifting because raw GPIO writes fight
-the owning process. Three explanations, worst-supported last:
+**Everything beyond that is unresolved.** This was originally written up as the filter physically
+drifting because raw GPIO writes fight the owning process. Two explanations remain:
 
-* **The readback is simply broken.**
-  [`user_gpio_show` cannot read an output pin](#-you-cannot-read-gpio-state-back-every-readback-is-meaningless)
-  — it returns `0` regardless of what is driven. A control that reads its own state back from
-  this interface will report `off` whatever you set, with no hardware involvement at all.
-* **A readback bug of a different kind.** During the same period the HA integration had a live
-  fault: the camera keeps [a single session token](web-ui.md#the-token) in `/tmp/token.txt`,
-  overwritten by every login, so concurrent polls invalidated each other, the helper exited
-  non-zero, and the switch read `off`.
+* **The Home Assistant integration mis-reported it.** During the same period it had a live fault:
+  the camera keeps [a single session token](web-ui.md#the-token) in `/tmp/token.txt`, overwritten
+  by every login, so concurrent polls invalidated each other, the helper exited non-zero, and the
+  switch read `off`. **This is intermittent by nature**, which fits an intermittent symptom.
 * **The filter really is reverting** — something re-asserts the position and overwrites the
   write.
 
-The first explanation needs no hardware behaviour and no timing coincidence, so **treat "the
-filter drifts" as unsupported.** The physical claim is now third in line behind two ways of
-mis-reading state.
+The first needs no hardware behaviour, so **treat "the filter drifts" as unsupported** until the
+readback path is known healthy.
 
-> **One honest gap.** If output reads always return `0`, the switch should have read `off`
-> *every* time, not three times. So either the state was being derived some other way, or more
-> than one of these was in play. Nobody has reconciled that, and it is worth doing before
-> declaring the question closed — it is the same shape of loose end as the changed PID in the
-> [snapshot-server story](troubleshooting.md#recovering-from-a-dead-snapshot-server).
+> **A gap that closed, and how.** A third explanation sat here for a while: that
+> `user_gpio_show` could not read an output pin and always returned `0`. Alongside it was a
+> flagged inconsistency — *if reads always return `0`, the switch should have read `off` every
+> time, not three times in a session.*
+>
+> That inconsistency was pointing at a false premise, not a missing mechanism.
+> [Readback was measured and works](#readback-works), so the explanation is gone and the gap
+> closed with it. Worth recording as a small vindication of logging things that do not fit:
+> the anomaly was the signal.
+>
+> The comparable open one — the changed PID in the
+> [snapshot-server story](troubleshooting.md#recovering-from-a-dead-snapshot-server) — is still
+> unexplained.
 
 If it does turn out to be real, the leading mechanism would be that `libre_anyka_app` runs its
 own day/night state machine and re-asserts the position — a raw GPIO write being a change the
@@ -152,10 +154,11 @@ owning process does not know about. Circumstantial support:
 * The daemon exposes `init_ir` / `set_ir_cut`, implying a driver-level owner rather than a bare
   pin.
 
-**What has not been tested:** whether the filter physically moves at all when you think it does
-— which now has to be judged **by looking at the image**, since the pin cannot be read. Then
-whether `set_ir_cut` behaves differently from a raw write, and only then whether `-i` matters.
-Do them in that order; the first may dissolve the other two.
+**What has not been tested:** whether the filter physically moves at all when you think it does.
+Judge that **by looking at the image** rather than by reading the pin — the pin reads back
+correctly even for the LEDs, which light nothing, so a good readback is not proof the hardware
+responded. Then whether `set_ir_cut` behaves differently from a raw write, and only then whether
+`-i` matters. Do them in that order; the first may dissolve the other two.
 
 The current mitigation is a boot-time GPIO write from `/Factory/config.sh` on the SD card:
 
@@ -179,7 +182,7 @@ device), not from upstream:
 
 | Pin | GPIO | Meaning | Writing it does something? |
 |---|---|---|---|
-| `IR_LED` | 6 | Infrared illuminator LEDs | ❔ **unverified** — accepts writes, [illumination not shown](#-ir-leds--unverified) |
+| `IR_LED` | 6 | Infrared illuminator LEDs | ❔ **unverified** — accepts writes, [illumination not shown](#lights--neither-ring-lights) |
 | `SPK_PA` | 7 | **Speaker** power amplifier (output side) | ✅ yes — required for [audio out](#speaker--audio-out-works) |
 | `WHITE_LED` | 24 | White LEDs on the ring | ❌ **no — see below** |
 | `wifi_en` | 34 | WiFi enable | ❌ no observable effect |
@@ -207,71 +210,102 @@ Two notes on the pins themselves:
 * **`ircut_b` doing nothing is expected, not broken.** 41 and 42 are an **H-bridge pair** driving
   the IR-cut solenoid. Energising the half that pushes the filter toward where it already rests
   produces no visible change. Prefer `set_ir_cut` over touching either directly.
-* **`wifi_en` reading `0` on a working camera means nothing** — see the readback warning
-  immediately below, which applies to every pin here.
+* **`wifi_en` is a specific anomaly** — see below. It does not generalise.
 
-### ⚠️⚠️ You cannot read GPIO state back. Every readback is meaningless.
+### Readback works
 
-**`user_gpio_show` performs a GPIO *input* read. On a pin configured as an output, the pad's
-input buffer is off, so it returns `0` regardless of the level actually being driven.**
+`user_gpio_show` returns `ak_gpio_getpin(pin)`, and the value tracks what you write. Measured
+directly on the camera:
 
-Consequences, and they are broad:
-
-* `cat /sys/user-gpio/anything` tells you **nothing** about that pin's state.
-* `wifi_en` reading `0` on a camera with working WiFi is not a puzzle — it is the expected
-  output of a read that cannot see anything.
-* **Do not build a Home Assistant switch, or any stateful control, that reads state back from
-  this interface.** It will report `off` no matter what you set. Track desired state in the
-  consumer instead, or drive the pin write-only and accept it is fire-and-forget.
-* [`ctl`'s `status` command](web-ui.md#-the-status-command-cannot-be-trusted) inherits this. Its
-  output is not a reading.
-
-This retires a premise several earlier conclusions leaned on. Anywhere this project previously
-reasoned from "the pin reads N", the correct reading is "we learned nothing".
-
-## Lights
-
-The LED ring holds **4 infrared and 4 white LEDs**. They behave completely differently.
-
-### ❔ IR LEDs — unverified
-
-```sh
-echo 1 > /sys/user-gpio/IR_LED
+```
+WHITE_LED: wrote 0 -> reads 0,  wrote 1 -> reads 1,  wrote 0 -> reads 0,  wrote 1 -> reads 1
+IR_LED   : wrote 0 -> reads 0,  wrote 1 -> reads 1,  wrote 0 -> reads 0     (control)
 ```
 
-**GPIO 6 accepts the write. Whether it actually lights the LEDs has not been demonstrated.**
+> **This page briefly claimed the opposite** — that `user_gpio_show` did an input read on an
+> output pad and therefore always returned `0`. That was wrong, and it was propagated into four
+> other places before being measured. Readback is fine; `ctl`'s
+> [`status` command](web-ui.md#sound-playback) is a real capability, and a Home Assistant switch
+> may read its state back from this interface.
 
-An earlier attempt measured average frame luma rising across on/off pairs (119→124, then
-101→119) and was briefly recorded here as proof. It is not, and the reasons are worth keeping,
-because anyone testing an invisible emitter will be tempted by the same shortcut:
+**One unresolved sub-question:** whether `ak_gpio_getpin` reads the **pad** or the **output
+latch** has not been determined. If it reads the latch, a correct readback confirms the write
+reached the register but *not* that the pin physically moved. That distinction matters for the
+LEDs below, where pins read back correctly and nothing lights.
 
-* **The ambient baseline moved between samples.** One pair started at luma 119, the other at
-  101 — the scene itself was getting darker, which is a luma change with no help from the pin.
-* **Sensor AGC responds to that independently**, and settles over seconds.
-* **Whatever drives day/night on this camera was live throughout**, including the IR-cut filter,
-  which shifts luma far more than illumination does. `ircut_a` is confirmed working, so that
-  mechanism was definitely in play.
+#### ⚠️ `wifi_en` is a genuine anomaly
 
-No A/B/A/B control was run, so nothing showed luma tracking the *command* rather than the
-*clock*. Two deltas of different magnitude (5 and 18) on a moving baseline is not a signal.
+`wifi_en` reads `0` on a camera whose WiFi is working, while the live kernel table shows
+`val=1`. That single disagreement is real and **unexplained**.
 
-> **On the day/night mechanism itself: we do not know what it is.** Upstream's
+It does *not* license the general claim that readbacks are broken — every other pin tested
+tracks its writes. Treat it as one specific inconsistency, and do not write to `wifi_en` hoping
+to reset the radio.
+
+## Lights — neither ring lights
+
+The LED ring holds **4 infrared and 4 white LEDs**. **Neither lights.** Both pins accept writes
+and read back correctly; no light of either kind appears.
+
+### The decisive test, and how to run it
+
+IR emitters are invisible to the eye but **plainly visible to a phone camera**, so the whole
+question costs ten seconds:
+
+```sh
+echo 1 > /sys/user-gpio/IR_LED     # assert and hold
+echo 1 > /sys/user-gpio/WHITE_LED
+```
+
+then point a phone at the ring.
+
+**Result: no white light, and the IR dots are off too.** The phone's IR sensitivity was
+independently confirmed on the same handset against a different camera's IR ring, which is the
+control that makes the negative meaningful — a phone that cannot see *any* IR would produce the
+same result on a working ring.
+
+> ⚠️ **Do not try to settle this with frame luma.** An earlier attempt measured average luma
+> rising across on/off pairs (119→124, then 101→119) and briefly recorded it here as proof that
+> the IR LEDs worked. It was not proof, and the reasons generalise to any invisible emitter:
+>
+> * **The ambient baseline moved between samples** — one pair opened at 119, the other at 101.
+>   The scene was getting darker on its own.
+> * **Sensor AGC responds to that independently**, settling over seconds.
+> * **The IR-cut filter shifts luma far more than illumination does**, and `ircut_a` is confirmed
+>   working, so that mechanism was live throughout.
+>
+> No A/B/A/B control was run, so nothing showed luma tracking the *command* rather than the
+> *clock*. Two deltas of different magnitude on a drifting baseline is not a signal. A human
+> eyeball and a phone settled in ten seconds what the arithmetic could not.
+
+### What this leaves
+
+`IR_LED` (6) and `WHITE_LED` (24) both accept writes and read back correctly, and neither
+produces light. That makes the readback question above load-bearing: **if `ak_gpio_getpin` reads
+the output latch rather than the pad, a correct readback tells you the register was written and
+nothing about whether the pin moved.**
+
+For the white LEDs there is a firmware-level explanation — see below. **For the IR LEDs there is
+not one yet.** The vendor's "not support white led" string says nothing about IR, so the two
+rings being dark for the same reason is an assumption, not a finding.
+
+> **Unexplained, and worth keeping visible:** why the IR ring is dark. Candidates nobody has
+> ruled out: the pin is right but the LEDs are unpopulated or have no supply rail; the pad is
+> muxed elsewhere; or a driver stage is missing. All look identical from software, exactly as
+> with the white ring.
+
+Separately, `dmesg` shows repeated `IR_LED store:0` / `store:1` transitions, so something else
+may also be writing the node — a night-mode loop would overwrite whatever you set. Assert and
+hold rather than pulsing when testing.
+
+> **On the day/night mechanism: we do not know what it is.** Upstream's
 > [`IR_shutter.txt`](../reference/IR_shutter.txt) says the LEDs are "automaticly controlled by a
-> photoresistor", and that is worth reading — but **nothing we have examined corroborates it.**
-> Not the decoded pin table, not `hw.conf`, not the vendor binaries. Cheap SoC cameras commonly
-> do day/night purely in software from the ISP's luma and gain registers rather than fitting a
-> CdS cell, so treat the presence of any ambient-light sensor as an open question rather than a
-> given.
+> photoresistor", and **nothing we have examined corroborates it** — not the decoded pin table,
+> not the vendor binaries. Cheap SoC cameras commonly do day/night in software from the ISP's
+> luma and gain registers rather than fitting a CdS cell, so treat any ambient-light sensor as an
+> open question.
 
-There is also an open question about whether the value even persists: `dmesg` shows repeated
-`IR_LED store:0` / `store:1` transitions, so something else may be writing the node — a vendor
-or ptz-daemon night-mode loop would overwrite whatever you set.
-
-> **The decisive test is trivial and costs ten seconds: IR LEDs are visible to a phone camera.**
-> Point a phone at the ring and toggle the pin. Do that before believing any luma argument,
-> including this one.
-
-### ❌ White LEDs do not light, and the pin is not the problem
+### ❌ White LEDs — the vendor firmware disables them on this variant
 
 The hardware is there — 4 white LEDs on the ring — but nothing lights them from
 `/sys/user-gpio/`:
@@ -280,22 +314,21 @@ The hardware is there — 4 white LEDs on the ring — but nothing lights them f
 echo 1 > /sys/user-gpio/WHITE_LED    # write succeeds, dmesg logs "WHITE_LED store:1", no light
 ```
 
-Measured dead: frame luma **159 / 157 / 157** across on / off / on. (This is a luma measurement,
-with all the caveats above — but here it is being used to show *nothing happened*, and a flat
-reading across a stable baseline is a much weaker claim than inferring that something did.)
+Confirmed by eye with a phone camera, and consistent with a flat frame-luma reading
+(**159 / 157 / 157** across on / off / on).
 
-> **Correction.** This section used to conclude, prominently, that the cause was "a driver/I2C
-> matter, not a pin-number problem". **That is now wrong** — it rested on the AW9523B theory,
-> which has since been [experimentally refuted](#2-the-aw9523b-expander--experimentally-refuted).
-> The pin number is back on the table.
+**Three candidates were investigated. Two are now dead, and the survivor is the one this page
+listed first from the beginning.**
 
-A sharper framing has replaced it. Of the seven pins, the three whose function is
-**independently validated** all work, and the two that were never validated both fail. With
-[`ircut_b` explained by the H-bridge pairing](#gpio-map), **`WHITE_LED = 24` is the only
-genuinely unexplained failure left** — which makes "is 24 even the right pin, and is it even
-wired to anything?" the live question rather than a settled one.
+> **Two corrections this section has been through**, kept visible because both were stated
+> confidently:
+>
+> * It once concluded the cause was "a driver/I2C matter, **not** a pin-number problem." That
+>   rested on the AW9523B theory and is wrong.
+> * It then said the pin number was "back on the table." That is also now wrong — the pin has
+>   been checked and is correct.
 
-Candidates, best-supported first.
+**There is no software fix, and no vendor code path to copy.**
 
 #### 1. This PTZ variant was never wired for white LEDs — best supported
 
@@ -357,21 +390,27 @@ and video kept working throughout. So this is not a dead bus — it is a dead ad
 The `EXPORT_SYMBOL`'d `aw9523b_read` / `aw9523b_write` are therefore a **red herring**: exported
 for a board variant that does have the chip. This one does not.
 
-#### 3. GPIO 24 is the wrong pin, muxed elsewhere, or not wired at all — unresolved
+**And it could never have mattered anyway.** `aw9523b_write` is reachable from `user_gpio_store`
+only for **virtual pins 79–82**, and no entry in this camera's pin table uses those. So even a
+populated expander could not have been reached through `/sys/user-gpio/`. `ch422_is_exist:0`
+as well — both expanders are absent.
 
-With the expander gone, this is where the remaining possibilities live, and none has been ruled
-out:
+#### 3. Wrong pin, or muxed elsewhere — ❌ also refuted
 
-* **Pad muxed to another peripheral.** The write lands, the driver logs it, the pin toggles in
-  software, and nothing reaches the LEDs. Nobody has checked the pinmux — and note
-  [`/proc/iomem` registers no GPIO block at all](hardware.md#register-map-and-why-you-cannot-poke-it),
-  so there is no easy sysfs route to inspect it.
-* **The pin number is simply wrong**, inherited along with the rest of the vestigial config.
-* **The LEDs are not populated, or have no boost rail.** A pin driven correctly into an absent
-  driver stage looks identical from software.
+The live kernel table, read out of running memory, confirms **`WHITE_LED` is pin 24 with
+`dir=1`** — *identical in configuration to `IR_LED`* — and the pin reads back what is written.
+The configuration is not the problem.
 
-All three produce the same observable — a successful write and no light — so software alone may
-not separate them. Continuity or a scope on the ring would.
+Every alternative software route was checked and is closed: no `akgpio` in `/proc/misc`, no
+`/dev/ak_pwm`, no `/sys/class/pwm`, no i2c-dev.
+
+#### So: candidate 1, and nothing else
+
+The vendor firmware declares this variant unsupported for white LEDs, the pin is configured
+correctly, and there is no other software path to the hardware. **A software fix does not exist,
+and there is no vendor code path to copy** — which also means no amount of further poking from
+the OS side will help. The remaining question is a hardware one: whether the white LEDs are
+populated and supplied at all on a shaking-head board. Continuity or a scope would answer it.
 
 > **A dead end already closed off.** `write_gpio` / `read_gpio` look promising and are not: they
 > only store a hardware-ID string in `gpio.conf` and configure nothing.

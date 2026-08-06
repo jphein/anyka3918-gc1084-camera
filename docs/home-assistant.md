@@ -73,16 +73,14 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 
 `switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live.
 
-> ⚠️⚠️ **Do not build this switch to read its state back from the camera.**
-> [GPIO readback does not work on this device](ptz.md#-you-cannot-read-gpio-state-back-every-readback-is-meaningless)
-> — `user_gpio_show` does an input read, and an output pin's input buffer is off, so it returns
-> `0` no matter what is driven. A switch that polls its own state will report `off` forever.
-> Track desired state in HA and treat the write as fire-and-forget.
+> ⚠️ **If that switch reads `off` when you set it `on`, suspect the integration before the
+> hardware.** The camera holds [one session token at a time](web-ui.md#the-token), so concurrent
+> polls invalidate each other and the helper exits non-zero — which surfaces as a switch flipping
+> itself off. That bug was live here and produced exactly this symptom.
 >
-> A second, independent way to get a spurious `off`: the camera holds [one session token at a
-> time](web-ui.md#the-token), so concurrent polls invalidate each other and the helper exits
-> non-zero. Between them, these two account for the "filter drifts back" belief this project
-> carried for a while — see [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
+> Reading GPIO state back from the camera **does** work, so a stateful switch is fine; an earlier
+> version of this page wrongly said otherwise. See
+> [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
 Command semantics, the mandatory `init_ptz` homing step, and the IR-cut caveats are in
 [ptz.md](ptz.md).

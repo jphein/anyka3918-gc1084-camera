@@ -21,10 +21,9 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ WiFi | 2.4 GHz only |
 | ✅ Web UI | Port 80, PTZ pad and live preview — [but see the security warning](#-security) |
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
-| ✅ IR-cut filter | Controllable. Has been [seen to read back `off` after being set](docs/ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown) — cause unresolved, and possibly a readback bug rather than the hardware |
-| ❔ IR LEDs | GPIO 6 accepts writes, but illumination is **not yet demonstrated** — [why the obvious test is confounded](docs/ptz.md#-ir-leds--unverified) |
-| ❌ White LEDs | Present in hardware (4 on the ring) but not driveable. The vendor firmware **disables them on PTZ units like this one** — [three candidate causes](docs/ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
-| ❌ GPIO readback | **Reads always return `0`** regardless of the driven level — [state cannot be read back at all](docs/ptz.md#-you-cannot-read-gpio-state-back-every-readback-is-meaningless) |
+| ✅ IR-cut filter | Controllable. Has been [seen to read back `off` after being set](docs/ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown) — cause unresolved, and more likely an integration bug than the hardware |
+| ❌ IR LEDs | Pin toggles and reads back correctly, but **the ring is dark** — confirmed with a phone camera. [Unexplained](docs/ptz.md#lights--neither-ring-lights) |
+| ❌ White LEDs | Present in hardware (4 on the ring) but dark. The vendor firmware **declares this PTZ variant unsupported** for them, the pin is correct, and there is **no software fix** — [all other candidates refuted](docs/ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
 | ✅ Clock | NTP syncs. No RTC battery, so it boots to 1969 and depends on it. The timezone was **15 hours wrong on every service** while `date` in a shell looked fine — [now fixed](docs/troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service) |
 

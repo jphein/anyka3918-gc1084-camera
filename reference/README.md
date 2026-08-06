@@ -29,7 +29,11 @@ are preserved verbatim in `upstream/`.
   gc1034, gc1054, sc1135, sc1235, sc1245, sc2232, F37, and h63 — but *not* gc1084, which is this
   camera's sensor. See the warning below.
 - **`hardware/`** — board photos and the AK3918 datasheet (`ak3918.pdf`).
-- **`UART_logs/`** — serial boot logs, useful when the camera won't come up.
+- **`UART_logs/`** — serial boot logs, useful when the camera won't come up. ⚠️ These are a
+  **different firmware build** from the one running on this camera (`#1 Nov 14 2022` vs
+  `#2 Sep 25 2023`, and prefixed `gpio-ircut_a` node names vs this camera's `ircut_a`/`ircut_b`
+  plus `motor_switch`). Good for family-level comparison, **not** evidence about this camera's
+  own factory firmware — see [`../docs/hardware.md`](../docs/hardware.md#serial-console).
 - **`hack-process.md`** — upstream's write-up of the hack procedure.
 - **`IR_shutter.txt`** — upstream notes on the IR cut filter (the thing that clicks), which the
   root README covers.

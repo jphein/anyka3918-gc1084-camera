@@ -95,16 +95,17 @@ The root filesystem is **read-only squashfs**. Anything you want to survive a re
 ## GPIO
 
 `/sys/user-gpio/` exposes exactly six pins. Full table and cautions are in
-[ptz.md](ptz.md#gpio-map) — including that **you cannot read any of them back**; a read on an
-output pin always returns `0`. Summary: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24), `wifi_en` (34),
+[ptz.md](ptz.md#gpio-map). Reads work — a pin reads back what was written, with `wifi_en` the one
+unexplained exception. Summary: `IR_LED` (6), `SPK_PA` (7), `WHITE_LED` (24), `wifi_en` (34),
 `ircut_b` (41), `ircut_a` (42). **There is no microphone pin**, which is why the mic cannot be
 muted in hardware.
 
 Pin numbers were decoded from **this camera's own kernel** (`mtd1` dumped from the live device).
 They do **not** match upstream's firmware image, which is a different build — `ircut_b` exists
 here and not there. Of the six, only `SPK_PA` and `ircut_a` are confirmed to do anything — by
-direct observation (audible speech, visibly purple image) rather than by inference. `IR_LED` is
-[unverified](ptz.md#-ir-leds--unverified); the rest have no observable effect.
+direct observation (audible speech, visibly purple image) rather than by inference. `IR_LED` and
+`WHITE_LED` toggle and read back correctly but **light nothing**; see
+[ptz.md](ptz.md#lights--neither-ring-lights).
 
 ## I2C
 
@@ -163,10 +164,19 @@ POSIX `TZ` counts hours *west* of Greenwich, and the configured value has the si
 
 ## Serial console
 
-The board has a UART. Upstream's boot logs are vendored in
+The board has a UART. Boot logs are vendored in
 [`reference/UART_logs/`](../reference/UART_logs/) — factory boot, factory boot with SD, and the
 exploit boot with and without SD. They are the fastest way to tell where a non-booting camera is
 getting stuck. `getty` runs on `ttySAK0` at **115200 8N1**.
+
+> ⚠️ **Those logs are not this camera's firmware.** They are `#1 Nov 14 2022
+> zhoujiahui@szfirsvr`; the kernel running here is `#2 Sep 25 2023 chensheng@ants-szfir`. The
+> node naming confirms it independently — the logs show a prefixed `gpio-ircut_a`, while this
+> camera has unprefixed `ircut_a` / `ircut_b` plus a `motor_switch`.
+>
+> They remain useful as **family-level** evidence (for instance, that the AW9523B is unpopulated
+> across these boards), but **do not cite them as evidence about this camera's own factory
+> firmware.** Two different builds.
 
 ## See also
 
