@@ -182,18 +182,70 @@ single-session-token bug in the HA integration produced exactly this symptom at 
 so the filter may never have moved. Both explanations, and the order to test them in, are in
 [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
-### The camera's clock stays at 1969
+### The clock — NTP works, but the timezone config is wrong and only accidentally harmless
 
-Cloud access is firewalled on the cams VLAN, and NTP to `192.168.1.1` also fails
-(`ntpd -q -p 192.168.1.1` times out), so `time_source` never syncs. There is no RTC battery, so
-every boot starts at the epoch.
+**The clock syncs.** This page previously said it was stuck at 1969 with NTP firewalled; that was
+true only while `time_source` still pointed at the *old* IoT VLAN router, unreachable after the
+camera moved. It was fixed during the move and these docs did not catch up.
 
-Only affects the camera's own timestamps; Home Assistant supplies its own. Allow UDP 123 from
-the cams zone to the router if you want it fixed.
+Verified on the running camera: `ntpd -n -N -p <router>` is alive, both copies of
+`gergesettings.txt` point at the camera-VLAN router, and after ~12 hours of uptime on a box with
+**no RTC battery** the clock matched the workstation to the second. It could only be right by
+having synced.
 
-Note the camera's `time_source` currently reads `192.168.8.1` — the *old* IoT VLAN router — on both
-the card and in flash, because a flash-only edit was reverted by the card. Fixing it means
-editing the card.
+The hardware fact still holds and is why `time_source` matters at all: there is a 32.768 kHz RTC
+but **no battery**, so every boot starts at the epoch and the camera depends entirely on NTP.
+
+#### ⚠️ The `time_zone` setting is wrong by 15 hours, and something else is saving you
+
+`gergehack.sh` line 87 is a raw pass-through:
+
+```sh
+export TZ=$time_zone
+```
+
+No transformation. So `time_zone` must be a **POSIX** `TZ` string — and **POSIX counts hours west
+of Greenwich**, which is the opposite of the ISO-style sign most people expect:
+
+| String | POSIX meaning | Commonly misread as |
+|---|---|---|
+| `GMT+07:00` | **UTC−7** (US Pacific, daylight) | UTC+7 |
+| `GMT-08:00` | **UTC+8** (China) | UTC−8 |
+
+`gergesettings.txt` carries `time_zone=GMT-08:00` on **both** the card and flash — written by
+someone reading it the ISO way. Taken literally that is UTC+8, i.e. **15 hours off**.
+
+**The clock nonetheless displays correctly, by accident.** `/etc/jffs2/time_zone.sh` contains
+`export TZ=GMT+07:00` — the correct POSIX form — and `anyka_ipc.sh` sources that file before
+launching the app. That is the same file the telnet exploit hooks.
+
+Per upstream's [`hack-process.md`](../reference/hack-process.md), **`time_zone.sh` is overwritten
+by the vendor app every time it syncs time with the cloud server.** This camera can no longer
+reach that server, because the camera VLAN is default-deny to the WAN. So a correct value is
+being **frozen in place by the firewall**. Restore cloud access, or reset flash, and
+`gergesettings` takes over and the clock jumps 15 hours.
+
+> **Evidence classes, since they differ here.** The running `ntpd`, the matching clocks, and both
+> `gergesettings.txt` copies are **directly observed**. That the vendor app rewrites
+> `time_zone.sh` comes from **upstream's write-up**, not from anyone watching it happen.
+
+#### There is no DST rule either
+
+Neither `GMT-08:00` nor `GMT+07:00` carries one, so the displayed time drifts an hour off when
+daylight saving ends.
+
+**Recommended fix — not applied, and untested on this hardware:** give `time_zone` a full
+DST-aware POSIX string, which `export TZ=` accepts directly and uClibc's `tzset` supports:
+
+```ini
+time_zone=PST8PDT,M3.2.0,M11.1.0
+```
+
+> ⚠️ [Settings precedence](sd-card.md#settings-precedence) applies: change it on **both** the SD
+> card and flash, or `gergehack.sh` will diff them, copy card→flash and reboot.
+
+None of this affects Home Assistant, which timestamps its own frames. It affects the camera's own
+logs and any filename it generates.
 
 ### The WebRTC integration is disabled
 

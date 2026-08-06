@@ -97,10 +97,12 @@ It does the same for `gergehack.sh` itself.
 > `gergehack.sh` sees the difference, overwrites your edit from the card, and **reboots again**.
 > The card always wins.
 >
-> This is not theoretical — it already happened here. `time_source` was edited in flash from
-> `192.168.8.1` to `192.168.1.1` after the camera moved to the cams VLAN. Both copies now read
-> `192.168.8.1`: the flash edit was reverted from the card. (An earlier note in
-> `reference/sd-card-original/README.md` recorded the intended value; the camera disagrees.)
+> This is not theoretical — it happened here. When the camera moved to the camera VLAN,
+> `time_source` was edited in flash from the old IoT-VLAN router to the new one, and the card
+> reverted it on the next boot, leaving NTP pointed at an unreachable address. It was only fixed
+> for good once **both** copies were changed. The docs then spent a while asserting the clock
+> could not sync, long after it could — see
+> [troubleshooting.md](troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless).
 
 So:
 

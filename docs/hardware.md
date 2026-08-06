@@ -131,9 +131,13 @@ work](ptz.md#1-this-ptz-variant-was-never-wired-for-white-leds--best-supported).
 
 ## Clock
 
-The camera has a 32.768 kHz RTC but **no battery**, so it boots to 1969 and depends on NTP.
-On the cams VLAN, NTP to the router is blocked, so the clock never syncs. See
-[troubleshooting.md](troubleshooting.md#the-cameras-clock-stays-at-1969).
+The camera has a 32.768 kHz RTC but **no battery**, so it boots to 1969 and depends entirely on
+NTP. NTP does work — `ntpd` runs from `gergehack.sh` against `time_source`, and the clock has
+been verified correct after ~12 hours of uptime.
+
+The timezone is a different story: `gergehack.sh` passes `time_zone` straight to `export TZ=`,
+POSIX `TZ` counts hours *west* of Greenwich, and the configured value has the sign backwards. See
+[troubleshooting.md](troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless).
 
 ## Serial console
 

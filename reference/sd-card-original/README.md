@@ -84,9 +84,13 @@ are backed up on the AP at `/root/backups/wireless-backup-20260805-preiot.conf` 
 
 Two consequences of living on the cams VLAN:
 
-* `time_source` was updated in the camera's flash copy (`/etc/jffs2/gergesettings.txt`) from
-  `192.168.8.1` to `192.168.1.1`. It still doesn't sync — NTP to the router is blocked from that
-  zone — so the camera clock reads 1969. Harmless for HA, which timestamps its own frames.
+* `time_source` had to be repointed from `192.168.8.1` (the old IoT-VLAN router) to the
+  camera-VLAN router. A flash-only edit did not survive — the card reverted it — so **both**
+  copies had to change. Once they did, **NTP works**: `ntpd` runs and the clock has been verified
+  correct after ~12 hours of uptime on a battery-less RTC. An earlier note here claimed the clock
+  was stuck at 1969; that was true only while `time_source` pointed at the unreachable router.
+  See [`../../docs/troubleshooting.md`](../../docs/troubleshooting.md#the-clock--ntp-works-but-the-timezone-config-is-wrong-and-only-accidentally-harmless)
+  for the separate — and still live — timezone-sign bug.
 * The copy of `gergesettings.txt` in this directory is the **card's** version and still says
   `time_source=192.168.8.1`. Update it before rebuilding a card.
 
