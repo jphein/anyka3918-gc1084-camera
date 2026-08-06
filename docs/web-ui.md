@@ -318,11 +318,11 @@ returns a few bytes.
 | `up` `down` `left` `right` | Relative move, 10° |
 | `left_up` `right_up` `left_down` `right_down` | Relative diagonal |
 | `init_ptz` | Home both axes |
-| `init_ir` | Initialise the IR-cut driver |
-| `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` |
+| `init_ir` | Initialise the IR-cut driver. **Required before `ircut_on`/`off`, and nothing runs it at boot** — [detail](ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot) |
+| `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` — ✅ **this works**, and is the path Home Assistant drives |
 | `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
-| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — **but the values are meaningless**, [see below](#the-status-command-works) |
+| `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — the reads are **real**, [see below](#the-status-command-works). ❔ But whether `ircut_a` still tracks the filter when the *daemon* moves it is [an open question](ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback) |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
 | `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
 

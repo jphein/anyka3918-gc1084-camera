@@ -33,6 +33,25 @@ LAA_STOCK_MD5="3458b8598ca9525a0d5e693ff5fd5d5c"   # writes gpio-ircut_a (2022 b
 LAA_PATCH_MD5="351d54e853ee6774e50e9704986bd6b6"   # writes ircut_a      (2023 build)
 LAA_PATCH_SRC="$REPO/reference/patches/libre_anyka_app.node-ircut_a"
 
+# ---------------------------------------------------------------------------
+# DO NOT ADD A libplat_drv.so PATCH HERE. It has been tried; it is a regression.
+#
+# That library (ptz/lib/libplat_drv.so, md5 f5769ff013d7a3094e73ee76e312cad0)
+# contains gpio-ircut_a, gpio-ircut_b and ir-led, none of which exist as nodes
+# on the 2023 build. It reads as an obvious unfinished job, exactly like the
+# libre_anyka_app patch below. It is not.
+#
+# Patching those strings on the live camera on 2026-08-06 STOPPED the IR-cut
+# solenoid from clicking. JP had been driving it from Home Assistant for weeks.
+# Rolling the library back restored it. Manual IR-cut control (set_ir_cut, which
+# is what HA uses) does not go through sysfs at all, so "fixing" the sysfs paths
+# only introduces a second writer that fights the one that works.
+#
+# The general rule, which is the thing worth keeping: a string that looks broken
+# may be a dead path whose failure is LOAD-BEARING. Establish that a path is
+# actually executed before correcting it. See docs/ptz.md.
+# ---------------------------------------------------------------------------
+
 # The pre-auth root RCE fix for cgi-bin/header. UNLIKE the binary patch this is
 # NOT kernel-build-specific, so it applies unconditionally with no detection.
 # Verified by demonstrating the hole and then its absence on the live camera -

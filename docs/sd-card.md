@@ -47,10 +47,17 @@ switching that has never worked**.
 | `cgi-bin/header` hardened | Closes the [pre-auth root RCE](web-ui.md#the-fix) on port 80. **Not** kernel-specific — applies unconditionally |
 | IR-cut node detection | See below |
 
-> ⚠️ **`ptz_daemon` has the same bug and is *not* patched.** It carries only prefixed paths, so
-> its `set_ir_cut` is very likely broken on a 2023 camera too — meaning a fresh card fixes the
-> app's **automatic** day/night switching but **not** manual IR-cut control through the daemon.
-> See [ptz.md](ptz.md#-ir-cut-control-through-the-daemon-is-broken--and-the-culprit-is-a-shared-library).
+> ⛔ **Do not add a `libplat_drv.so` patch to this card. It has been tried and it is a
+> regression.**
+>
+> This warning previously said the opposite — that `ptz_daemon` "has the same bug" and a card
+> should probably patch it too. **Retracted.** Manual IR-cut control through the daemon
+> (`set_ir_cut`, which is what Home Assistant drives) **already works**, and it does not go
+> through sysfs at all. Rewriting the `gpio-`prefixed strings in that library **stopped the
+> solenoid clicking on a live camera** and had to be rolled back.
+>
+> The card ships **three** fixes and no more: `libre_anyka_app`, `cgi-bin/header`, and the
+> settings. [The full story](ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
 
 ### 🔑 One card works in any of these cameras
 

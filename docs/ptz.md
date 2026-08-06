@@ -46,10 +46,13 @@ the caller's perspective, and errors surface in the daemon's own stdout, not to 
 | `up` / `down` / `left` / `right` | Relative move, 10° |
 | `left_up` / `right_up` / `left_down` / `right_down` | Relative diagonal, 10° |
 | `t2p <pan> <tilt>` | Absolute move in degrees. Tilt `0` is the top. |
-| `init_ir` | Initialise the IR-cut driver |
+| `init_ir` | Initialise the IR-cut driver. **Required before `set_ir_cut`, and *not* run at boot** — [detail](#-init_ir-is-required-first--and-nothing-runs-it-at-boot) |
 | `set_ir_cut 1` | IR-cut filter **on** |
 | `set_ir_cut 0` | IR-cut filter **off** |
 | `q` | Quit the daemon |
+
+> ⚠️ **Two separate initialisation steps, one settings key.** `ptz_init_on_boot=1` runs `init_ptz`
+> only. **Nothing runs `init_ir`.** Homed axes do not imply a ready IR driver.
 
 Relative and absolute commands compose, so this ends at pan 290, tilt 40:
 
@@ -84,7 +87,20 @@ The web UI exposes no absolute-position control. `t2p` is telnet-only.
 The IR-cut filter is the mechanical shutter that makes the audible **click**. It is not the IR
 LEDs. With it in the wrong position the image has a heavy pink/purple cast.
 
-### ✅ The only method shown to work: write the pin
+**Two independent routes move it, and both are confirmed working.** They are genuinely different
+mechanisms, not two names for one — the daemon route does not touch sysfs at all:
+
+| Route | Status |
+|---|---|
+| Direct sysfs write to `ircut_a` | ✅ confirmed — image goes purple, by eye |
+| `set_ir_cut` at the daemon (what Home Assistant uses) | ✅ confirmed — solenoid clicks, by ear |
+
+> ⚠️ **This heading used to say "the only method shown to work".** That was true when written and
+> is not true now; the daemon route was wrongly written off. Kept visible because the wrong
+> version of this line is what licensed
+> [the regression below](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+
+### ✅ Route 1: write the pin
 
 ```sh
 echo 1 > /sys/user-gpio/ircut_a     # 1 = filter IN = normal colour
@@ -94,27 +110,76 @@ echo 1 > /sys/user-gpio/ircut_a     # 1 = filter IN = normal colour
 which is the normal daytime position. `0` takes it out, which is what makes the image purple.
 
 > ⚠️ **Allow ~10 seconds.** The filter takes **4–8 s** to move, so
-> [measuring sooner gives a false negative](troubleshooting.md#measuring-the-ir-cut-filter-use-the-green-fraction).
+> [measuring sooner gives a false negative](troubleshooting.md#measuring-the-ir-cut-filter-the-best-instrument-is-your-ears).
 > Judge by the image, not by re-reading the pin — the pin read is honest, but the solenoid is
 > downstream of it.
 
-### ❔ `set_ir_cut` through the daemon — unverified, and probably broken
+### ✅ Route 2: `set_ir_cut` through the daemon — what Home Assistant uses
 
 ```sh
-echo "set_ir_cut 1" > /tmp/ptz.daemon    # or over HTTP: command=iron / iroff
+echo "init_ir"     > /tmp/ptz.daemon    # once — see below, this is not optional
+echo "set_ir_cut 1" > /tmp/ptz.daemon   # or over HTTP: command=iron / iroff
 ```
 
-> ⚠️ **This page previously called this "the intended way" and implied it worked. Retracting
-> that.** The evidence for it was that issuing `set_ir_cut` produced no visible change *in a
-> situation where no change was needed* — and "nothing happened because nothing needed to" is
-> equally well explained by **"the daemon did nothing at all"**.
->
-> And there is now a mechanism for the second reading: `ptz_daemon` has
-> [the same hard-coded-path bug](#-ir-cut-control-through-the-daemon-is-broken--and-the-culprit-is-a-shared-library) as
-> `libre_anyka_app`. On this build it cannot open the node.
+**Evidence class: JP's direct observation, by ear, over weeks of daily use.**
+`switch.anyka_cam_ir_cut_filter` in Home Assistant drives exactly this path —
+`command_on` → `anyka_http.py ircut on` → `ctl?command=ircut_on` →
+`echo "set_ir_cut 1" > /tmp/ptz.daemon` — and it **had been working reliably for weeks**. The
+solenoid clicks. That is the strongest evidence on this page, and it is not a number.
 
-Treat daemon-mediated IR-cut control as **unproven**. The only thing demonstrated to move the
-filter on this camera is a direct sysfs write to `ircut_a`.
+> #### ❌ RETRACTED, twice, in opposite directions — read this before trusting any claim here
+>
+> This section has been wrong in *both* directions on the same day, and both errors came from
+> measuring a command that **could not have changed anything**:
+>
+> * It once said this was "the intended way" and implied it worked. The evidence was that
+>   `set_ir_cut` produced no visible change **in a situation where no change was needed** — which
+>   supports "the daemon did nothing" just as well. Retracted, correctly.
+> * It then said the daemon path was **broken**. That retraction
+>   [over-corrected](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback) and was
+>   itself wrong.
+>
+> **The common defect is not the conclusion, it is the experiment**: in both cases the filter was
+> commanded to the state it was already in. Always
+> [read the state first and command an actual change](troubleshooting.md#measuring-the-ir-cut-filter-the-best-instrument-is-your-ears).
+
+A direct sysfs write to `ircut_a` **also** moves the filter. The two are different routes to the
+same mechanism, and — importantly — the daemon does **not** reach it through sysfs at all; see
+[below](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+
+### ⚠️ `init_ir` is required first — and nothing runs it at boot
+
+**`set_ir_cut` does not work until `init_ir` has been issued.** This has been **measured**.
+
+```sh
+echo "init_ir" > /tmp/ptz.daemon
+```
+
+> **This was previously retracted as an "invented mechanism". That retraction was wrong and is
+> hereby reversed.** The claim was correct, and has since been measured directly. It is the same
+> shape as the [`init_ptz` trap](#-the-homing-command-is-init_ptz-not-init) — an initialisation
+> step the daemon requires and never complains about omitting.
+>
+> ⚠️ **Meta-lesson, and it is the counterweight to everything else on this page: over-retracting
+> is its own failure mode.** Absent evidence of the *negative*, an unsupported claim retracts to
+> **"unproven"**, not to **"false"**. Deleting a true statement because nobody had measured it yet
+> costs exactly as much as asserting a false one — and it is harder to notice afterwards, because
+> the record no longer contains the thing you removed. Two of today's four reversals were
+> corrections of *previous corrections*.
+
+> ⚠️ **`ptz_init_on_boot=1` runs `init_ptz` only. It does **not** run `init_ir`.** Check
+> `gergehack.sh` before assuming boot has left the IR driver ready — the PTZ axes being homed
+> tells you nothing about the IR-cut path, and the two initialisation steps are unrelated despite
+> living behind one settings key.
+
+> ❔ **An open question this creates, kept visible rather than smoothed over.** If `init_ir` is
+> required and nothing issues it at boot, **how did Home Assistant's switch work for weeks?**
+> Candidates nobody has separated: something else in the boot chain initialises the driver as a
+> side effect; the daemon self-initialises on first use and only the *first* `set_ir_cut` after a
+> boot is lost; or an `irinit` issued by hand in an earlier session persisted across the weeks in
+> question because the camera was not rebooted. **This does not weaken the `init_ir` finding** —
+> that was measured — but it means the boot-time story is not yet understood, and a camera that
+> has just been power-cycled should have `init_ir` sent explicitly.
 
 ### ⚠️ The vendor app's day/night logic is half-broken on this build
 
@@ -154,9 +219,39 @@ reaching for a node that is not there, silently, on every day/night transition.
 > This is reported from another agent's analysis, along with a patch. **I have not verified
 > either the ENOENT or the patch directly** — recorded as their finding, not mine.
 
-### ⚠️ IR-cut control through the daemon is broken — and the culprit is a shared library
+> ### ⚠️ This reasoning is now under suspicion — and it is the patch we ship
+>
+> **The argument above is the same argument that produced the
+> [`libplat_drv.so` regression](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback):**
+> a prefixed string is in the binary, the node does not exist, therefore that is the defect,
+> therefore correct the string. For the library, that reasoning was **wrong** — the path was dead
+> and its failure was load-bearing.
+>
+> **This is not a retraction.** Two things distinguish the app patch, and both are real:
+>
+> * **No regression has been observed from it.** Automatic day/night switching did not work
+>   before the patch and does not work after it. Nothing that used to work has stopped.
+> * It is [selected per boot](sd-card.md#-one-card-works-in-any-of-these-cameras) against the node
+>   that actually exists, so it cannot be wrong on the other kernel build.
+>
+> **But the honest status is weaker than this page once implied.** After the patch, the lens was
+> covered many times and **no `ircut` toggle occurred at all** — which is *consistent with* the
+> app also reaching the filter by a route that has nothing to do with `/sys/user-gpio`, exactly as
+> the daemon does. In that case the patched string is no more the live path than the library's
+> was, and the patch is simply inert rather than helpful.
+>
+> **What would settle it**, and nobody has done it: establish which call `libre_anyka_app`
+> actually makes when its day/night loop fires, before drawing any further conclusion from the
+> strings. Do not "improve" this patch on string evidence alone.
 
-**Measured, not inferred.** Using the camera's own interface, before any patch:
+### ❌ RETRACTED: "IR-cut control through the daemon is broken"
+
+**It was never broken. A patch to "fix" it is what broke it.** This section previously asserted,
+in bold, that the daemon could not move the filter. That was wrong, it was wrong on the strength
+of a measurement that did not test what it appeared to test, and the correction cost a live
+regression to discover.
+
+#### What was actually measured, and what it actually proved
 
 ```
 ctl?command=ircut_on   ->  'OK'
@@ -164,17 +259,91 @@ ctl?command=ircut_on   ->  'OK'
   after 16 s  ircut_a=1  mtime=1786031282  Gfrac=1.048  filter IN
 ```
 
-**The mtime never moved.** sysfs updates mtime on *any* write, including one that sets the same
-value — so the write never reached the pin at all. `ctl` returns `OK` because it only confirms it
-put a line into the `/tmp/ptz.daemon` FIFO; the failure is silent, downstream, in the daemon.
+**Split this into its two halves, because only one of them survives.**
 
-> ⚠️ **Consequence for Home Assistant: `switch.anyka_cam_ir_cut_filter` is a no-op switch with a
-> truthful state.** Its `command_on` / `command_off` do nothing, while `command_state` reads
-> `/sys/user-gpio/ircut_a` directly — the correct, unprefixed path — and therefore reports the
-> *real* pin. So the switch honestly shows a state it cannot change. Same "reports success, does
-> nothing" family as everything else on this device.
+| Half | Verdict |
+|---|---|
+| **The mtime did not move.** sysfs updates mtime on *any* write, including a same-value one. | ✅ **Stands.** The daemon genuinely never writes `/sys/user-gpio/ircut_a`. |
+| **The green fraction did not move**, therefore the filter did not move, therefore the daemon is broken. | ❌ **Void.** |
 
-#### ❌ RETRACTED: "`ptz_daemon` has the same bug"
+**The mtime result was read as proving the wrong claim.** It proves *the daemon does not use
+sysfs*. It was taken as proving *the daemon cannot move the filter*. Those are different
+statements, and everything downstream followed from conflating them.
+
+> ⚠️ **And the green-fraction half was never evidence of anything.** Look at the baseline:
+> `ircut_a=1` is **filter already IN**, and the command issued was `ircut_on`. **It commanded the
+> filter to the state it was already in**, then read the resulting non-change as proof of
+> brokenness.
+>
+> **That is precisely the fallacy this same page retracts a few paragraphs above** — "nothing
+> happened because nothing needed to." The page caught the error, wrote it down, and then
+> committed it again in the opposite direction within the same day. Both readings (1.066 and
+> 1.048) are inside the **filter-IN band** of
+> [1.06–1.39](troubleshooting.md#the-bands-and-the-boundary-that-does-not-exist) anyway, so the
+> numbers agree with each other and say nothing about the daemon.
+
+#### 🔴 The daemon path was never broken: a regression, and its rollback
+
+**Sequence of events, 2026-08-06:**
+
+1. On the strength of the reasoning above, `/mnt/anyka_hack/ptz/lib/libplat_drv.so` was patched
+   **on the live camera** — `gpio-ircut_a` → `ircut_a`, `gpio-ircut_b` → `ircut_b`, `ir-led` →
+   `IR_LED` — and the daemon restarted.
+2. The result was **measured as a fix**: `set_ir_cut` now moved the pin.
+3. **JP reported the regression.** The Home Assistant IR-cut switch **had been working fine for
+   weeks** and stopped working after that patch — *"it was working before even if it doesn't
+   now."*
+4. The library was **rolled back** to the original (md5 `f5769ff013d7a3094e73ee76e312cad0`) and
+   the daemon restarted.
+5. **JP confirmed by ear** that the solenoid *"does actually click on and off again."*
+
+**The live camera is running the original, unpatched library. That is the correct state.**
+
+> ❔ **Why it broke — a hypothesis, explicitly untested.** The daemon appears to have a *working*
+> route to the filter that has nothing to do with sysfs — most likely the
+> **`ak_drv_ir_set_ircut` driver call**, which fits the surviving mtime evidence exactly (the
+> filter moves; `/sys/user-gpio/ircut_a` is never written). On that reading, the `gpio-`prefixed
+> sysfs string was a **legacy path that had been failing silently and harmlessly for the entire
+> life of this firmware**, and "fixing" it woke up a second writer that then fought with, or
+> pre-empted, the route that worked.
+>
+> **This is a hypothesis. Nobody has read the daemon's control flow, and nobody has confirmed
+> which call moves the solenoid.** It is recorded because it is the leading explanation and it
+> predicts something testable — but it is *not* the reason the rollback happened. The rollback
+> happened because the filter stopped clicking, which needs no theory at all.
+
+> ### 🔑 The lesson, and it is the sharpest one this project has produced
+>
+> **A string that looks broken may be a dead path whose failure is load-bearing.**
+>
+> `gpio-ircut_a` in a binary on a camera with no `gpio-ircut_a` node looks like an unambiguous
+> defect. It reads as a bug you can see with `strings` and fix with `dd`. But **a path that
+> reliably fails is still a behaviour the rest of the system is built on** — silence from a dead
+> branch can be exactly what keeps the live branch in control.
+>
+> **Before "fixing" a wrong-looking path, establish that it is the path actually being taken.**
+> Not that it exists. Not that it is wrong. That it *executes*. The cheapest check is usually to
+> break it *further* — or simply to ask whether the feature currently works, which here would
+> have cost one question and saved the whole excursion.
+>
+> **This was the fourth time in one day that a fix targeted something outside the execution
+> path**, after the `ptz_daemon` binary that never runs, the AW9523B that is not on the board, and
+> the photoresistor that does not exist. The pattern is now the single most reliable predictor of
+> wasted effort in this repo: *we keep finding real defects in code that does not run.*
+
+> ⚠️ **Consequence for Home Assistant — the previous claim here is retracted.** This page said
+> `switch.anyka_cam_ir_cut_filter` was "a no-op switch with a truthful state". **The reverse of
+> the command half is now established: the switch works**, and has for weeks.
+>
+> ❔ **The state half is now the open one, and it is deliberately not being flipped.**
+> `command_state` reads `/sys/user-gpio/ircut_a`. If the daemon moves the filter without touching
+> sysfs, it is **no longer established that this read tracks the real filter position** — it may
+> still, since the driver call could drive GPIO 42 by another route and
+> [the pad read is known honest](#-readback-works-and-it-reads-the-physical-pad), or it may not.
+> **Unknown, and recorded as unknown.** Asserting the inverse would repeat today's mistake facing
+> the other way.
+
+#### ❌ ALSO RETRACTED: "`ptz_daemon` has the same bug"
 
 This page said the 2.1 MB `ptz_daemon` carried the same hard-coded prefixed paths. **The strings
 are genuinely in that file — but that file never runs**, so patching it would fix nothing.
@@ -188,44 +357,60 @@ ps  ->  /mnt/anyka_hack/ptz/ptz_daemon_dyn        <- this is what executes
 `ptz_daemon` is inert here and is **deliberately left unpatched**; it may still matter on a
 variant that launches it, since `gergehack.sh` has a `/usr/bin/ptz_daemon_dyn` preference branch.
 
-#### The real target: `libplat_drv.so` — and there are two different builds
+#### 🔴 `libplat_drv.so` — where the prefixed strings live. **Do not patch it.**
+
+> ### ⛔ This is the file that caused the regression. Leave it alone.
+>
+> Everything below is **reference for identifying the file**, not a recipe. The offsets are
+> correct, the strings really are wrong, and **applying the patch breaks working IR-cut control**
+> — [that experiment has been run](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+>
+> It is documented rather than deleted for one reason: **this table is exactly what makes the
+> patch look obvious and safe.** Someone will rediscover these strings with `strings` and reach
+> for `dd`. The warning has to live next to the temptation, not on the front page.
+>
+> **The live camera runs the original, md5 `f5769ff013d7a3094e73ee76e312cad0`. Verify that before
+> anything else if the IR-cut filter stops clicking.**
+
+There are two different builds sharing the filename:
 
 | Copy | Size | md5 | Strings |
 |---|---|---|---|
 | `ptz/lib/libplat_drv.so` | 33782 | `f5769ff013d7a3094e73ee76e312cad0` | `gpio-rf_feed`, `gpio-ircut_a`, `gpio-ircut_b`, **`ir-led`** |
 | `libre_anyka_app/lib/`, `rtsp/lib/` | 26594 | `385740bed22797fb5bb26a996cd3e145` | `gpio-rf_feed`, `gpio-ircut_a`, `gpio-ircut_b` |
 
-> ⚠️ **Key any patch off the md5, not the filename.** Three files share the name and there are
-> two distinct builds with different offsets. Both repo copies match the card exactly, so a patch
-> can be built here and verified against the device.
+> ⚠️ **Identify this file by md5, not by filename.** Three files share the name and there are two
+> distinct builds with different offsets. Both repo copies match the card exactly — which is how
+> the rollback was verified.
 
-Offsets in the 33782-byte build:
+Offsets in the 33782-byte build. **These are the edits that were applied and then reverted** —
+listed so the damage can be recognised, not so it can be repeated:
 
-| Offset | Wrong | Right | Note |
-|---|---|---|---|
-| `0x450f` | `/sys/user-gpio/gpio-ircut_a` | `/sys/user-gpio/ircut_a` | 27→22, shorter |
-| `0x452b` | `/sys/user-gpio/gpio-ircut_b` | `/sys/user-gpio/ircut_b` | 27→22, shorter |
-| `0x466e` | `/sys/user-gpio/ir-led` | `/sys/user-gpio/IR_LED` | **21→21, same length** |
-| `0x4457` | `/sys/user-gpio/gpio-rf_feed` | — | **do not touch** |
+| Offset | Original (**correct — leave it**) | What the regression wrote |
+|---|---|---|
+| `0x450f` | `/sys/user-gpio/gpio-ircut_a` | `/sys/user-gpio/ircut_a` |
+| `0x452b` | `/sys/user-gpio/gpio-ircut_b` | `/sys/user-gpio/ircut_b` |
+| `0x466e` | `/sys/user-gpio/ir-led` | `/sys/user-gpio/IR_LED` |
+| `0x4457` | `/sys/user-gpio/gpio-rf_feed` | — never touched |
 
-**`ir-led` is a fourth naming mismatch nobody had spotted** — the live node is `IR_LED`. Being
-the same length, it is the simplest of the four edits.
+**`ir-led` vs the live `IR_LED` is a genuine fourth naming mismatch** — and it is now the clearest
+illustration of the lesson, because being the same length it was *the safest and simplest of the
+four edits*, and that made it no less part of the regression. **Ease of patching says nothing
+about whether patching is the right move.**
 
-> ⚠️ **`gpio-rf_feed` cannot be fixed by renaming.** The live node list is exactly `IR_LED
-> SPK_PA WHITE_LED ircut_a ircut_b wifi_en` — there is no `rf_feed` in any spelling. That feature
-> is unavailable on this build. **Do not point it at another name that also does not exist**;
-> that turns a clean `ENOENT` into a silent wrong-pin write, which is strictly worse.
+> ⚠️ **`gpio-rf_feed` cannot be fixed by renaming, and this reasoning survived the regression
+> intact.** The live node list is exactly `IR_LED SPK_PA WHITE_LED ircut_a ircut_b wifi_en` —
+> there is no `rf_feed` in any spelling. **Do not point it at another name that also does not
+> exist**; that turns a clean `ENOENT` into a silent wrong-pin write, which is strictly worse.
+>
+> Note that this warning was already arguing, for one string, exactly what the regression proved
+> for the others: **a failing path can be the safe one.** It was right, and it was not
+> generalised. Worth remembering that the correct instinct was already written down here.
 
-**Not patched yet.** It needs its own authorisation — the earlier approval named `ptz_daemon`,
-and this is a different file and a shared library at that — and it will not be marked working
-until `set_ir_cut` is shown to move the pin, judged by
-[green fraction over a ≥10 s window](troubleshooting.md#measuring-the-ir-cut-filter-use-the-green-fraction).
-Until then the honest state will be the same as the app patch: **path corrected, effect
-unvalidated.**
-
-The library patch carries the **same kernel-build dependency** as the app patch, so both must sit
-behind [the same per-boot selection](sd-card.md#-one-card-works-in-any-of-these-cameras). The
-discriminator is unchanged: test for `/sys/user-gpio/ircut_b`.
+**Status: reverted, and to be left reverted.** Any future attempt needs to start from a
+demonstration of *which call actually moves the solenoid*, not from the strings — and any test
+must [command a real change and be judged by ear](troubleshooting.md#measuring-the-ir-cut-filter-the-best-instrument-is-your-ears),
+since the metric that "confirmed" the patch was the one that had already been shown unreliable.
 
 ### ❔ The filter has been seen to read back `off` — cause unknown
 
@@ -276,7 +461,10 @@ owning process does not know about. Circumstantial support:
 
   So the app has an opinion about IR state. This camera runs `-i 4 -u`.
 * The daemon exposes `init_ir` / `set_ir_cut`, implying a driver-level owner rather than a bare
-  pin.
+  pin. **This is no longer only circumstantial**: the daemon demonstrably moves the filter
+  [without writing sysfs at all](#-the-daemon-path-was-never-broken-a-regression-and-its-rollback),
+  so a driver-level owner is not an inference from the API shape — something has to be moving that
+  solenoid, and it is not `/sys/user-gpio/ircut_a`.
 
 **What has not been tested:** whether the filter physically moves at all when you think it does.
 Judge that **by looking at the image**, not by reading the pin. The pin read is trustworthy — it
@@ -343,7 +531,7 @@ Two notes on the pins themselves:
 > where it already rests would do nothing. **That was unsupported and is now contradicted.**
 >
 > Measured with the filter out: `ircut_b=1` held for 14 s produced a **dead-flat**
-> [green fraction](troubleshooting.md#measuring-the-ir-cut-filter-use-the-green-fraction)
+> [green fraction](troubleshooting.md#measuring-the-ir-cut-filter-the-best-instrument-is-your-ears)
 > (0.450 → 0.451 → 0.451), with a **passing positive control** (releasing `ircut_a` swung the
 > filter) and a **passing negative control** (26 s with no spontaneous return). The filter is
 > hold-to-engage on `ircut_a` alone.

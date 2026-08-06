@@ -71,7 +71,20 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 `packages/anyka_camera.yaml` in the `ha` repo and call a helper deployed to
 `/config/scripts/anyka_ptz.py`, which writes to the camera's `/tmp/ptz.daemon` FIFO over telnet.
 
-`switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live.
+`switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live, and **it works** — `command_on`
+runs `anyka_http.py ircut on` → `ctl?command=ircut_on` → `set_ir_cut 1` at the daemon. JP has
+driven it this way for weeks; the solenoid audibly clicks.
+
+> ⛔ **If this switch stops working, the first thing to check is whether somebody patched
+> `libplat_drv.so` on the camera.** Rewriting its `gpio-ircut_a` / `gpio-ircut_b` / `ir-led`
+> strings to match the real node names **breaks this switch** — it looks like an obvious bug fix
+> and it is a regression. The good library is md5 `f5769ff013d7a3094e73ee76e312cad0`. Restore it
+> and restart the daemon.
+> [Why](ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+
+> ⚠️ **After a power cycle, send `init_ir` before expecting the switch to work.** Nothing runs it
+> at boot — `ptz_init_on_boot=1` homes the *PTZ axes* only.
+> [Detail](ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot).
 
 > ⚠️ **If that switch reads `off` when you set it `on`, suspect the integration before the
 > hardware.** The camera holds [one session token at a time](web-ui.md#the-token), so concurrent
@@ -79,7 +92,9 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 > itself off. That bug was live here and produced exactly this symptom.
 >
 > Reading GPIO state back from the camera **does** work, so a stateful switch is fine; an earlier
-> version of this page wrongly said otherwise. See
+> version of this page wrongly said otherwise. ❔ **But note an open question:** `command_state`
+> reads `/sys/user-gpio/ircut_a`, and the daemon moves the filter *without writing sysfs*. Whether
+> that read still tracks the filter when the daemon drives it is **not established**. See
 > [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
 Command semantics, the mandatory `init_ptz` homing step, and the IR-cut caveats are in

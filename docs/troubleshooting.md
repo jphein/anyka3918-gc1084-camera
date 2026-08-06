@@ -69,9 +69,20 @@ not merely similar.** Six consecutive fetches of an unchanging scene came back a
 **Pace your requests**, and **verify frames are actually distinct** — compare bytes or hashes,
 do not assume two fetches are two frames.
 
-### Measuring the IR-cut filter: use the green fraction
+### Measuring the IR-cut filter: the best instrument is your ears
 
-If you are checking whether the IR-cut filter actually moved, **measure the green fraction**:
+> 🔑 **Before reaching for any image metric: go and listen.** The filter is a solenoid and it
+> **clicks, audibly**, on every transition. A human standing next to the camera hearing it click
+> on and off is **a more reliable instrument than any number computed from a frame** — it has no
+> threshold to mis-set, no scene dependency, and no cached-frame failure mode. The two hardest
+> IR-cut questions of 2026-08-06 were both settled by ear after image metrics had produced
+> confident, wrong answers in *both* directions.
+>
+> Use the chromatic test when nobody can be at the camera. Do not use it when somebody can.
+
+#### The chromatic test: green fraction, not R/B
+
+If you must judge from a frame, **measure the green fraction**:
 
 ```
 G / ((R + B) / 2)
@@ -88,9 +99,56 @@ looks like noise. Measured across the same transition:
 Any earlier "chromatic" measurement in this project that used R/B was therefore **weak evidence
 at best**, and a null from it means very little.
 
+#### The bands, and the boundary that does not exist
+
+Measured across several runs on 2026-08-06 (**JP's and the orchestrator's readings, not a single
+sample**):
+
+| Filter | Green fraction | Look |
+|---|---|---|
+| **IN** (normal colour) | **≈ 1.06 – 1.39** | normal |
+| **OUT** (IR-pass) | **≈ 0.45 – 0.90** | magenta / pink cast |
+
+> ⚠️ **Do not classify against a single boundary value, and specifically not `0.8`.** A run was
+> judged with `0.8` as the in/out cut-off and **an entire test run was mislabelled** as a result —
+> the reported bands do not sit either side of it, they sit either side of a **gap between 0.90
+> and 1.06 that is itself narrower than the within-band spread.** Compare a reading against the
+> *bands*, and if it lands between them, the honest answer is **"this measurement does not say"**,
+> not a coin flip.
+>
+> The safe form of the test is a **paired** one: take a reading, command the change, take another,
+> and require the two to land in *different* bands. An absolute reading judged against a
+> remembered number is how the mislabelling happened.
+
+#### ⚠️ The chromatic test only works if the scene contains IR
+
+**This is the failure mode that makes the metric untrustworthy indoors, and it is not a precision
+problem — the signal is simply absent.** The green fraction moves because removing the filter lets
+infrared reach the sensor. **Under blue-dominant indoor lighting there may be almost no IR in the
+scene to admit**, so the filter can swing its full travel and produce **almost no colour change at
+all**.
+
+So a flat green fraction has **two** explanations, and the metric cannot separate them:
+
+* the filter did not move, or
+* the filter moved and there was no IR for it to gate.
+
+**A null from this test is therefore not evidence of a null result** unless you have independently
+established that the scene has IR in it — daylight, or an IR illuminator you can confirm is
+actually emitting (**not this camera's**, whose [ring is dark](ptz.md#-ir-confirmed-dark)).
+
+That is the whole reason the ear beats the eye here: **the click is unconditional.** It does not
+care what is lighting the room.
+
 > ⚠️ **Allow at least 10 seconds.** The filter transition takes **4–8 s** — nothing has happened
 > at 4 s, and it is complete by 8 s. **Sampling at 2–4 s guarantees a false negative.** Ten
 > seconds is the right rule, with margin.
+
+> ⚠️ **Command a change, not a no-op.** Read the current state first. Commanding the filter *on*
+> when it is already *on* and then measuring no change proves **nothing** — and this project has
+> made that exact error twice, in both directions: once to conclude a working path was broken, and
+> once to conclude a broken path worked. See
+> [the daemon's IR-cut path](ptz.md#-retracted-ir-cut-control-through-the-daemon-is-broken).
 
 Judge by the image, not the pin: the pin read is trustworthy, but the solenoid is downstream of
 the pad, so a swinging pad does not prove the mechanism moved.

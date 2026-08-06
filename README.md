@@ -21,7 +21,7 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ WiFi | 2.4 GHz only |
 | ✅ Web UI | Port 80, PTZ pad and live preview — [but see the security warning](#-security) |
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
-| ✅ IR-cut filter | Controllable. Has been [seen to read back `off` after being set](docs/ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown) — cause unresolved, and more likely an integration bug than the hardware |
+| ✅ IR-cut filter | Works, from Home Assistant and by hand — the solenoid audibly clicks. Send [`init_ir` first](docs/ptz.md#-init_ir-is-required-first--and-nothing-runs-it-at-boot); nothing does it at boot. ⛔ **Do not "fix" the `gpio-`prefixed paths in `libplat_drv.so`** — [that is a regression](docs/ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback) |
 | ❌ IR LEDs | Pin and pad both toggle correctly, but **the ring is dark** — confirmed with a phone that demonstrably sees another camera's emitters. [Why is still open](docs/ptz.md#-ir-confirmed-dark) |
 | ❌ White LEDs | Present in hardware (4 on the ring) but dark. The **pad demonstrably swings** and nothing lights, the vendor firmware **declares this PTZ variant unsupported**, and there is **no software fix** — [all other candidates refuted](docs/ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
@@ -126,9 +126,10 @@ camera. Anywhere else it is not. Do not port-forward it. If you cannot segregate
 | [reference/](reference/) | Vendored upstream material, provenance and licensing |
 | [reference/sd-card-original/](reference/sd-card-original/) | **This camera's real working config**, including `isp_gc1084.conf` |
 
-## Three things that cost the most time
+## Four things that cost the most time
 
-Recorded up front because each one looks like dead hardware:
+Recorded up front because each one looks like dead hardware — except the last, which looks like a
+bug you can fix in one line:
 
 1. **The homing command is `init_ptz`, not `init`.** Upstream's PTZ README has it wrong. The
    daemon accepts `init` and silently does nothing, then every move fails with `not init.` —
@@ -144,6 +145,15 @@ Recorded up front because each one looks like dead hardware:
 3. **The SD card overwrites your settings.** `gergehack.sh` re-syncs `gergesettings.txt` from
    the card on every boot and reboots if it differs, so edits made only in `/etc/jffs2` quietly
    revert. [→](docs/sd-card.md#settings-precedence)
+
+4. **A string that looks broken may be a dead path whose failure is load-bearing.** This firmware
+   is full of hard-coded sysfs paths that do not exist on this kernel build. They look like
+   obvious one-line fixes. **One of them was "fixed", and it broke IR-cut control that had worked
+   for weeks** — the failing path was legacy, and its silent failure was what kept the working
+   path in charge. Before correcting a wrong-looking path, establish that it is **the path
+   actually being taken**, not merely that it is wrong. On this camera the boring question — *does
+   this feature currently work?* — has been worth more than any amount of disassembly.
+   [→](docs/ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback)
 
 ## Credits
 

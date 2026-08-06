@@ -43,6 +43,13 @@ printf '/sys/user-gpio/ircut_a\0\0\0\0\0\0' \
 > [selects one per boot](../../docs/sd-card.md#-one-card-works-in-any-of-these-cameras) rather
 > than baking a choice in at write time.
 
+> ⚠️ **Same reasoning as the regression below — read that first.** This patch was justified by
+> "the string is wrong, so correct the string", which is exactly the argument that broke IR-cut
+> control when applied to `libplat_drv.so`. **It is kept because nothing regressed from it**: the
+> day/night loop did not work before and does not work after, so at worst it is inert. **Do not
+> extend it, and do not build a new patch on string evidence alone.**
+> [Detail](../../docs/ptz.md#-this-reasoning-is-now-under-suspicion--and-it-is-the-patch-we-ship).
+
 ## `cgi-bin-header.hardened`
 
 Fixes the **pre-auth remote root RCE** on port 80. Not a binary patch — a rewritten shell
@@ -93,11 +100,53 @@ uppercase by convention — `PATH`, `IFS`, `LD_*`, `ENV`, `BASH_ENV`, `CDPATH`.
 > locale-independent. **Do not change this file to "fix" that without re-running the live exploit
 > test**; the md5 here is what was verified.
 
-## Not patched
+## ⛔ Deliberately NOT patched — and one of these is a mistake already made
 
-* **`ptz_daemon`** carries the same bug (`gpio-ircut_a`, `gpio-ircut_b`) and is very likely
-  broken the same way, but has **not** been patched — separate authorisation, and it needs
-  testing. See [ptz.md](../../docs/ptz.md#-ir-cut-control-through-the-daemon-is-broken--and-the-culprit-is-a-shared-library).
-* **`gpio-rf_feed`**, also in `ptz_daemon`, has **no counterpart at all** on the 2023 build —
-  there is no `rf_feed` node, prefixed or otherwise. It cannot be fixed by renaming; the feature
-  is simply unavailable. Do not patch it to another name that also does not exist.
+**This section is the most dangerous page in the repo, because every entry below looks like an
+obvious unfinished job.** Each one is a real, visible, easily-patched wrong string. None of them
+should be patched. Read the reason before reaching for `dd`.
+
+### `libplat_drv.so` — 🔴 **tried, regressed, rolled back**
+
+This is where `ptz_daemon_dyn` gets `gpio-ircut_a`, `gpio-ircut_b` and `ir-led` from. On
+2026-08-06 those three strings were patched on the **live camera** and the result was measured as
+a fix.
+
+**It was not a fix.** JP reported that the Home Assistant IR-cut switch — which had been working
+for weeks — stopped working after the patch. The library was restored to md5
+`f5769ff013d7a3094e73ee76e312cad0`, the daemon restarted, and the solenoid **audibly clicks
+again**.
+
+> **Leading hypothesis, untested:** the daemon reaches the filter through a driver call
+> (`ak_drv_ir_set_ircut` is the likely candidate), and the sysfs strings are a **legacy path that
+> was failing silently and harmlessly**. Correcting them woke up a writer that then interfered
+> with the route that worked.
+
+**No patch file for this library exists in this directory, and none should be added.**
+[Full story](../../docs/ptz.md#-the-daemon-path-was-never-broken-a-regression-and-its-rollback).
+
+### `ptz_daemon` (the static 2.1 MB binary) — inert
+
+It carries the same prefixed strings, but **that file never executes** on this setup —
+`ptz_daemon_dyn` does. Patching it would change nothing. Left alone.
+
+### `gpio-rf_feed` — no counterpart exists
+
+There is **no `rf_feed` node** on the 2023 build, prefixed or otherwise. It cannot be fixed by
+renaming; the feature is unavailable. **Do not patch it to another name that also does not
+exist** — that turns a clean `ENOENT` into a silent wrong-pin write.
+
+---
+
+> ### 🔑 The rule this section exists to enforce
+>
+> **A string that looks broken may be a dead path whose failure is load-bearing.**
+>
+> Before patching a wrong-looking path, establish that it is **the path actually being taken** —
+> not that it exists, not that it is wrong, that it *executes*. The cheapest test is usually to
+> ask whether the feature currently works.
+>
+> Three of the four entries above are real defects in code that **does not run**, and the fourth
+> was a real defect whose **failure was holding the system together**. This project has now spent
+> four separate efforts patching things outside the execution path in a single day. Assume you are
+> about to be the fifth.
