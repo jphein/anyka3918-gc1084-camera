@@ -45,6 +45,20 @@ interesting the problem is.
   had eight comment lines the camera's copy did not. Editing the device copy and
   committing it would have silently deleted them. Diff before you overwrite, and
   make the two hash the same afterwards.
+- **`git commit -o` stops you carrying someone else's work. Nothing stops them
+  carrying yours.** Everyone guards the first direction and nobody guards the
+  second. It happened here on 2026-08-06: a one-line phrasing fix sat
+  uncommitted in `write-sd-card.sh` while a sibling committed that same file,
+  and the fix shipped under a message about the speaker volume ladder, which
+  never mentions it. Nothing broke — the content was correct and landed on
+  `main` — but the change is now attributed to work it has nothing to do with,
+  and no amount of `-o` discipline on the *author's* side would have prevented
+  it. **The only defence available is committing promptly**, which is why "a
+  partial commit that unblocks a sibling beats a complete one that holds the
+  file" is an engineering rule and not just courtesy. Corollary: git authorship
+  cannot distinguish who did what here — every commit is `jp <jp@jphein.com>` —
+  so the commit *message* is the only provenance record, and a message that
+  silently covers two people's work has lost it.
 
 ---
 
