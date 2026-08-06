@@ -23,11 +23,13 @@ echo ""
 t=""
 c=""
 f=""
+v=""
 for kv in $(echo "$QUERY_STRING" | tr '&' ' '); do
   case "$kv" in
     token=*) t="${kv#token=}" ;;
     command=*) c="${kv#command=}" ;;
     file=*) f="${kv#file=}" ;;
+    level=*) v="${kv#level=}" ;;
   esac
 done
 
@@ -94,8 +96,25 @@ case "$c" in
     # and pitch. The old value here was 41100 - both a typo for 44100 and wrong
     # for a 16kHz file, which made speech come out ~2.5x fast.
     # setsid so the player outlives this CGI process.
-    # NOTE: ak_adec_demo has no working volume control - attenuate before upload.
-    setsid ak_adec_demo 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
+    # VOLUME. ak_adec_demo hardcodes the DAC volume to 6 (the max of a 0-6 range)
+    # with no CLI flag and no getenv, so upstream concluded "volume control fails
+    # when running" and told everyone to pre-attenuate the mp3. The control never
+    # failed - it was never exposed. A one-byte patch to the `mov r1,#6` immediate
+    # feeding ak_ao_set_dac_volume gives a real hardware volume, and because that
+    # value goes to the DAC ioctl it sits DOWNSTREAM of the ASLC compressor and
+    # cannot be normalised away. Pre-attenuating the file cannot work: the file is
+    # upstream of ASLC, which levels it straight back up.
+    #
+    # &level=1..6 selects a pre-patched variant (DAC device volume 0..5).
+    # Absent, malformed or out-of-range falls back to the default binary, which is
+    # level 4. The final -x fallback is to the stock /usr/bin copy so that a
+    # missing card file can never wedge the speaker into silence.
+    BIN=/mnt/anyka_hack/ak_adec_demo/ak_adec_demo
+    case "$v" in
+      [1-6]) [ -x "$BIN.vol$v" ] && BIN="$BIN.vol$v" ;;
+    esac
+    [ -x "$BIN" ] || BIN=ak_adec_demo
+    setsid "$BIN" 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
     echo "OK"
     exit 0 ;;
   sounds)
