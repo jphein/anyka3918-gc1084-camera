@@ -31,11 +31,12 @@ flash copy when `/etc/jffs2/www/index.html` exists.
 > the flag has other effects besides (see [sd-card.md](sd-card.md)). This camera runs
 > `rootfs_modified=0` and has no `/etc/jffs2/www`.
 
-`start_web_interface.sh` also launches `/mnt/anyka_hack/ffmpeg/app_restarter.sh`. That path is
-**not** in this repo — `ffmpeg` was deliberately excluded as a 37 MB re-downloadable blob (see
-[`reference/README.md`](../reference/README.md)). It is present on the real SD card, so it works
-there, but a card written purely from this repo will have that line fail silently and the
-Events page's "Run FFMPEG" button will do nothing.
+`start_web_interface.sh` also launches `/mnt/anyka_hack/ffmpeg/app_restarter.sh` — the watchdog
+that keeps `libre_anyka_app` running. It **is** vendored here, at
+[`reference/sd-card-hack/anyka_hack/ffmpeg/`](../reference/sd-card-hack/anyka_hack/ffmpeg/);
+only the 37 MB `ffmpeg` binary itself is excluded, so the Events page's "Run FFMPEG" button is
+the sole casualty on a repo-built card. Its restart policy is documented in
+[troubleshooting.md](troubleshooting.md#the-watchdog-only-catches-death-not-hangs).
 
 ## Getting in
 

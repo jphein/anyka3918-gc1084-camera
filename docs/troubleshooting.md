@@ -32,9 +32,9 @@ nothing to tell you the address changed.
 
 ## The 2026 outage: a renamed SSID
 
-The camera was offline from **2026-04-28** to **2026-08-05**. It hardcodes `wifi_ssid=iot` in
-`gergesettings.txt`, and on that date an "iot prefix delete" change removed the `iot` and
-`iot-office` SSIDs, consolidating onto `my-home-ssid` (same VLAN, **same PSK** — only the name
+The camera was offline from **2026-04-28** to **2026-08-05**. It hardcodes `wifi_ssid=my-iot-ssid` in
+`gergesettings.txt`, and on that date an SSID consolidation removed the `my-iot-ssid` and
+`my-iot-ssid-office` SSIDs, consolidating onto `my-home-ssid` (same VLAN, **same PSK** — only the name
 changed). The camera was hunting for a network that no longer existed.
 
 > ⚠️ **This failure mode is nearly invisible, and that is the lesson worth keeping.** A station
@@ -47,10 +47,10 @@ network. When a device is invisible, go read its configuration; do not keep inte
 infrastructure.
 
 Pinned to the exact date because the AP still had its pre-change backups:
-`/etc/config/wireless.pre-iot-prefix-delete-2026-04-28` contained `option ssid 'iot'` and
-`option ssid 'iot-office'`.
+`/etc/config/wireless.pre-ssid-change-2026-04-28` contained `option ssid 'my-iot-ssid'` and
+`option ssid 'my-iot-ssid-office'`.
 
-Fixed by adding an `iot` SSID on one **access point** (`192.168.1.2`) mirroring `my-home-ssid` —
+Fixed by adding a `my-iot-ssid` SSID on one **access point** (`192.168.1.2`) mirroring `my-home-ssid` —
 `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key — bridged to a new
 `network.cams` interface on `br-lan.20`, the **camera VLAN**. That VLAN was already tagged on that
 AP's trunk, so only the interface definition was missing. Configs were backed up on the AP at
@@ -118,12 +118,31 @@ explanations, neither tested:
 * **Memory.** At 3.6 MB free, a JPEG encode buffer allocated at snapshot-server startup could
   simply fail, with the app continuing without that listener.
 
-> The process that restarts the app is `/mnt/anyka_hack/ffmpeg/app_restarter.sh`, and it runs
-> continuously (started by `start_web_interface.sh`). **It is in the `ffmpeg/` directory, which
-> this repo excludes**, so its restart policy is undocumented here and cannot be read from the
-> repo — which is a good argument for vendoring at least the small shell scripts out of that
-> directory even if the 37 MB `ffmpeg` binary stays out. See
-> [`reference/README.md`](../reference/README.md).
+### The watchdog only catches death, not hangs
+
+What restarts the app is `/mnt/anyka_hack/ffmpeg/app_restarter.sh`, started by
+`start_web_interface.sh` and now vendored at
+[`reference/sd-card-hack/anyka_hack/ffmpeg/`](../reference/sd-card-hack/anyka_hack/ffmpeg/).
+It is short enough to quote in full behaviour:
+
+```sh
+while [ 1 ]; do check_app; sleep 20; done
+```
+
+`check_app` restarts `libre_anyka_app` only when **neither** it **nor** `wrap_mp4.sh` is
+running. That second condition is a deliberate mutex: `video?scan=true` intentionally stops the
+app to free memory while wrapping clips, and the watchdog must not fight it.
+
+Two consequences worth knowing before you rely on it:
+
+* **It detects death, not hangs.** `check_app` greps `top` for the process name, so an app that
+  is wedged but still resident is never restarted. That is precisely the silent-failure shape
+  described above — the process is alive, RTSP answers, and port 3000 is simply gone. The
+  watchdog will not save you from it.
+* **It polls every 20 seconds**, which is well inside the usual 60-second `TIME_WAIT` window. So
+  a restart it triggers is very likely to land while the old listening socket is still held —
+  which strengthens the `SO_REUSEADDR` hypothesis above for why 3000 fails to rebind while 554
+  comes back. Still a hypothesis; it has not been tested against the binary.
 
 ## Known rough edges
 
