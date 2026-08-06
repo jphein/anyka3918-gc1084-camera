@@ -127,6 +127,45 @@ case "$c" in
     setsid "$BIN" 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
     echo "OK"
     exit 0 ;;
+  stop)
+    # Stop playback. Idempotent by design: HA calls this speculatively, so
+    # stopping nothing is a SUCCESS, not an error.
+    #
+    # ⚠️ pkill -f, NOT killall, and this is measured rather than stylistic.
+    # comm is truncated to 15 chars, so ak_adec_demo.vol1 appears as
+    # "ak_adec_demo.vo" while the default binary appears as "ak_adec_demo".
+    # `killall ak_adec_demo` therefore matches ONLY the default and silently
+    # misses every .volN variant — verified live: 2 players running, killall
+    # left both, pkill -f left none. That failure would present as "stop works
+    # sometimes", which is the worst available shape. -f matches the full
+    # command line, so it covers the default and all six variants.
+    #
+    # ⚠️ SPK_PA must be dropped by hand. A player that exits NATURALLY runs
+    # ak_ao_close and the amp goes 0->1->0 (measured). A player that is KILLED
+    # never gets there and SPK_PA stays HIGH (measured) — a powered amplifier
+    # with nothing driving it. Every stop would leave it on.
+    #
+    # pgrep -f does NOT match itself here (verified: returns 0 with nothing
+    # playing), so IDLE is reachable.
+    #
+    # ⚠️ ZOMBIES MUST BE EXCLUDED, or the count lies. A killed player lingers
+    # unreaped for 0.5-2s and BOTH pgrep and ps still list it (ps shows it
+    # bracketed: "[ak_adec_demo]"). A naive `pgrep | wc -l` therefore reports
+    # STOPPED 1 for a process that is already dead — measured: three
+    # back-to-back stops all claimed STOPPED 1, and only a >=2s gap gave IDLE.
+    # HA calls this speculatively, so a phantom count is exactly the case that
+    # matters. Field 3 of /proc/PID/stat is the state; skip Z.
+    n=0
+    for p in $(pgrep -f ak_adec_demo 2>/dev/null); do
+      case "$(awk '{print $3}' /proc/$p/stat 2>/dev/null)" in
+        Z|'') ;;
+        *) n=$((n+1)) ;;
+      esac
+    done
+    pkill -f ak_adec_demo 2>/dev/null
+    echo 0 > /sys/user-gpio/SPK_PA 2>/dev/null
+    if [ "$n" -gt 0 ]; then echo "STOPPED $n"; else echo "IDLE"; fi
+    exit 0 ;;
   stats)
     # One call, one bundle, for the HA telemetry tile. Fixed key set, always
     # present, null when unavailable - same convention as whoami.sh --json, so the
