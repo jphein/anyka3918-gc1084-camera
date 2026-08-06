@@ -80,10 +80,14 @@ case "$c" in
     # SPK_PA is the speaker power amplifier and sits at 0 on a cold boot;
     # without it the decoder runs happily and you hear nothing.
     echo 1 > /sys/user-gpio/SPK_PA
-    # Backgrounded so the HTTP request returns immediately rather than blocking
-    # for the length of the clip. NOTE: ak_adec_demo has no working volume
-    # control - attenuate the file before uploading it.
-    ak_adec_demo 41100 1 mp3 "/mnt/sounds/$f.mp3" >/dev/null 2>&1 &
+    # Every clip in /mnt/sounds is standardised to 16kHz mono mp3, so the rate is
+    # fixed here. This matters: ak_adec_demo takes the sample rate as an argument
+    # and does NOT read it from the file, so a mismatch plays at the wrong speed
+    # and pitch. The old value here was 41100 - both a typo for 44100 and wrong
+    # for a 16kHz file, which made speech come out ~2.5x fast.
+    # setsid so the player outlives this CGI process.
+    # NOTE: ak_adec_demo has no working volume control - attenuate before upload.
+    setsid ak_adec_demo 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
     echo "OK"
     exit 0 ;;
   sounds)
