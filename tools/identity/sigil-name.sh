@@ -46,12 +46,20 @@ if [ -n "$MAC" ]; then
   # ---- UNIT IDENTITY: seed from the MAC, with the golden-ratio spread.
   #
   # NOT the raw MAC. MACs in one bag come from one vendor block and are
-  # consecutive, often with a stride - measured, 50 cameras at stride 4 collapse
-  # onto EIGHT distinct names with a raw seed, and a raw seed caps at 32 distinct
-  # names no matter how many cameras there are. The spread is what smol uses and
-  # what lexicon's node-identity design doc proves: 2654435761 is odd, so
-  # gcd(G,32)=1 and id -> (id*G) mod 32 is a bijection - it needs only that the
-  # inputs are distinct mod 32, and consecutive integers are.
+  # consecutive, often with a stride. With a raw seed the noun index is bits
+  # 8-12, which are CONSTANT across any aligned 256-wide MAC window - so a bag
+  # whose MACs fall in one such window gets at most 32 distinct names (one noun,
+  # 32 adjectives) however many cameras are in it. Measured: 50 cameras at
+  # stride 4 collapse onto 8-16 distinct names.
+  #
+  # (That cap is PER WINDOW, not absolute. Spread far enough apart and raw
+  # seeding does recover - 8192 sequential MACs give all 1024 names. It is
+  # useless for the case we actually have, which is a bag, not the whole space.)
+  #
+  # The spread is what smol uses and what lexicon's node-identity design doc
+  # proves: 2654435761 is odd, so gcd(G,32)=1 and id -> (id*G) mod 32 is a
+  # bijection - it needs only that the inputs are distinct mod 32, and
+  # consecutive integers are.
   #
   # Only the low 24 bits are used. The top 24 are the vendor OUI, identical
   # across the whole bag, so they carry no information.
@@ -69,10 +77,27 @@ if [ -n "$MAC" ]; then
   # 32-bit ARM. It does not have to: only bits 0-4 and 8-12 of the product are
   # ever read, i.e. only (product mod 2^13). Congruence gives that exactly, and
   # 2654435761 mod 8192 = 6577, so the largest intermediate here is
-  # 8191 * 6577 = 53,878,207 - comfortably inside 32 bits.
+  # 8191 * 6577 = 53,872,207 - comfortably inside 32 bits.
   #
   # This is not an approximation. verify-pin.sh enumerates it against the
   # reference implementation over the whole 24-bit input space.
+  #
+  # BUT IT IS EXACT ONLY FOR TABLE SIZES THAT DIVIDE THOSE BIT FIELDS, so the
+  # precondition is asserted below rather than assumed. Truncating to 13 bits
+  # preserves `x % NADJ` only when NADJ divides 8192, and `(x >> 8) % NNOUN`
+  # only when NNOUN divides 32. `fleet` is 32 x 32 and satisfies both. `forge`
+  # is 14 x 14 and does not - with --mac it would return a plausible name that
+  # disagrees with every other sigil implementation, at exit 0. A silent wrong
+  # answer from a naming tool is the failure class this whole project spent a
+  # day cataloguing, so it refuses instead.
+  if [ $(( 8192 % NADJ )) -ne 0 ] || [ $(( 32 % NNOUN )) -ne 0 ]; then
+    echo "sigil-name.sh: --mac needs a realm whose adjective count divides 8192" >&2
+    echo "  and whose noun count divides 32. Realm '$REALM' is ${NADJ}x${NNOUN}." >&2
+    echo "  The 32-bit-safe truncation would silently return a name that" >&2
+    echo "  disagrees with Go/Python/JS. Use --hash for this realm, or a" >&2
+    echo "  power-of-two-sized realm (fleet is 32x32) for --mac." >&2
+    exit 2
+  fi
   SEED=$(( ((LOW % 8192) * 6577) % 8192 ))
 else
   # ---- BUILD PROVENANCE: sigil used natively, seeded by the git short hash.

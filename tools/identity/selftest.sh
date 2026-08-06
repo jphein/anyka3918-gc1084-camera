@@ -224,6 +224,25 @@ grep -q '"store": "/etc/jffs2"' "$r/etc/jffs2/unit.json" \
   && ok "marker records which store it landed in" || bad "store field wrong in fallback"
 rm -rf "$r"
 
+# --- 8b. the 13-bit truncation is exact only for realms whose counts divide the
+#         bit fields it keeps. A realm that does not must REFUSE, not answer.
+#         forge is 14x14: before the guard this returned "Forged Crucible" where
+#         every other sigil implementation gives "Anvilled Mold", at exit 0.
+if out="$("$DIR/sigil-name.sh" --realm forge --mac 3c6a9d4f2a91 2>&1)"; then
+  bad "--mac with a 14x14 realm returned '$out' instead of refusing"
+else
+  case "$out" in *"divides 8192"*) ok "--mac refuses a realm the truncation cannot serve" ;;
+                 *) bad "--mac failed, but not with a usable reason: $out" ;; esac
+fi
+# and the realm it IS for must still work, so the guard cannot have over-fired
+"$DIR/sigil-name.sh" --realm fleet --mac 3c6a9d4f2a91 >/dev/null 2>&1 \
+  && ok "the guard does not block fleet (32x32, the realm --mac is for)" \
+  || bad "the guard rejects fleet - it has over-fired"
+# --hash takes the untruncated path, so any realm size is fine there
+"$DIR/sigil-name.sh" --realm forge --hash 4c299ee >/dev/null 2>&1 \
+  && ok "--hash still works for forge (no truncation, so no precondition)" \
+  || bad "the guard leaked into the --hash path"
+
 # --- 9. the fleet-wide property: a bag of consecutive MACs gets distinct names.
 #        This is the whole reason for the golden-ratio spread; if it ever
 #        regresses, every camera in a batch quietly becomes the same name.
