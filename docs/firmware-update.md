@@ -117,6 +117,25 @@ parses this partition is inside that.
 > fall back to compiled-in defaults — silently.** Which is the failure this
 > project keeps meeting, arriving by a new route.
 
+**That is not inference from how u-boot usually behaves — it is compiled into
+this one.** Strings from the `0x20000` region (`lucid-camera`):
+
+```
+## Error: bad CRC, import failed
+## Resetting to default environment
+Saving Environment to %s...
+env_buf [%d bytes] too small for value of "%s"
+```
+
+Which also explains why `erase_env` was so convincing: **`0x20000` is where
+u-boot's environment-*handling code* lives.** The address sits right beside the
+subsystem it appears to describe — a plausible-looking wrong constant, adjacent
+to the thing it seems to name. Both readers took it as evidence for the same
+reason.
+
+`readcfg` is **not** in that 8 KB window; it is elsewhere in the `0x00000–0x20000`
+bootloader region, which is where anyone reversing this format should look.
+
 *(An earlier draft here argued the risk was a redundant 4 KB/8 KB env pair. That
 rested on `erase_env` pointing at the environment, which it does not. **Refuted —
 the inference was reasonable and the anchor beneath it was wrong.**)*

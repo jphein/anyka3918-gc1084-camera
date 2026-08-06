@@ -93,6 +93,30 @@ interesting the problem is.
   beside it. At that frequency it is not bad luck, it is **the dominant mode**.
   Tables are usually dumps — measured. Summaries are usually unsourced and drift.
 
+- **Printing evidence and requiring interpretation is not a guard.** It fails
+  precisely when the operator is in a hurry, which is when destructive tools get
+  run. `write-sd-card.sh` printed a full `lsblk` listing before its ERASE prompt
+  — the right design, and not enough. On 2026-08-06 the only removable device
+  present was **JP's bootable Multitool card**, and it passed every check the
+  tool had: `removable=1`, not the system disk, backup present. **Two different
+  people reached that prompt within thirty minutes of each other**, both at the
+  end of a long session, both told to "write a card and call it done".
+
+  The fix was to **refuse by default** — a camera card is blank or a single FAT32
+  partition, anything else needs `--force-wipe` — and to name what was found
+  rather than list it: `MULTITOOL`, and the mountpoints, not "3 partitions".
+
+  > **A guard should convert "an operator interprets output" into "a human
+  > answers a direct question about a named thing."**
+
+  It worked the first time it fired: the refusal was taken to JP rather than
+  overridden, he cleared it explicitly, and *then* the flag was used.
+
+  🔑 **And the escape hatch must be documented with the refusal.** A user who hits
+  a refusal, does not know an override exists, and reaches for `dd` instead **has
+  been made less safe by a guard working correctly.** An undocumented override is
+  not extra safety; it is a detour into a tool with no guard at all.
+
 - **A correction is trusted more than the original — so a wrong correction costs
   more than the error it replaced.** On 2026-08-06 a firmware doc said *"196 KB
   before `KERNEL`, none of it inside a named partition."* **True.** One piece of
