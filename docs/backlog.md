@@ -186,6 +186,34 @@ interesting the problem is.
   > already been wrong here: the most *evidenced* source was the least *current*,
   > and the resolution came from a human, not from the files.
 
+- **A surprising first sample is a sample, not a finding — and the more
+  interesting it is, the more samples it owes you.** The rule below covers a
+  *uniform* result meaning a broken instrument. This is the opposite shape and
+  the more seductive one, because **a surprise feels like a discovery rather than
+  an error**, and nothing about it prompts you to repeat the measurement.
+
+  2026-08-06: the first `/vs0` frame-rate sample came back at **14.76 fps,
+  behind real time** — the exact anomaly someone had said to watch for. It was
+  nearly written up. **Five more samples clustered at 15.15–15.81. The 14.76 was
+  noise.**
+
+  > **The recursion is why this earns a rule rather than a note.** Publishing it
+  > would have **replaced one wrong conclusion drawn from n=1 with a different
+  > wrong conclusion drawn from n=1 — on the same page, within the hour, while
+  > writing the commit message about why n=1 was the problem.** A rule that can be
+  > violated in the act of documenting it is one worth writing down.
+
+  ⚠️ **And the half that helps whoever is *briefing* the measurement, not taking
+  it: telling someone in advance which result would be interesting biases what
+  they do with the first one.** The *"if it comes back lower you've found
+  something more interesting"* framing was **mine**, handed over before any
+  sample existed — which converted a noisy first reading into a pre-confirmed
+  hypothesis the moment it arrived. The person measuring caught it by taking five
+  more; **I would have read the write-up and believed it, because I would have
+  been reading my own prediction back.**
+
+  **Say what you want measured. Do not say which answer would be exciting.**
+
 - **A uniform result across varied inputs means a broken instrument, not a
   conclusion.** Six different `&level=` values that all report the same thing are
   telling you about your *test*, not the system. Seen four times today: a `ps`
