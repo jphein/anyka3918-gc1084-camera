@@ -44,6 +44,7 @@ switching that has never worked**.
 | `cgi-bin/ctl` installed, mode 755 | Our fast control endpoint — not upstream's. [Detail](web-ui.md#cgi-binctl--our-fast-control-endpoint) |
 | `/sounds/` created | Where `ctl`'s `play` and `sounds` commands look |
 | Missing `]` in `Factory/config.sh` | [Upstream's bracket bug](#-latent-bug-in-factoryconfigsh), which stops the sensor symlink ever being recreated |
+| `cgi-bin/header` hardened | Closes the [pre-auth root RCE](web-ui.md#the-fix) on port 80. **Not** kernel-specific — applies unconditionally |
 | IR-cut node detection | See below |
 
 > ⚠️ **`ptz_daemon` has the same bug and is *not* patched.** It carries only prefixed paths, so

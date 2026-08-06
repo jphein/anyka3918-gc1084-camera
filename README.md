@@ -98,10 +98,11 @@ sudo tools/write-sd-card.sh /dev/sdX --ssid <your-ssid>
 **These cameras must live on an isolated, cloud-blocked VLAN.** That is not generic caution —
 the hacked firmware has specific, verified problems:
 
-* **Unauthenticated remote root command execution on port 80.** `cgi-bin/header` `eval`s the
-  query string as root *before* the token check. One GET is enough:
-  `GET /cgi-bin/webui?a=1;id` → `uid=0(root)`. The login token is real but readable pre-auth,
-  so the authentication is **cosmetic**. [Full detail and proof](docs/web-ui.md#security-the-auth-is-cosmetic).
+* **Unauthenticated remote root command execution on port 80 — ✅ now fixed, but only on cards
+  written since 2026-08-06.** `cgi-bin/header` `eval`'d the query string as root *before* the
+  token check, so `GET /cgi-bin/webui?a=1;id` returned `uid=0(root)`. **Any camera still running
+  an older card remains fully exploitable.**
+  [The hole, and the fix](docs/web-ui.md#security-the-auth-is-cosmetic).
 * **RTSP and the snapshot server have no authentication at all**, on any port.
 * **FTP is enabled by default**, writable, rooted at `/`, and serves the file containing your
   WiFi PSK in cleartext.

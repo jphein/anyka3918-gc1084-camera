@@ -123,6 +123,13 @@ cat /tmp/token.txt
 
 ## Security: the auth is cosmetic
 
+> ✅ **FIXED — but only on cards written since 2026-08-06, and only if you applied it.**
+> [`reference/patches/cgi-bin-header.hardened`](../reference/patches/) closes this, and
+> [`tools/write-sd-card.sh`](../tools/write-sd-card.sh) installs it. **Any camera running an
+> older card is still fully exploitable.** The section below describes the hole as it exists
+> unpatched — read it as the reason the fix matters, and as what to expect on an un-updated unit.
+> Jump to [the fix](#the-fix).
+
 > ⚠️⚠️ **Unauthenticated remote command execution as root.** Anything that can open a TCP
 > connection to port 80 fully owns this camera. There is no exploit chain and no credential
 > required — one GET is enough.
@@ -171,6 +178,40 @@ From there every "authenticated" endpoint is available, including `system?comman
 
 Injected output lands **before** the `Content-type` header, which is why it appears between the
 status line and the headers rather than in the page body.
+
+### The fix
+
+The parser is replaced so that it accepts **lowercase identifier keys only** and assigns values
+**by reference**, so a value's contents are never re-parsed as shell:
+
+```sh
+for i in $QUERY_STRING; do
+  key="${i%%=*}"; val="${i#*=}"
+  case "$key" in ''|*[!a-z0-9_]*) continue ;; [0-9]*) continue ;; esac
+  case "$key" in path|env|ifs|query_string|http_*|remote_*|ld_*) continue ;; esac
+  eval "$key=\$val"
+done
+```
+
+It **cannot** be fixed by moving the token check earlier, because `$token` is produced *by* that
+eval. The lowercase rule is derived from the device, not guessed: every legitimate parameter is
+lowercase — all 17 `gergesettings.txt` keys and all five UI params — while every dangerous
+shell/loader variable is uppercase by convention (`PATH`, `IFS`, `LD_*`, `ENV`, `BASH_ENV`,
+`CDPATH`). Dynamic keys still work, which `settings_submit.sh` requires.
+
+**Verified by demonstrating the hole and then its absence on the live camera** — an
+unauthenticated `GET` created a root-owned `/tmp/rce_probe`; afterwards the identical payloads
+(backtick, `$()`, embedded, and `?PATH=/tmp/evil&IFS=X`) left no file. Regression-checked: UI
+login works, `settings_submit.sh` did not corrupt `gergesettings.txt`, and the HA path never
+sourced `header` at all.
+
+> **A harness pass was explicitly not accepted as evidence.** An earlier version of the fix passed
+> one while still permitting `PATH`/`IFS`/`LD_PRELOAD` hijacking — those *are* valid identifiers,
+> so checking identifier-ness alone is not enough. On this device the only acceptable proof is the
+> exploit failing against the real target.
+
+Provenance, md5s and a locale hardening note are in
+[`reference/patches/README.md`](../reference/patches/README.md).
 
 ### Honest summary of the posture
 

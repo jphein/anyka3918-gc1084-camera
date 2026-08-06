@@ -43,6 +43,56 @@ printf '/sys/user-gpio/ircut_a\0\0\0\0\0\0' \
 > [selects one per boot](../../docs/sd-card.md#-one-card-works-in-any-of-these-cameras) rather
 > than baking a choice in at write time.
 
+## `cgi-bin-header.hardened`
+
+Fixes the **pre-auth remote root RCE** on port 80. Not a binary patch — a rewritten shell
+parser.
+
+| | |
+|---|---|
+| md5 (hardened) | `934ce4814d4fc90edec82275769986c5` |
+| md5 (stock) | `997a3c6e65e66d29a47a7c59c8964685` |
+| Kernel-specific? | **No.** Applies unconditionally, no detection needed. |
+
+The old parser was `for i in $QUERY_STRING; do eval $i; done`, and because every CGI sources
+`header` *before* its token check, that was unauthenticated remote root code execution. It cannot
+be fixed by reordering, because `$token` is produced **by** that eval.
+
+The fix accepts **lowercase identifier keys only** and assigns the value **by reference**:
+
+```sh
+eval "$key=\$val"
+```
+
+`$val` inside the eval is a *variable reference*, so its contents are never re-parsed as shell.
+Dynamic keys still work, which `settings_submit.sh` depends on. The lowercase rule is derived
+from the device rather than guessed: every legitimate parameter is lowercase (all 17
+`gergesettings.txt` keys and all five UI params), while every dangerous shell/loader variable is
+uppercase by convention — `PATH`, `IFS`, `LD_*`, `ENV`, `BASH_ENV`, `CDPATH`.
+
+**Verified by demonstrating the hole, then its absence** — not by a harness:
+
+* Before: an unauthenticated `GET` created a **root-owned `/tmp/rce_probe`**.
+* After: the identical payloads — backtick, `$()`, embedded, and `?PATH=/tmp/evil&IFS=X` — left
+  no file, same URL, same camera.
+* Regression-checked: UI login still works; `settings_submit.sh` did **not** corrupt
+  `gergesettings.txt` (md5-identical to a pre-test backup); the Home Assistant path is
+  structurally independent (`login_validate.sh` and `login` do not source `header` at all, and
+  `ctl`'s only match is a comment).
+
+> **Why a harness pass was not accepted as evidence:** an earlier version of this fix passed one
+> while still permitting `PATH`/`IFS`/`LD_PRELOAD` hijacking — those are valid *identifiers*, so
+> validating identifier-ness alone is insufficient. On this device, proof has to be the exploit
+> failing on the real target.
+
+> 📌 **Hardening note for a future revision — not a defect in this one.** The key filter uses the
+> glob range `*[!a-z0-9_]*`. Under a non-C locale, bracket ranges follow collation order and
+> `[a-z]` can match uppercase, which would let `PATH` through. This camera has no locale
+> configured, so it runs in the C locale and the filter is strict ASCII — the fix is sound **as
+> deployed**. A future revision could enumerate the characters explicitly to make it
+> locale-independent. **Do not change this file to "fix" that without re-running the live exploit
+> test**; the md5 here is what was verified.
+
 ## Not patched
 
 * **`ptz_daemon`** carries the same bug (`gpio-ircut_a`, `gpio-ircut_b`) and is very likely

@@ -121,8 +121,17 @@ filter on this camera is a direct sysfs write to `ircut_a`.
 **`libre_anyka_app` can turn the IR illuminator on, and can never move the IR-cut filter.**
 
 Observed unprompted: with the filter left out and the scene looking IR-washed, **the app asserted
-`IR_LED` by itself.** So its day/night logic is alive and running — it just cannot complete the
-other half of the job.
+`IR_LED` by itself.** So *something* in its day/night logic runs.
+
+> ❔ **But the loop has never been seen to move the IR-cut pin — even patched.** With the
+> corrected binary running, the lens was covered **many times** and **no `ircut` toggle occurred
+> at all**.
+>
+> So the honest state is: **the path is fixed, and the automatic loop is not observed to use it.**
+> Whether that loop functions on this hardware at all is **an open question**, and a better thing
+> to record than implying the patch restored a working feature. Possibilities nobody has
+> separated: the trigger threshold is never met by covering a lens; the loop needs a longer
+> settle than the test allowed; or it does not run on this build for an unrelated reason.
 
 The reason is the node-naming difference already noted [above](#gpio-map):
 
@@ -179,10 +188,19 @@ is a separate authorisation and it needs testing first.
 > ircut_b wifi_en`. That feature is simply unavailable here. **Do not patch it to another name
 > that also does not exist**; that would convert a clean `ENOENT` into a silent wrong-pin write.
 
-> **Design decision needed before both binaries are fixed.** Once `libre_anyka_app` *and*
-> `ptz_daemon` can both reach `ircut_a`, there are **two actors on one pin** — the app's
-> automatic day/night loop, and manual control via `set_ir_cut` (which is what Home Assistant
-> drives). Decide which wins before shipping cards that enable both, or they will fight.
+> **Two actors on one pin — a documented risk, deliberately not designed around.** Once
+> `libre_anyka_app` *and* `ptz_daemon` can both reach `ircut_a`, the app's automatic day/night
+> loop and manual `set_ir_cut` (what Home Assistant drives) could contend.
+>
+> **No arbitration has been built, on purpose.** The conflict is hypothetical: see below — the
+> app's automatic loop has **never been observed to move that pin**, patched or not. Building
+> sequencing or locking now would mean designing around behaviour nobody has seen, which is the
+> exact failure mode this project has produced repeatedly today.
+>
+> **Symptom if it does appear:** a manual `set_ir_cut` gets reverted at the app's next
+> evaluation. That is not necessarily a bug — an auto mode overriding a manual override is normal
+> camera behaviour — and the fix would more likely be a mode selector in Home Assistant than a
+> change on the camera.
 
 ### ❔ The filter has been seen to read back `off` — cause unknown
 

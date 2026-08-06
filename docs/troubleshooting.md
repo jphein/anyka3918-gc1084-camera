@@ -119,6 +119,26 @@ to the SD card, or captured over [UART](hardware.md#serial-console).
 > `"Error, gpio %d isn't config outpu level"`, which is about the *value*, not the pin. The two
 > cannot be reconciled, and no theory is being built on it. Logged as unexplained.
 
+## Working *on* the camera: five silent no-ops
+
+These are traps in the tooling rather than the device — hit while patching binaries over telnet.
+**All five fail silently**, which is this camera's signature.
+
+> **The rule that covers all of them: re-verify by md5. Never trust an exit code.** On this
+> device an exit code, an HTTP 200 and a `DrwAck` all mean *the request was parsed*, not that it
+> was honoured.
+
+| Trap | What happens | Do this instead |
+|---|---|---|
+| **`dd: Text file busy`** | You cannot write a running binary. | Patch a **copy** and swap it in, so the risky write never touches a live file. |
+| **~255-byte input truncation** | A tty in canonical mode (`N_TTY MAX_CANON`) **silently truncates** long lines. Joining commands with `"; "` into one line hits this fast. | Chunk long transfers — one patch was moved as **15 base64 chunks**. |
+| **Trailing `&` in a `;`-joined list** | A syntax error, not a background job. | Wrap it: `( … & )`. |
+| **busybox `mv` prompts on overwrite** | And **the prompt eats the *next* command** as its answer — so the `mv` silently declines *and* the following `sync` vanishes. | `mv -f`. |
+| **`cp -f` still prompts** | Even though `mv -f` does not. | `cat src > dest`, which cannot prompt. |
+
+The middle three compound: a long `;`-joined line gets truncated, the truncation lands mid-`mv`,
+the prompt swallows the next command, and nothing reports an error.
+
 ## The 2026 outage: a renamed SSID
 
 The camera was offline from **2026-04-28** to **2026-08-05**. It hardcodes `wifi_ssid=my-iot-ssid` in

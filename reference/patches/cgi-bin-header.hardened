@@ -1,0 +1,52 @@
+#!/bin/bash
+
+readline() {
+  linetoread=$1
+  file=$2
+  sed $linetoread'q;d' $file
+}
+#https://www.freecodecamp.org/news/url-encoded-characters-reference/
+QUERY_STRING="${QUERY_STRING//&/ }"
+query_out=""
+for element in $QUERY_STRING; do
+  splitelement="${element//%/ %}"
+  for i in $splitelement; do
+    #query_out="$query_out"
+    if [[ ${i:0:1} == "%" ]]; then
+      query_out="$query_out"$(printf "\x${i:1:2}")$(echo -n "${i:3}")
+    else
+      query_out="$query_out$i"
+    fi
+  done
+  query_out="$query_out "
+done
+QUERY_STRING="$query_out"
+
+# SECURITY: the previous code was `for i in $QUERY_STRING; do eval $i; done`,
+# which executed arbitrary shell from the query string. Because every CGI sources
+# this file BEFORE its token check, that was unauthenticated remote root RCE
+# (demonstrated: /cgi-bin/webui?x=%60touch%24%7BIFS%7D%2Ftmp%2Frce_probe%60).
+#
+# It cannot simply be gated behind auth, because $token itself comes from here.
+# So: accept only LOWERCASE identifier keys -- every legitimate parameter is
+# lowercase (token file scan command undo, plus all gergesettings.txt keys),
+# while every dangerous shell/loader variable is uppercase (PATH IFS LD_* ENV
+# BASH_ENV CDPATH). The value is passed BY REFERENCE into eval so its contents
+# are never re-parsed as shell. Dynamic keys still work, which settings_submit.sh
+# depends on.
+for i in $QUERY_STRING; do
+  key="${i%%=*}"
+  val="${i#*=}"
+  case "$key" in
+    ''|*[!a-z0-9_]*) continue ;;
+    [0-9]*)          continue ;;
+  esac
+  case "$key" in
+    path|env|ifs|query_string|http_*|remote_*|ld_*) continue ;;
+  esac
+  eval "$key=\$val"
+done
+
+
+echo "Content-type: text/html"
+echo ""

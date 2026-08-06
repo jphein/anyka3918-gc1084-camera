@@ -35,10 +35,13 @@ LAA_PATCH_SRC="$REPO/reference/patches/libre_anyka_app.node-ircut_a"
 
 # The pre-auth root RCE fix for cgi-bin/header. UNLIKE the binary patch this is
 # NOT kernel-build-specific, so it applies unconditionally with no detection.
-# Pending lucid-ledhunt re-verifying the exploit is dead against the live camera
-# - its first attempt passed a harness while still permitting PATH/IFS/LD_PRELOAD
-# hijacking, so a harness pass is not sufficient evidence here.
+# Verified by demonstrating the hole and then its absence on the live camera -
+# NOT by a harness, because an earlier version passed one while still permitting
+# PATH/IFS/LD_PRELOAD hijacking. Never swap this file without re-running the
+# live exploit test; the md5 below is what was actually verified.
 HEADER_FIX_SRC="$REPO/reference/patches/cgi-bin-header.hardened"
+HEADER_FIX_MD5="934ce4814d4fc90edec82275769986c5"
+HEADER_STOCK_MD5="997a3c6e65e66d29a47a7c59c8964685"
 
 # Fixes applied to gergesettings.txt on the card. POSIX TZ counts hours WEST of
 # Greenwich, so the shipped GMT-08:00 actually means UTC+8 - 15 hours out.
@@ -80,7 +83,7 @@ echo "Source : $BACKUP"
 if [ "$STOCK" -eq 1 ]; then
   echo "Mode   : --stock (backup contents only, NO project fixes)"
 else
-  echo "Mode   : fixes applied (timezone, ptz_init_on_boot, ctl, IR-cut selection)"
+  echo "Mode   : fixes applied (timezone, ptz_init_on_boot, ctl, RCE fix, IR-cut selection)"
 fi
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
 echo
@@ -144,13 +147,26 @@ if [ "$STOCK" -eq 0 ]; then
     NOTES+=("cgi-bin/ctl was NOT installed (source missing).")
   fi
 
-  # --- 3b. hardened cgi-bin/header (pre-auth root RCE fix), if present
-  if [ -f "$HEADER_FIX_SRC" ]; then
-    echo "==> installing hardened cgi-bin/header (pre-auth RCE fix)"
-    install -m 755 "$HEADER_FIX_SRC" "$MNT/anyka_hack/web_interface/www/cgi-bin/header"
-  else
-    NOTES+=("cgi-bin/header is UNPATCHED - the pre-auth root RCE on port 80 is live on this card.")
+  # --- 3b. hardened cgi-bin/header (pre-auth root RCE fix)
+  HDR_DST="$MNT/anyka_hack/web_interface/www/cgi-bin/header"
+  if [ ! -f "$HEADER_FIX_SRC" ]; then
+    NOTES+=("cgi-bin/header is UNPATCHED - the pre-auth root RCE on port 80 is LIVE on this card.")
     NOTES+=("  -> the camera VLAN's isolation is the only thing mitigating it. See docs/web-ui.md.")
+  else
+    hgot="$(md5sum "$HEADER_FIX_SRC" | cut -d' ' -f1)"
+    if [ "$hgot" != "$HEADER_FIX_MD5" ]; then
+      warn "hardened header md5 is $hgot, expected $HEADER_FIX_MD5 - NOT installing it"
+      NOTES+=("cgi-bin/header REJECTED on md5 mismatch - the pre-auth root RCE is LIVE on this card.")
+    else
+      # sanity-check what we are replacing, so a changed backup is noticed
+      if [ -f "$HDR_DST" ]; then
+        sgot="$(md5sum "$HDR_DST" | cut -d' ' -f1)"
+        [ "$sgot" = "$HEADER_STOCK_MD5" ] || \
+          warn "backup's cgi-bin/header is $sgot, not the expected stock $HEADER_STOCK_MD5 - replacing anyway"
+      fi
+      echo "==> installing hardened cgi-bin/header (pre-auth RCE fix)"
+      install -m 755 "$HEADER_FIX_SRC" "$HDR_DST"
+    fi
   fi
 
   # --- 4. somewhere for ctl's play/sounds commands to look
