@@ -67,20 +67,43 @@ Three consequences worth holding onto:
 
 ### Platform gaps, in priority order
 
-1. **A camera has no identity.** Every card is the same card. There is no
-   per-unit name, no way to tell from the device which build it is running, and
-   the DHCP reservation is the only thing distinguishing them.
+1. **A camera has no identity — DONE, see [identity.md](identity.md).** Both
+   halves of the split now ship in `tools/write-sd-card.sh`:
 
-   ⚠️ **Do not put the unit marker in `/etc/jffs2`** — an earlier version of this
-   item recommended exactly that, and it was wrong. `/etc/jffs2` is `mtd6`, which
-   is slot **`C`** of the stock updater: any firmware update carrying a
-   `usr.jffs2` overwrites the whole partition. Every camera would lose its
-   identity and silently re-derive a *new* one — no error, no fault, just a fleet
-   of strangers. Use **`/data`** (`mtd7`), which `update.sh` does not write.
+   | | Unit | Build |
+   |---|---|---|
+   | Lives in | `/data/unit.json` (`mtd7`) | `/anyka_hack/build.json` (the card) |
+   | Written by | `name-unit.sh`, once, at first boot | the writer, at card-write time |
+   | Realm | `fleet` (identity) | `forge` (provenance) |
+   | On a card swap | stays with the camera | follows the card |
 
-   The durable split: **unit identity belongs to the camera** (`/data`, survives
-   updates and card swaps); **build identity belongs to the card** (written at
-   card-write time, travels with the artefact).
+   A camera out of the bag names itself from its own MAC — no registry, no
+   configuration, nothing to keep in sync. `--unit-name` overrides it for a
+   camera JP wants to name himself. Read it back with
+   `/mnt/anyka_hack/identity/whoami.sh`.
+
+   ⚠️ **Do not move the unit marker to `/etc/jffs2`** — an earlier version of
+   this item recommended exactly that, and it was wrong. `/etc/jffs2` is `mtd6`,
+   slot **`C`** of the stock updater: any firmware update carrying a `usr.jffs2`
+   overwrites the whole partition.
+
+   **What softens that failure, and only here:** the name is *derived* from the
+   MAC, so it is idempotent — a wiped marker re-derives the **same** name on the
+   next boot. A wipe costs a boot, not an identity. That does **not** hold for
+   `--unit-name`; an override is not derivable and a wiped one is gone. Which is
+   the argument for leaving cameras self-named unless there is a real reason.
+
+   Two limits worth carrying forward rather than rediscovering:
+
+   - It is a strong spread, **not** a uniqueness proof. `Adjective Noun` draws
+     from 1024 combinations and can repeat; the full `Adj Noun · <mac6>` does not
+     while MACs are unique. **Never use the bare noun as an identifier.**
+   - The word tables are **pinned** (`tools/identity/PINNED.md`). Counts are the
+     modulus, so a word added upstream renames every camera. `fleet` is
+     size-locked at 32 × 32 by design, which is why it was chosen over `fantasy`.
+
+   Nothing here has run on a camera yet — the device was owned by another agent.
+   Watch the boot console for `identity:` lines on the first unit to take a card.
 2. **No inventory.** Nothing enumerates which cameras exist, what card each is
    running, or which are behind. On one camera that is fine; on ten it is the
    whole problem. Note there are **three** distinct version-ish facts, and an
