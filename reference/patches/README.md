@@ -97,7 +97,7 @@ uppercase by convention — `PATH`, `IFS`, `LD_*`, `ENV`, `BASH_ENV`, `CDPATH`.
 
 * **`ptz_daemon`** carries the same bug (`gpio-ircut_a`, `gpio-ircut_b`) and is very likely
   broken the same way, but has **not** been patched — separate authorisation, and it needs
-  testing. See [ptz.md](../../docs/ptz.md#-ptz_daemons-ir-cut-control-is-probably-broken-too).
+  testing. See [ptz.md](../../docs/ptz.md#-ir-cut-control-through-the-daemon-is-broken--and-the-culprit-is-a-shared-library).
 * **`gpio-rf_feed`**, also in `ptz_daemon`, has **no counterpart at all** on the 2023 build —
   there is no `rf_feed` node, prefixed or otherwise. It cannot be fixed by renaming; the feature
   is simply unavailable. Do not patch it to another name that also does not exist.

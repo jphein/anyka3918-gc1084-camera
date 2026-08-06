@@ -110,7 +110,7 @@ echo "set_ir_cut 1" > /tmp/ptz.daemon    # or over HTTP: command=iron / iroff
 > equally well explained by **"the daemon did nothing at all"**.
 >
 > And there is now a mechanism for the second reading: `ptz_daemon` has
-> [the same hard-coded-path bug](#-ptz_daemons-ir-cut-control-is-probably-broken-too) as
+> [the same hard-coded-path bug](#-ir-cut-control-through-the-daemon-is-broken--and-the-culprit-is-a-shared-library) as
 > `libre_anyka_app`. On this build it cannot open the node.
 
 Treat daemon-mediated IR-cut control as **unproven**. The only thing demonstrated to move the
@@ -154,53 +154,78 @@ reaching for a node that is not there, silently, on every day/night transition.
 > This is reported from another agent's analysis, along with a patch. **I have not verified
 > either the ENOENT or the patch directly** — recorded as their finding, not mine.
 
-### ⚠️ `ptz_daemon`'s IR-cut control is probably broken too
+### ⚠️ IR-cut control through the daemon is broken — and the culprit is a shared library
 
-**The same hard-coded-path bug is in a second binary, and nobody had looked.** `ptz_daemon`
-(2191668 bytes, md5 `9ce077f844d500b963b5adc6bc0b403b`) contains only prefixed paths:
-
-```
-/sys/user-gpio/gpio-ircut_a
-/sys/user-gpio/gpio-ircut_b
-/sys/user-gpio/gpio-rf_feed
-```
-
-**Zero unprefixed variants.** On the 2023 build all three are `ENOENT`. And the daemon clearly
-branches on whether it can reach them:
+**Measured, not inferred.** Using the camera's own interface, before any patch:
 
 ```
-Ircut a & b interface all can access
-Ircut a & b interface can't access
-Ircut 1line mode, ir_feed:%d
-Ircut 2line mode, ir_feed:%d
+ctl?command=ircut_on   ->  'OK'
+  baseline    ircut_a=1  mtime=1786031282  Gfrac=1.066  filter IN
+  after 16 s  ircut_a=1  mtime=1786031282  Gfrac=1.048  filter IN
 ```
 
-So on this camera it takes the **"can't access"** branch — while `run_ptz_daemon=1` keeps it
-running. That is the mechanism behind
-[`set_ir_cut` being unproven](#-set_ir_cut-through-the-daemon--unverified-and-probably-broken).
+**The mtime never moved.** sysfs updates mtime on *any* write, including one that sets the same
+value — so the write never reached the pin at all. `ctl` returns `OK` because it only confirms it
+put a line into the `/tmp/ptz.daemon` FIFO; the failure is silent, downstream, in the daemon.
 
-**It has not been patched.** `gpio-ircut_a` → `ircut_a` and `gpio-ircut_b` → `ircut_b` are both
-shortening replacements, so both are in-place patchable exactly like the other binary — but that
-is a separate authorisation and it needs testing first.
+> ⚠️ **Consequence for Home Assistant: `switch.anyka_cam_ir_cut_filter` is a no-op switch with a
+> truthful state.** Its `command_on` / `command_off` do nothing, while `command_state` reads
+> `/sys/user-gpio/ircut_a` directly — the correct, unprefixed path — and therefore reports the
+> *real* pin. So the switch honestly shows a state it cannot change. Same "reports success, does
+> nothing" family as everything else on this device.
 
-> ⚠️ **`gpio-rf_feed` cannot be fixed by renaming.** There is **no `rf_feed` node at all** on the
-> 2023 build, prefixed or otherwise — the live list is exactly `IR_LED SPK_PA WHITE_LED ircut_a
-> ircut_b wifi_en`. That feature is simply unavailable here. **Do not patch it to another name
-> that also does not exist**; that would convert a clean `ENOENT` into a silent wrong-pin write.
+#### ❌ RETRACTED: "`ptz_daemon` has the same bug"
 
-> **Two actors on one pin — a documented risk, deliberately not designed around.** Once
-> `libre_anyka_app` *and* `ptz_daemon` can both reach `ircut_a`, the app's automatic day/night
-> loop and manual `set_ir_cut` (what Home Assistant drives) could contend.
->
-> **No arbitration has been built, on purpose.** The conflict is hypothetical: see below — the
-> app's automatic loop has **never been observed to move that pin**, patched or not. Building
-> sequencing or locking now would mean designing around behaviour nobody has seen, which is the
-> exact failure mode this project has produced repeatedly today.
->
-> **Symptom if it does appear:** a manual `set_ir_cut` gets reverted at the app's next
-> evaluation. That is not necessarily a bug — an auto mode overriding a manual override is normal
-> camera behaviour — and the fix would more likely be a mode selector in Home Assistant than a
-> change on the camera.
+This page said the 2.1 MB `ptz_daemon` carried the same hard-coded prefixed paths. **The strings
+are genuinely in that file — but that file never runs**, so patching it would fix nothing.
+
+```
+ps  ->  /mnt/anyka_hack/ptz/ptz_daemon_dyn        <- this is what executes
+```
+
+`ptz_daemon_dyn` (122181 B) is the dynamically-linked variant and contains **zero**
+`/sys/user-gpio` strings — verified. Its paths come from a shared library. The static
+`ptz_daemon` is inert here and is **deliberately left unpatched**; it may still matter on a
+variant that launches it, since `gergehack.sh` has a `/usr/bin/ptz_daemon_dyn` preference branch.
+
+#### The real target: `libplat_drv.so` — and there are two different builds
+
+| Copy | Size | md5 | Strings |
+|---|---|---|---|
+| `ptz/lib/libplat_drv.so` | 33782 | `f5769ff013d7a3094e73ee76e312cad0` | `gpio-rf_feed`, `gpio-ircut_a`, `gpio-ircut_b`, **`ir-led`** |
+| `libre_anyka_app/lib/`, `rtsp/lib/` | 26594 | `385740bed22797fb5bb26a996cd3e145` | `gpio-rf_feed`, `gpio-ircut_a`, `gpio-ircut_b` |
+
+> ⚠️ **Key any patch off the md5, not the filename.** Three files share the name and there are
+> two distinct builds with different offsets. Both repo copies match the card exactly, so a patch
+> can be built here and verified against the device.
+
+Offsets in the 33782-byte build:
+
+| Offset | Wrong | Right | Note |
+|---|---|---|---|
+| `0x450f` | `/sys/user-gpio/gpio-ircut_a` | `/sys/user-gpio/ircut_a` | 27→22, shorter |
+| `0x452b` | `/sys/user-gpio/gpio-ircut_b` | `/sys/user-gpio/ircut_b` | 27→22, shorter |
+| `0x466e` | `/sys/user-gpio/ir-led` | `/sys/user-gpio/IR_LED` | **21→21, same length** |
+| `0x4457` | `/sys/user-gpio/gpio-rf_feed` | — | **do not touch** |
+
+**`ir-led` is a fourth naming mismatch nobody had spotted** — the live node is `IR_LED`. Being
+the same length, it is the simplest of the four edits.
+
+> ⚠️ **`gpio-rf_feed` cannot be fixed by renaming.** The live node list is exactly `IR_LED
+> SPK_PA WHITE_LED ircut_a ircut_b wifi_en` — there is no `rf_feed` in any spelling. That feature
+> is unavailable on this build. **Do not point it at another name that also does not exist**;
+> that turns a clean `ENOENT` into a silent wrong-pin write, which is strictly worse.
+
+**Not patched yet.** It needs its own authorisation — the earlier approval named `ptz_daemon`,
+and this is a different file and a shared library at that — and it will not be marked working
+until `set_ir_cut` is shown to move the pin, judged by
+[green fraction over a ≥10 s window](troubleshooting.md#measuring-the-ir-cut-filter-use-the-green-fraction).
+Until then the honest state will be the same as the app patch: **path corrected, effect
+unvalidated.**
+
+The library patch carries the **same kernel-build dependency** as the app patch, so both must sit
+behind [the same per-boot selection](sd-card.md#-one-card-works-in-any-of-these-cameras). The
+discriminator is unchanged: test for `/sys/user-gpio/ircut_b`.
 
 ### ❔ The filter has been seen to read back `off` — cause unknown
 

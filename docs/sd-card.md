@@ -50,7 +50,7 @@ switching that has never worked**.
 > ⚠️ **`ptz_daemon` has the same bug and is *not* patched.** It carries only prefixed paths, so
 > its `set_ir_cut` is very likely broken on a 2023 camera too — meaning a fresh card fixes the
 > app's **automatic** day/night switching but **not** manual IR-cut control through the daemon.
-> See [ptz.md](ptz.md#-ptz_daemons-ir-cut-control-is-probably-broken-too).
+> See [ptz.md](ptz.md#-ir-cut-control-through-the-daemon-is-broken--and-the-culprit-is-a-shared-library).
 
 ### 🔑 One card works in any of these cameras
 
