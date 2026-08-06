@@ -179,6 +179,16 @@ case "$c" in
             if (nx==1) { vw=l; nx=0 } else if (nx==2) { vh=l; nx=0 }
             if (l=="-w") nx=1; else if (l=="-h") nx=2 }
         }
+        while ((getline l < "/proc/stat") > 0)
+          if (l ~ /^cpu /) { n=split(l,a," "); ct=0; for (k=2;k<=n;k++) ct+=a[k]; ci=a[5] }
+        while ((getline l < "/proc/net/tcp") > 0) {
+          n=split(l,a," ")
+          if (n>3) { split(a[2],pp,":"); if (pp[2]=="022A" && a[4]=="01") rc++ } }
+        while (("df -k /mnt /etc/jffs2 /data 2>/dev/null" | getline l) > 0) {
+          n=split(l,a," ")
+          if (n>=6) { if      (a[6]=="/mnt")       { sdt=a[2]; sdf=a[4] }
+                      else if (a[6]=="/etc/jffs2") { jt=a[2];  jf=a[4]  }
+                      else if (a[6]=="/data")      { dt=a[2];  dfr=a[4] } } }
         q="\""
         printf "{"
         printf "%suptime_s%s:%d,", q,q, up
@@ -194,6 +204,12 @@ case "$c" in
         printf "%svideo_dims_source%s:%sconfigured%s,", q,q,q,q
         printf "%sencoder_pid%s:%s,",   q,q, (PID==""  ? "null" : PID)
         printf "%sencoder_cpu_jiffies%s:%s,", q,q, (cpu=="" ? "null" : cpu)
+        printf "%scpu_total_jiffies%s:%s,", q,q, (ct=="" ? "null" : ct)
+        printf "%scpu_idle_jiffies%s:%s,",  q,q, (ci=="" ? "null" : ci)
+        printf "%srtsp_clients%s:%d,",      q,q, rc+0
+        printf "%sdisk_sd_total_kb%s:%s,%sdisk_sd_free_kb%s:%s,",       q,q,(sdt==""?"null":sdt), q,q,(sdf==""?"null":sdf)
+        printf "%sdisk_jffs2_total_kb%s:%s,%sdisk_jffs2_free_kb%s:%s,", q,q,(jt==""?"null":jt),  q,q,(jf==""?"null":jf)
+        printf "%sdisk_data_total_kb%s:%s,%sdisk_data_free_kb%s:%s,",   q,q,(dt==""?"null":dt),  q,q,(dfr==""?"null":dfr)
         printf "%shz%s:100,", q,q
         printf "%ssignal_level%s:null,%snoise_level%s:null,%sfps%s:null", q,q,q,q,q,q
         printf "}\n"
