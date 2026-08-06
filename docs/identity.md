@@ -145,13 +145,13 @@ low24 = last 6 hex digits                        0x4f2a91      (the OUI is
                                                   it carries no information)
 seed  = (low24 × 2654435761) mod 2^32            the golden-ratio spread
 name  = fleet.adjectives[seed % 32]
-
-⚠ 3c:6a:9d:4f:2a:91 is ILLUSTRATIVE — it was never read from a device. It is
-  not this camera's address, and its OUI belongs to an unrelated vendor, so do
-  not read anything into the prefix when debugging your own unit.
         + fleet.nouns[(seed >> 8) % 32]
         + " · " + low24                          "Arcane Quartz · 4f2a91"
 ```
+
+> ⚠️ **`3c:6a:9d:4f:2a:91` is illustrative** — it was never read from a device. It is not this
+> camera's address, and its OUI belongs to an unrelated vendor, so **do not read anything into the
+> prefix** when debugging your own unit.
 
 **Write-once.** If a marker already exists, the script exits without touching
 it. Re-writing a card, changing a build, or swapping a card never renames a
