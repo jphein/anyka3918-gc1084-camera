@@ -78,8 +78,8 @@ Everything you need before touching it, because getting any of these wrong has c
 | `ircut_a=1` | filter **IN** → **normal colour** (daytime position) |
 | `ircut_a=0` | filter **OUT** → **magenta / pink cast** (IR-pass) |
 | Transition time | **4–8 s.** Allow **≥10 s** before measuring — sampling at 2–4 s guarantees a false negative |
-| Green fraction, filter IN | **≈ 1.06 – 1.39** |
-| Green fraction, filter OUT | **≈ 0.45 – 0.90** |
+| Green fraction, filter IN | **≥ 1.00** (observed 1.02 – 1.39) |
+| Green fraction, filter OUT | **≤ 0.90** (observed 0.45 – 0.90) |
 | Best instrument | **A human hearing the solenoid click.** Beats every image metric |
 | Chromatic test is blind when | **the scene has little IR** — under blue-dominant indoor light the filter can swing with almost no colour change |
 | Symptom: *toggles then reverts* | The vendor app's day/night loop is fighting you — [see ptz.md](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control) |
@@ -121,13 +121,20 @@ sample**):
 
 | Filter | Green fraction | Look |
 |---|---|---|
-| **IN** (normal colour) | **≈ 1.06 – 1.39** | normal |
-| **OUT** (IR-pass) | **≈ 0.45 – 0.90** | magenta / pink cast |
+| **IN** (normal colour) | **≥ 1.00** (observed 1.02 – 1.39) | normal |
+| **OUT** (IR-pass) | **≤ 0.90** (observed 0.45 – 0.90) | magenta / pink cast |
 
 > ⚠️ **Do not classify against a single boundary value, and specifically not `0.8`.** A run was
 > judged with `0.8` as the in/out cut-off and **an entire test run was mislabelled** as a result —
 > the reported bands do not sit either side of it, they sit either side of a **gap between 0.90
-> and 1.06 that is itself narrower than the within-band spread.** Compare a reading against the
+> and 1.00 that is itself narrower than the within-band spread.**
+>
+> ⚠️ **The IN band was published as 1.06–1.39 and was WRONG.** A *confirmed* filter-IN
+> transition, cross-checked by eye, measured **1.019** — which that band would have scored as a
+> MISS. That is the third false threshold this metric has produced (0.8 mislabelled a whole run;
+> 1.06 would have rejected a correct result), and all three were set by picking a number from a
+> previous session's scene rather than from a pair. **Judge direction from a pair, never altitude
+> from a constant.** Compare a reading against the
 > *bands*, and if it lands between them, the honest answer is **"this measurement does not say"**,
 > not a coin flip.
 >
