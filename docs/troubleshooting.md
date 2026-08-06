@@ -69,6 +69,32 @@ not merely similar.** Six consecutive fetches of an unchanging scene came back a
 **Pace your requests**, and **verify frames are actually distinct** — compare bytes or hashes,
 do not assume two fetches are two frames.
 
+### Measuring the IR-cut filter: use the green fraction
+
+If you are checking whether the IR-cut filter actually moved, **measure the green fraction**:
+
+```
+G / ((R + B) / 2)
+```
+
+**Not R/B.** IR floods red and blue roughly equally, so R/B barely moves and a real filter swap
+looks like noise. Measured across the same transition:
+
+| Metric | Filter in → out | Separation |
+|---|---|---|
+| R/B | 0.875 → 0.970 | **1.1×** — dismissible as noise |
+| **Green fraction** | 1.06 → 0.445 | **2.4× — unmissable** |
+
+Any earlier "chromatic" measurement in this project that used R/B was therefore **weak evidence
+at best**, and a null from it means very little.
+
+> ⚠️ **Allow at least 10 seconds.** The filter transition takes **4–8 s** — nothing has happened
+> at 4 s, and it is complete by 8 s. **Sampling at 2–4 s guarantees a false negative.** Ten
+> seconds is the right rule, with margin.
+
+Judge by the image, not the pin: the pin read is trustworthy, but the solenoid is downstream of
+the pad, so a swinging pad does not prove the mechanism moved.
+
 ### Use `curl`, not `urllib`
 
 The same server returns a **deterministic 502 to Python's `urllib`** while `curl` gets 200 every

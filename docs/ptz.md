@@ -103,6 +103,35 @@ echo 1 > /sys/user-gpio/ircut_a
 
 This works immediately but bypasses the driver.
 
+### ⚠️ The vendor app's day/night logic is half-broken on this build
+
+**`libre_anyka_app` can turn the IR illuminator on, and can never move the IR-cut filter.**
+
+Observed unprompted: with the filter left out and the scene looking IR-washed, **the app asserted
+`IR_LED` by itself.** So its day/night logic is alive and running — it just cannot complete the
+other half of the job.
+
+The reason is the node-naming difference already noted [above](#gpio-map):
+
+| The app writes | On this camera | Result |
+|---|---|---|
+| `IR_LED` | exists | ✅ write succeeds |
+| `gpio-ircut_a` | **does not exist** — this build has unprefixed `ircut_a` | ❌ `ENOENT` |
+
+The prefixed `gpio-ircut_a` name belongs to the *other* firmware build. On this one the app is
+reaching for a node that is not there, silently, on every day/night transition.
+
+**Two consequences:**
+
+* It answers an open question. This page used to ask whether something else was writing
+  `IR_LED`, given repeated `store:0` / `store:1` in `dmesg`. **Yes — the vendor app is.**
+* It reframes the "filter drifts" reports below. A day/night state machine that flips the
+  illuminator but cannot move the filter is exactly the kind of half-state that produces
+  confusing, intermittent-looking behaviour.
+
+> This is reported from another agent's analysis, along with a patch. **I have not verified
+> either the ENOENT or the patch directly** — recorded as their finding, not mine.
+
 ### ❔ The filter has been seen to read back `off` — cause unknown
 
 **Observation, which is solid:** after setting the filter on, the state has been seen to read
@@ -183,12 +212,12 @@ device), not from upstream:
 
 | Pin | GPIO | Meaning | Writing it does something? |
 |---|---|---|---|
-| `IR_LED` | 6 | Infrared illuminator LEDs | ❔ **unverified** — accepts writes, [illumination not shown](#lights--neither-ring-lights) |
+| `IR_LED` | 6 | Infrared illuminator LEDs | ❌ pad toggles, [ring stays dark](#-ir-confirmed-dark). The vendor app *does* write this pin. |
 | `SPK_PA` | 7 | **Speaker** power amplifier (output side) | ✅ yes — required for [audio out](#speaker--audio-out-works) |
 | `WHITE_LED` | 24 | White LEDs on the ring | ❌ **no — see below** |
 | `wifi_en` | 34 | WiFi enable | ❌ no observable effect |
-| `ircut_b` | 41 | IR-cut filter, coil B | ❌ no observable effect |
-| `ircut_a` | 42 | IR-cut filter, coil A | ✅ yes — flips the filter |
+| `ircut_b` | 41 | IR-cut filter — role unknown | ❌ **no observable effect** — measured, not assumed |
+| `ircut_a` | 42 | IR-cut filter — **hold to engage** | ✅ yes — moves the filter on its own |
 | `motor_switch` | −1 | — | no `/sys` node at all (negative pin) |
 
 **The table corroborates itself on two pins**, and it is worth being precise about which. Both
@@ -198,8 +227,8 @@ speaker, and you *see* the image go purple when the filter moves. Neither rests 
 number that could have moved for another reason.
 
 That is meaningful evidence the decode is right rather than a plausible-looking guess, but it is
-two pins out of seven, not a validated table. `IR_LED` is untested and the rest have no
-observable effect.
+two pins out of seven, not a validated table. `IR_LED` and `WHITE_LED` toggle their pads and
+drive nothing; `ircut_b` and `wifi_en` have no observable effect.
 
 > ⚠️ **Do not quote upstream's GPIO numbers for this camera.** They are a genuinely different
 > kernel build: `ircut_b` (41) exists here and is **absent** from the upstream firmware image,
@@ -208,10 +237,25 @@ observable effect.
 
 Two notes on the pins themselves:
 
-* **`ircut_b` doing nothing is expected, not broken.** 41 and 42 are an **H-bridge pair** driving
-  the IR-cut solenoid. Energising the half that pushes the filter toward where it already rests
-  produces no visible change. Prefer `set_ir_cut` over touching either directly.
+* **`ircut_a` is hold-to-engage, and it acts alone.** Assert it and the filter moves; release it
+  and the filter returns. Holding `ircut_a=1` is the **normal operating state**, not a stress
+  condition — both the vendor daemon's `set_ir_cut 0` path and the known-good baseline sit there.
+* **`ircut_b` genuinely does nothing, and we do not know why.** See the retraction below.
 * **`wifi_en` is a specific anomaly** — see below. It does not generalise.
+
+> ⚠️ **RETRACTED: the "H-bridge pair" explanation for `ircut_b`.** This page previously said 41
+> and 42 were two halves of an H-bridge, so energising the half that pushes the filter toward
+> where it already rests would do nothing. **That was unsupported and is now contradicted.**
+>
+> Measured with the filter out: `ircut_b=1` held for 14 s produced a **dead-flat**
+> [green fraction](troubleshooting.md#measuring-the-ir-cut-filter-use-the-green-fraction)
+> (0.450 → 0.451 → 0.451), with a **passing positive control** (releasing `ircut_a` swung the
+> filter) and a **passing negative control** (26 s with no spontaneous return). The filter is
+> hold-to-engage on `ircut_a` alone.
+>
+> **This matters structurally, and makes the picture less tidy.** The H-bridge story was what
+> explained `ircut_b` away, leaving `WHITE_LED` as the *sole* unexplained failure. Without it,
+> **both `ircut_b` and `WHITE_LED` are measured-dead and unexplained.**
 
 ### ✅ Readback works, and it reads the physical pad
 
@@ -344,9 +388,10 @@ rings being dark for the same reason is an assumption, not a finding.
 > muxed elsewhere; or a driver stage is missing. All look identical from software, exactly as
 > with the white ring.
 
-Separately, `dmesg` shows repeated `IR_LED store:0` / `store:1` transitions, so something else
-may also be writing the node — a night-mode loop would overwrite whatever you set. Assert and
-hold rather than pulsing when testing.
+Separately, `dmesg` shows repeated `IR_LED store:0` / `store:1` transitions. **That is answered:
+the vendor app is writing them**, from a day/night loop that
+[works for the LED and fails for the filter](#-the-vendor-apps-daynight-logic-is-half-broken-on-this-build).
+So assert and hold rather than pulsing when testing — something else is competing with you.
 
 > **On the day/night mechanism: we do not know what it is.** Upstream's
 > [`IR_shutter.txt`](../reference/IR_shutter.txt) says the LEDs are "automaticly controlled by a
