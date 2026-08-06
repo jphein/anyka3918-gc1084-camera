@@ -91,18 +91,39 @@ warn() { printf 'WARNING: %s\n' "$*" >&2; }
 
 DEV="${1:-}"; shift || true
 SSID=""
+KEEP_SSID=0
 TIME_SOURCE=""
 STOCK=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --ssid)        SSID="${2:-}"; shift 2 ;;
+    --keep-ssid)   KEEP_SSID=1; shift ;;
     --time-source) TIME_SOURCE="${2:-}"; shift 2 ;;
     --stock)       STOCK=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
-[ -n "$DEV" ] || die "usage: $0 /dev/sdX [--ssid NAME] [--time-source IP] [--stock]"
+[ -n "$DEV" ] || die "usage: $0 /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP] [--stock]"
+
+# The SSID decision is REQUIRED, deliberately. Defaulting to the backup's baked-in
+# value is how you produce a camera that associates with nothing: no network path,
+# no console, and no indication of why. This project already lost a camera for four
+# months to exactly that - the SSID it hardcoded was renamed, and a station looking
+# for an absent SSID never sends auth frames, so it appears in NO association list
+# and NO failed-auth log anywhere. See docs/troubleshooting.md.
+#
+# --keep-ssid is a one-word affirmation, not an inconvenience: it means "yes, I
+# know what SSID is baked in and I want it".
+if [ -n "$SSID" ] && [ "$KEEP_SSID" -eq 1 ]; then
+  die "--ssid and --keep-ssid are mutually exclusive"
+fi
+if [ -z "$SSID" ] && [ "$KEEP_SSID" -eq 0 ]; then
+  die "refusing to guess the WiFi SSID.
+  Pass --ssid NAME to set it, or --keep-ssid to accept the backup's baked-in value.
+  A card written for a retired SSID produces a camera with no network path and no
+  console - the most expensive failure available on this hardware."
+fi
 [ -b "$DEV" ] || die "$DEV is not a block device"
 [ -d "$BACKUP" ] || die "backup not found at $BACKUP"
 [ "$(id -u)" -eq 0 ] || die "must run as root (writing a raw device)"
@@ -124,6 +145,56 @@ else
   echo "Mode   : fixes applied (timezone, ptz_init_on_boot, ctl, RCE fix)"
   echo "IR-cut : stock binaries + direct-GPIO ctl + boot mitigation (no binary patch)"
 fi
+
+# --- network preflight, BEFORE the destructive step.
+#
+# This block exists because the warning it replaces fired at the END of the run.
+# A warning that arrives after the card is written is documentation, not a guard:
+# by then the only remaining action is to run the tool again. Both values below
+# are "inherited from a backup and may no longer be real", and both fail SILENTLY
+# on the camera - a wrong SSID never associates, a wrong time_source never syncs.
+#
+# Read straight out of the tarball so this can run before anything is erased.
+#
+# --wildcards and a leading * are load-bearing: this archive stores members as
+# "./anyka_hack/gergesettings.txt", so an exact-name extract matches NOTHING and
+# returns empty. That failure is silent, and it would have turned this whole guard
+# into a block that always prints <unreadable> - a guard that cannot fail loudly is
+# not a guard, which is the entire point of moving these checks up here.
+BAKED_SETTINGS="$(tar -xzOf "$BACKUP/yicam-files.tar.gz" \
+                    --wildcards '*anyka_hack/gergesettings.txt' 2>/dev/null || true)"
+BAKED_SSID="$(printf '%s\n' "$BAKED_SETTINGS" | sed -n 's/^wifi_ssid=//p' | head -1)"
+BAKED_TS="$(printf '%s\n' "$BAKED_SETTINGS"   | sed -n 's/^time_source=//p' | head -1)"
+
+echo
+echo "Network settings this card will carry:"
+if [ -n "$SSID" ]; then
+  printf '  SSID        : %s  (set by --ssid)\n' "$SSID"
+  echo   "                NOTE: the PSK is NOT changed. If this network uses a different"
+  echo   "                key, edit wifi_password= on the card before first boot."
+else
+  printf '  SSID        : %s  (INHERITED from the backup, kept by --keep-ssid)\n' "${BAKED_SSID:-<unreadable>}"
+  echo   "                >> Confirm this SSID is still broadcasting. A camera looking for"
+  echo   "                >> an absent SSID is invisible: no association, no auth failure,"
+  echo   "                >> nothing in any log. It looks exactly like dead hardware."
+fi
+if [ -n "$TIME_SOURCE" ]; then
+  printf '  time_source : %s  (set by --time-source)\n' "$TIME_SOURCE"
+else
+  printf '  time_source : %s  (INHERITED from the backup)\n' "${BAKED_TS:-<unreadable>}"
+  echo   "                >> If that is not this camera's gateway, NTP silently never syncs"
+  echo   "                >> and the clock sits at 1969. Use --time-source."
+fi
+if [ -z "$BAKED_SSID" ]; then
+  # --keep-ssid means "keep the value I can see". If we cannot show it, that
+  # instruction is meaningless and the dangerous case is exactly this one.
+  [ "$KEEP_SSID" -eq 1 ] && die "cannot read wifi_ssid out of the backup, so --keep-ssid
+  cannot be confirmed. Refusing to write a card whose SSID nobody has seen.
+  Pass --ssid NAME explicitly, or check $BACKUP/yicam-files.tar.gz."
+  warn "could not read wifi_ssid out of the backup (harmless - --ssid overrides it anyway)"
+fi
+
+echo
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
 echo
 read -r -p "This ERASES $DEV. Type ERASE to continue: " confirm
@@ -274,11 +345,16 @@ grep -E '^(wifi_ssid|sensor_kern_module|time_source|time_zone|ptz_init_on_boot|r
   | sed 's/^/    /'
 echo "    (wifi_password is set but not shown)"
 
-# The backup's time_source points at a router that may no longer exist.
-BAKED_TS="$(sed -n 's/^time_source=//p' "$SETTINGS")"
+# Both inherited-value hazards are surfaced in the preflight above, before the
+# erase, where they can still change the outcome. Repeated here only so they
+# survive in a scrollback the operator reads after the fact.
 if [ -z "$TIME_SOURCE" ]; then
-  NOTES+=("time_source is $BAKED_TS, inherited from the backup. If that is not this")
-  NOTES+=("  camera's gateway, NTP will silently never sync. Use --time-source.")
+  NOTES+=("time_source was INHERITED from the backup. If it is not this camera's")
+  NOTES+=("  gateway, NTP silently never syncs. Use --time-source.")
+fi
+if [ "$KEEP_SSID" -eq 1 ]; then
+  NOTES+=("wifi_ssid was INHERITED from the backup (--keep-ssid). If that SSID has")
+  NOTES+=("  been retired, this camera will be invisible - no association, no logs.")
 fi
 
 sync

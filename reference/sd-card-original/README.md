@@ -29,7 +29,7 @@ upstream's defaults are the interesting ones:
 |---|---|---|
 | `wifi_ssid` | `my-iot-ssid` | See the WiFi section below — this is what broke. |
 | `sensor_kern_module` | `/mnt/sensor_gc1084.ko` | **The fix for the sensor mismatch.** Upstream defaults to `/usr/modules/sensor_h63.ko`, the wrong sensor. Pointing it at the `.ko` on the SD card is how this camera works. |
-| `time_source` | `192.168.8.1` | The camera lived on the IoT VLAN. Repointed at the camera-VLAN router during the move; NTP works. |
+| `time_source` | `192.168.8.1` | The camera lived on a different VLAN. Repointed at the camera-VLAN (VLAN 20) router during the move; NTP works. |
 | `time_zone` | `GMT-08:00` | ⚠️ **Wrong by 15 hours — do not copy this.** See the warning below. |
 | `rootfs_modified` | `0` | Upstream default is `1`. |
 | `run_ipc` | `0` | Stock `anyka_ipc` cloud daemon stays off. |
@@ -96,13 +96,13 @@ offline since.
 
 Resolved by adding a `my-iot-ssid` SSID on one **access point** (`192.168.1.2`) as a mirror of
 `my-home-ssid` — `radio0` (2.4 GHz channel 6; the camera is 2.4 GHz only), `psk2`, same key —
-bridged to a new `network.cams` interface on `br-lan.20`, the **cams VLAN**, so the camera now
+bridged to a new `network.cams` interface on `br-lan.20`, the **camera VLAN (VLAN 20)**, so the camera now
 sits with the other cameras at `192.168.1.20` and inherits that VLAN's cloud-egress blocking. That VLAN
 was already tagged on the AP's trunk; only the interface definition was missing. Prior configs
 are backed up on the AP at `/root/backups/wireless-backup-20260805-preiot.conf` and
 `/root/backups/network-backup-20260805-precams.conf`.
 
-Two consequences of living on the cams VLAN:
+Two consequences of living on the camera VLAN (VLAN 20):
 
 * `time_source` had to be repointed from `192.168.8.1` (the old IoT-VLAN router) to the
   camera-VLAN router. A flash-only edit did not survive — the card reverted it — so **both**

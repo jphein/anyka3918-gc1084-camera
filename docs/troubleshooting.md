@@ -250,6 +250,34 @@ The longer-term choice is either to keep that mirror SSID, or to edit `gergesett
 `wifi_ssid=my-home-ssid` and drop the mirror. Note that editing it means editing the **card** —
 see [sd-card.md](sd-card.md#settings-precedence).
 
+### 🔑 Name the VLAN by its tag, never by a nickname
+
+**One VLAN answers to a different name at every layer**, and using any of those names in prose
+produces ambiguity that has already cost time here:
+
+| Layer | What it is called |
+|---|---|
+| Router interface | e.g. `network.lan` (`br-lan.20`) — **often *not* named after its purpose** |
+| Router firewall zone | e.g. `cameras` |
+| Access-point interface | e.g. `network.cams` |
+| SSID the devices join by | e.g. `my-iot-ssid` |
+
+Four names, one broadcast domain, and **none of them is reliably the one your colleague means.**
+
+> ⚠️ **The specific trap: an SSID named after IoT, on a VLAN that is not the IoT VLAN.** "The IoT
+> network" then means either the actual IoT VLAN or the camera VLAN reached through that SSID —
+> and they are different networks with different security postures. **Say "VLAN 20" and the
+> ambiguity disappears**; say "the IoT network" and a reader has to guess.
+>
+> Note also that a router interface called `lan` may carry an isolated camera VLAN. **Renaming it
+> is riskier than living with it** — repointing a firewall zone can silently stop a default-deny
+> rule applying, which fails open and is invisible until something reaches the internet. Document
+> the mismatch; do not "tidy" it.
+
+**Convention in these docs: refer to the VLAN by tag.** "The camera VLAN" is acceptable where the
+security property is the point; a bare nickname like "the cams VLAN" is not, because it matches
+nothing you could grep for in any config.
+
 ### ⚠️ Moving VLANs requires a camera reboot
 
 Re-pointing the SSID to a different VLAN leaves the camera associated but still holding its old

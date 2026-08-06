@@ -11,8 +11,10 @@
 None of these use authentication. `/vs2` returns 404.
 
 The camera is configured in HA as a **Generic Camera** entry with `rtsp_transport: tcp`. The
-entity ID is still the legacy `camera.10_0_8_106` from when the camera lived on the IoT VLAN —
-the name is cosmetic, the URLs inside it are current.
+entity ID is still the legacy `camera.10_0_8_106` from when the camera lived on a different
+VLAN — the name is cosmetic, the URLs inside it are current. (Not "the IoT VLAN": that phrase is
+[ambiguous here](troubleshooting.md#-name-the-vlan-by-its-tag-never-by-a-nickname), because the
+SSID the cameras join is *named* after IoT while sitting on the camera VLAN.)
 
 > **`/vs0` is available and is 720p.** The integration currently points at `/vs1` (640×360),
 > because `image_width`/`image_height` in `gergesettings.txt` were mistaken for the only

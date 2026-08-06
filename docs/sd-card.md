@@ -10,7 +10,7 @@ these cameras, cloning cards is the normal workflow.
 ## Writing a card
 
 ```sh
-sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
+sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP] [--stock]
 ```
 
 [`tools/write-sd-card.sh`](../tools/write-sd-card.sh) writes a ready-to-run card from the
@@ -29,8 +29,37 @@ sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
 | Flag | Effect |
 |---|---|
 | `--ssid NAME` | Rewrites `wifi_ssid=`. **Does not change the PSK.** |
+| `--keep-ssid` | Accept the backup's baked-in SSID. **One of these two is required** — see below |
 | `--time-source IP` | Rewrites `time_source=`. Worth using — see the warning below. |
 | `--stock` | Writes the backup **unmodified**, with no project fixes. Escape hatch. |
+
+### 🔴 The SSID decision is required, and the reason is the worst failure this hardware has
+
+**The tool refuses to run without `--ssid NAME` or `--keep-ssid`.** That is deliberate friction.
+
+The backup carries a baked-in `wifi_ssid`, and **a card written for a retired SSID produces a
+camera with no network path and no console.** There is nothing to log into, nothing to look at,
+and — because a station configured for an absent SSID never sends auth frames — **nothing appears
+in any association list or failed-auth log anywhere.** It is indistinguishable from dead hardware.
+
+This project already lost a camera for **four months** to exactly that.
+[The post-mortem](troubleshooting.md#the-2026-outage-a-renamed-ssid) is worth reading before you
+write a card for a network you have not checked.
+
+> **`--keep-ssid` is a one-word affirmation, not an obstacle.** It means *"I know what SSID is
+> baked in and I want it."* The point is only that the value is never chosen **by default**.
+
+**Before erasing anything**, the tool prints the SSID and `time_source` the card will carry, and
+flags each one as *set by flag* or *inherited from the backup*.
+
+> 🔑 **That preflight replaced a warning that fired at the end of the run** — and the distinction
+> generalises past this tool. **A warning that arrives after the destructive step is documentation,
+> not a guard**, because by then the only available action is to do the whole thing again. Both
+> values are silent-failure modes on the camera: a wrong SSID never associates, a wrong
+> `time_source` never syncs. Neither announces itself.
+>
+> If the SSID cannot be read out of the backup, `--keep-ssid` **fails hard** rather than warning.
+> "Keep the value I can see" is meaningless when nobody can see it.
 
 ### What gets fixed
 
@@ -210,11 +239,35 @@ fi
 
 It does the same for `gergehack.sh` itself.
 
+### The WiFi credentials self-heal from `gergesettings.txt` on every boot
+
+**There is a third copy of the WiFi config, and it is not one you edit.** `input_wifi_creds()` in
+`gergehack.sh` compares the vendor's `anyka_cfg.ini` against `gergesettings.txt` on every boot and
+**rewrites the vendor config on mismatch.**
+
+Two consequences, and the second is the one that cost four months:
+
+* ✅ **Editing `gergesettings.txt` alone is sufficient.** You never have to touch `anyka_cfg.ini` —
+  the self-heal propagates the change for you. That is why `--ssid` only rewrites one file.
+* 🔴 **A camera pointed at a dead SSID re-heals itself to the wrong value forever.** The mechanism
+  only ever reads *from* `gergesettings.txt`; nothing ever writes *back* into it. So a stale SSID
+  is not a value that drifts and might recover — it is **actively restored on every boot**, for as
+  long as the card says so.
+
+> 🔑 **This is what made [the 2026 outage](troubleshooting.md#the-2026-outage-a-renamed-ssid)
+> permanent rather than transient**, and it is the part most people would guess wrong. Self-healing
+> config sounds like a resilience feature. It is resilience *toward whatever the card says* — which
+> is indistinguishable from resilience when the card is right, and is a latch that holds the fault
+> in place when it is wrong.
+>
+> **The fix is always the card**, never the camera. A camera you cannot reach over the network
+> cannot be fixed over the network, and this mechanism guarantees the wrong value comes back.
+
 > ⚠️ **Editing `/etc/jffs2/gergesettings.txt` alone does not persist.** On the next boot
 > `gergehack.sh` sees the difference, overwrites your edit from the card, and **reboots again**.
 > The card always wins.
 >
-> This is not theoretical — it happened here. When the camera moved to the camera VLAN,
+> This is not theoretical — it happened here. When the camera moved to the camera VLAN (VLAN 20),
 > `time_source` was edited in flash from the old IoT-VLAN router to the new one, and the card
 > reverted it on the next boot, leaving NTP pointed at an unreachable address. It was only fixed
 > for good once **both** copies were changed. The docs then spent a while asserting the clock
