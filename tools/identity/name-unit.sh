@@ -111,12 +111,44 @@ if [ -f "$MARKER" ]; then
   exit 0
 fi
 if [ -f "$MARKER_LEGACY" ]; then
-  # A marker written before /data became the primary store. Honour it - the name
-  # is the camera's and must not change - but say where it is, because a
-  # firmware update will erase mtd6 and take it with it. The name is
-  # MAC-derived, so losing it self-heals to the identical name; an override
-  # would not.
-  log "already named (LEGACY store $MARKER_LEGACY, mtd6 - a firmware update erases this): $(sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' "$MARKER_LEGACY" | head -1)"
+  # A marker in mtd6, either written before /data became the primary store or
+  # by the no-/data fallback below. MIGRATE it - do not just report it.
+  #
+  # WHY MIGRATION EARNS ITS PLACE, when "leave it and let it self-heal" is
+  # usually the safer instinct: mtd6 is updater slot C, a whole-partition erase.
+  # A MAC-derived name that is erased re-derives IDENTICALLY, so for those this
+  # is only tidying. But an --unit-name override is NOT derivable - erase it and
+  # the name JP chose is gone for good, with no error anywhere. Migration
+  # protects exactly the case that cannot self-heal, which is the case worth
+  # five lines.
+  #
+  # The name is COPIED VERBATIM. This must never be a re-derivation: a camera's
+  # name is the camera's, and a migration that recomputed it would silently
+  # rename any unit whose override this is meant to rescue - the precise failure
+  # it exists to prevent.
+  legacy_name="$(sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' "$MARKER_LEGACY" | head -1)"
+  if [ ! -d "$R/data" ]; then
+    log "already named \"$legacy_name\" (LEGACY store $MARKER_LEGACY, mtd6)"
+    log "WARNING /data is absent, so this cannot be migrated. A firmware update"
+    log "WARNING carrying usr.jffs2 ERASES mtd6 and this marker with it."
+    exit 0
+  fi
+  # Only the store field is rewritten; everything else is carried across as-is.
+  sed 's|"store": "/etc/jffs2"|"store": "/data"|' "$MARKER_LEGACY" > "$MARKER.tmp" 2>/dev/null
+  if [ -s "$MARKER.tmp" ] && grep -q '"name"' "$MARKER.tmp" 2>/dev/null \
+     && mv "$MARKER.tmp" "$MARKER" 2>/dev/null; then
+    sync
+    # Remove the mtd6 copy only AFTER the new one is in place, so a power cut
+    # anywhere in here leaves at least one marker, never zero. Two copies are
+    # recoverable; the read path prefers /data. Zero copies is the failure.
+    rm -f "$MARKER_LEGACY" 2>/dev/null
+    sync
+    log "MIGRATED \"$legacy_name\" from mtd6 to $MARKER (name copied verbatim, not re-derived)"
+  else
+    rm -f "$MARKER.tmp" 2>/dev/null
+    log "already named \"$legacy_name\" (LEGACY store $MARKER_LEGACY, mtd6)"
+    log "WARNING migration to /data FAILED - a firmware update erases this marker."
+  fi
   exit 0
 fi
 

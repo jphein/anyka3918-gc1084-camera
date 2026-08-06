@@ -116,6 +116,7 @@ out="$(IDENTITY_TEST_ROOT="$r" $SH "$r/mnt/anyka_hack/identity/whoami.sh" 2>&1)"
 case "$out" in *"Bellowed Foundry"*) ok "whoami.sh reports the build version" ;;
                *) bad "whoami.sh did not report the build: $out" ;; esac
 
+
 # --- 6b. --json is the enumerator's contract. Every key ALWAYS present, null
 #         when unknown, and fw_version read LIVE rather than from a marker.
 mkdir -p "$r/usr"; printf '6.0.24.10_202401091113\n' > "$r/usr/fw_version"
@@ -152,21 +153,63 @@ assert d["card_build"] is None and d["card_dirty"] is None and d["fw_version"] i
 assert d["unit_name"], d
 ' 2>/dev/null && ok "--json nulls unknown fields instead of dropping them" \
              || bad "--json dropped keys when the build marker was absent: $j2"
+
+# UNIDENTIFIABLE is not the same as BEHIND, and needs a different fix. "dev"
+# is a sentinel that reads like a value, so it must be called out, not printed.
+cat > "$r/mnt/anyka_hack/build.json" <<'EOF'
+{
+  "version": "unknown", "hash": "dev", "branch": "unknown",
+  "dirty": true, "stock": true, "built": "2026-08-06T00:00:00Z"
+}
+EOF
+out="$(IDENTITY_TEST_ROOT="$r" $SH "$r/mnt/anyka_hack/identity/whoami.sh" 2>&1)"
+case "$out" in *"SENTINEL, not a version"*) ok "whoami.sh calls out hash=dev as unidentifiable" ;;
+               *) bad "whoami.sh printed hash=dev without comment: $out" ;; esac
+case "$out" in *"dirty=true"*) ok "whoami.sh calls out a dirty build" ;;
+               *) bad "whoami.sh did not flag dirty=true: $out" ;; esac
+case "$out" in *"NONE of the"*) ok "whoami.sh calls out a --stock card" ;;
+               *) bad "whoami.sh did not flag stock=true: $out" ;; esac
 rm -rf "$r"
 
-# --- 7. a marker left in the LEGACY store is honoured, never duplicated.
-#        Getting this wrong would rename a camera the day /data became primary.
+# --- 7. a LEGACY marker is MIGRATED to /data, verbatim, never re-derived.
+#        Re-deriving would silently rename any camera carrying an override -
+#        the exact failure migration exists to prevent. The name below is
+#        deliberately NOT the one this MAC derives to, so a re-derivation
+#        cannot pass this test by coincidence.
 r="$(mkroot 3c:6a:9d:4f:2a:91)"
 mkdir -p "$r/etc/jffs2"
+printf '{\n  "name": "Front Door",\n  "source": "override",\n  "store": "/etc/jffs2"\n}\n' \
+  > "$r/etc/jffs2/unit.json"
+out="$(run "$r")"
+[ "$(name "$r/data/unit.json")" = "Front Door" ] \
+  && ok "legacy marker migrated to /data with the name copied VERBATIM" \
+  || bad "migration lost or changed the name: got '$(name "$r/data/unit.json")'"
+[ ! -f "$r/etc/jffs2/unit.json" ] \
+  && ok "the mtd6 copy is removed after the /data copy is in place" \
+  || bad "left a second marker on mtd6 - two sources of truth"
+grep -q '"store": "/data"' "$r/data/unit.json" \
+  && ok "migration rewrites the store field" || bad "store field still says /etc/jffs2"
+grep -q '"source": "override"' "$r/data/unit.json" \
+  && ok "migration preserves source=override (the case that cannot self-heal)" \
+  || bad "migration dropped the source field"
+case "$out" in *MIGRATED*) ok "migration is logged" ;;
+               *) bad "migration was silent: $out" ;; esac
+# and it must be idempotent - a second boot must not re-migrate or rename
+out2="$(run "$r")"
+[ "$(name "$r/data/unit.json")" = "Front Door" ] \
+  && ok "second boot after migration leaves the name alone" \
+  || bad "renamed after migration: $(name "$r/data/unit.json")"
+rm -rf "$r"
+
+# --- 7b. no /data: a legacy marker stays put, and is warned about
+r="$(mkroot 3c:6a:9d:4f:2a:91)"; rmdir "$r/data"
 printf '{\n  "name": "Ashen Vigil · 010203"\n}\n' > "$r/etc/jffs2/unit.json"
 out="$(run "$r")"
-[ ! -f "$r/data/unit.json" ] \
-  && ok "legacy marker honoured - no second marker written in /data" \
-  || bad "wrote a duplicate marker while a legacy one existed"
-case "$out" in *"Ashen Vigil"*) ok "legacy marker's name is reported back" ;;
-               *) bad "legacy name not reported: $out" ;; esac
-case "$out" in *"firmware update erases"*) ok "legacy store is flagged as update-erasable" ;;
-               *) bad "legacy store was not flagged as risky: $out" ;; esac
+[ -f "$r/etc/jffs2/unit.json" ] \
+  && ok "no /data -> legacy marker left intact rather than destroyed" \
+  || bad "removed the only marker with nowhere to put it"
+case "$out" in *"ERASES mtd6"*) ok "un-migratable legacy marker is warned about" ;;
+               *) bad "silent about an un-migratable legacy marker: $out" ;; esac
 rm -rf "$r"
 
 # --- 8. no /data at all -> falls back to mtd6, loudly, and still names

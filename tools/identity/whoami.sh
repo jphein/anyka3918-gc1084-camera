@@ -110,6 +110,20 @@ if [ -f "$BUILD" ]; then
   echo "  hash     $(field "$BUILD" hash)  branch $(field "$BUILD" branch)  dirty $(bool "$BUILD" dirty)"
   echo "  built    $(field "$BUILD" built)"
   echo "  writer   $(field "$BUILD" writer_host)"
+  # Two states that are NOT "behind" - they are UNIDENTIFIABLE, which is a
+  # different problem with a different fix (rewrite from a clean commit).
+  # Called out because "dev" is a sentinel that reads like a value, and a human
+  # scanning this output will not necessarily register the difference.
+  [ "$(field "$BUILD" hash)" = "dev" ] && \
+    echo "  !!       hash is \"dev\" - a SENTINEL, not a version. git could not identify" && \
+    echo "           the checkout when this card was written, so this card cannot tell" && \
+    echo "           you which commit produced it. Rewrite from a clean checkout."
+  [ "$(bool "$BUILD" dirty)" = "true" ] && \
+    echo "  !!       dirty=true - the working tree had uncommitted changes, so the hash" && \
+    echo "           above does NOT fully describe what is on this card."
+  [ "$(bool "$BUILD" stock)" = "true" ] && \
+    echo "  !!       stock=true - written with --stock. This card carries NONE of the" && \
+    echo "           project fixes, and no identity toolkit either."
 else
   echo "  UNKNOWN - no $BUILD."
   echo "  This card was written before build stamping existed, or by --stock."
