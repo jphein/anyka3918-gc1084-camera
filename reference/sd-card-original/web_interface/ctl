@@ -22,10 +22,12 @@ echo ""
 
 t=""
 c=""
+f=""
 for kv in $(echo "$QUERY_STRING" | tr '&' ' '); do
   case "$kv" in
     token=*) t="${kv#token=}" ;;
     command=*) c="${kv#command=}" ;;
+    file=*) f="${kv#file=}" ;;
   esac
 done
 
@@ -60,6 +62,33 @@ case "$c" in
       "$(cat /sys/user-gpio/ircut_a 2>/dev/null)" \
       "$(cat /sys/user-gpio/WHITE_LED 2>/dev/null)" \
       "$(cat /sys/user-gpio/IR_LED 2>/dev/null)"
+    exit 0 ;;
+  play)
+    # $f comes straight off the network and is interpolated into a command, so
+    # it is validated hard: bare name only, no path, no extension, no dots, no
+    # slashes. The directory and the .mp3 suffix are supplied by us, never by
+    # the caller. Reject anything with a character outside [A-Za-z0-9_-].
+    case "$f" in
+      ""|*[!A-Za-z0-9_-]*)
+        echo "ERR file"
+        exit 0 ;;
+    esac
+    if [ ! -f "/mnt/sounds/$f.mp3" ]; then
+      echo "ERR nofile"
+      exit 0
+    fi
+    # SPK_PA is the speaker power amplifier and sits at 0 on a cold boot;
+    # without it the decoder runs happily and you hear nothing.
+    echo 1 > /sys/user-gpio/SPK_PA
+    # Backgrounded so the HTTP request returns immediately rather than blocking
+    # for the length of the clip. NOTE: ak_adec_demo has no working volume
+    # control - attenuate the file before uploading it.
+    ak_adec_demo 41100 1 mp3 "/mnt/sounds/$f.mp3" >/dev/null 2>&1 &
+    echo "OK"
+    exit 0 ;;
+  sounds)
+    ls /mnt/sounds/ 2>/dev/null | sed 's/\.mp3$//' | tr '\n' ' '
+    echo
     exit 0 ;;
   *)
     echo "ERR cmd"
