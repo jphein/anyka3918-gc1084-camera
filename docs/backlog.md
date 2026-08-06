@@ -107,6 +107,25 @@ interesting the problem is.
   > the same failure as ["proximity is not protection"](#improvement-backlog) seen
   > from the reviewer's side: **the reader is looking where the evidence used to
   > be, and a good fix is precisely what moves it.**
+
+- **Fix where the repository is the only authority; report where reality is.**
+  The test: **can this fix be wrong about the world?** If no — a broken anchor, a
+  renamed heading, a stale path, a typo — fix it. If yes — a number, a mechanism,
+  a version, a threshold, a recommendation, *"how X behaves"* — **it is a claim,
+  whatever it looks like**, and the repo is a *record* of it rather than the
+  source. Correcting one means asserting something about hardware nobody
+  re-measured, which is how most of the retractions above happened.
+
+  **Prefer this test to "trivial vs substantive".** That one is a judgement call
+  every time and therefore erodes under pressure; *who is the authority* returns
+  the same answer regardless of who is asking or how tired they are.
+
+  > ⚠️ **A doc contradicting another doc is NOT mechanical, however obvious the
+  > newer one looks.** **Neither doc is the authority**, so choosing between them
+  > is an assertion about the device wearing a tidy-up's clothes — and it has
+  > already been wrong here: the most *evidenced* source was the least *current*,
+  > and the resolution came from a human, not from the files.
+
 - **A uniform result across varied inputs means a broken instrument, not a
   conclusion.** Six different `&level=` values that all report the same thing are
   telling you about your *test*, not the system. Seen four times today: a `ps`
@@ -125,6 +144,17 @@ interesting the problem is.
   had eight comment lines the camera's copy did not. Editing the device copy and
   committing it would have silently deleted them. Diff before you overwrite, and
   make the two hash the same afterwards.
+- **A closed thread is a statement about what someone knew, not a prohibition on
+  new information.** *"Nothing further"* means the sender had nothing further —
+  it does not mean you should sit on something they had not seen. This happened
+  **three times on 2026-08-06**: an agent went back on an explicit *"you're
+  clear"* because it had noticed something the instruction did not cover, and
+  **all three were right to.** The cost of asking is one message; the cost of
+  not asking is a finding that dies in whoever noticed it.
+
+  Ask rather than act, though — reopening a thread is cheap, **acting unasked on
+  a closed one is not.**
+
 - **`git commit -o` stops you carrying someone else's work. Nothing stops them
   carrying yours.** Everyone guards the first direction and nobody guards the
   second. It happened here on 2026-08-06: a one-line phrasing fix sat
