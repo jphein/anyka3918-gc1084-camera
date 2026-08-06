@@ -4,19 +4,38 @@
 
 | | |
 |---|---|
-| Main | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @20 fps†, PCM A-law 8 kHz |
-| Sub | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @20 fps†, PCM A-law 8 kHz |
-
-> † **The 20 fps figure is unsourced and was not measured.** Searched 2026-08-06: it is
-> not in `gergesettings.txt`, not in the app's argv (`-w 640 -h 360 -m 0 -i 4 -u`, no rate
-> flag), and there is no anyka/video/encoder entry under `/proc` that reports throughput.
-> Treat it as a stream property someone observed once, not a guarantee. The `640×360` half
-> *is* traceable — it is `image_width`/`image_height` in `gergesettings.txt`, passed through
-> to the running process, and `ctl?command=stats` reports it from the live argv.
-> **There is no fps counter on this camera and `stats` deliberately returns `"fps":null`.**
-> Use `encoder_cpu_jiffies` differentiated across two polls if you need a
-> "is the encoder actually working" signal.
+| Main | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @ **15.2 fps**†, PCM A-law 8 kHz |
+| Sub | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @ **15.2 fps**†, PCM A-law 8 kHz |
 | Still | `http://192.168.1.20:3000/snapshot.jpeg` — ~32 KB JPEG, 640×360 |
+
+> † **15.2 fps is measured, 2026-08-06.** `ffmpeg -rtsp_transport tcp -t 30 -an -f null -`
+> against `/vs1`: **455 frames in 29.93 s of stream time = 15.20 fps**, and 455 frames in
+> 28.77 s of *wall clock* = 15.82 fps — delivering slightly ahead of its own timestamps, so
+> it is keeping up rather than lagging. ffmpeg's independent `tbr` estimate agrees at 15.17.
+> ⚠️ **That figure is for `/vs1`. `/vs0`'s *delivered* rate has not been measured.** `/vs0`
+> returned a byte-identical frame count — but per the warning below that is guaranteed by the
+> method, not observed in the device: `-t` cuts on media time, so two streams stamping at the
+> same nominal rate always return the same count. **It establishes that both streams *declare*
+> the same rate; it says nothing about what `/vs0` delivers.** 720p is 4× the pixels over
+> 2.4 GHz on a printed-circuit antenna, which is exactly where a delivered rate could fall
+> behind a declared one.
+>
+> ⚠️ Count frames; do not read `avg_frame_rate`, and do not divide by ffmpeg's `time=`.
+> That field is the **media timestamp**, not wall clock — dividing by it returns the rate the
+> camera *stamps* frames at, which is a declared number wearing a measurement's clothes. The
+> giveaway was `/vs0` and `/vs1` reporting byte-identical counts: `-t` cuts on media time, so
+> both stopped at the same stamp by construction.
+>
+> **The "20 fps" that stood here until 2026-08-06 was never sourced anywhere.** Searched that
+> day: not in `gergesettings.txt`, not in the app's argv (`-w 640 -h 360 -m 0 -i 4 -u`, no
+> rate flag), and no anyka/video/encoder entry under `/proc` reports throughput. It was wrong
+> by ~24%. The `640×360` half *is* traceable — `image_width`/`image_height` in
+> `gergesettings.txt`, passed to the running process, and `ctl?command=stats` reports it from
+> the live argv.
+>
+> **There is no fps counter on this camera and `stats` deliberately returns `"fps":null`** —
+> which is precisely why this had to be measured from outside. Use `encoder_cpu_jiffies`
+> differentiated across two polls if you need an "is the encoder actually working" signal.
 
 None of these use authentication. `/vs2` returns 404.
 
@@ -32,7 +51,10 @@ SSID the cameras join is *named* after IoT while sitting on the camera VLAN.)
 > resolution upgrade if the extra bitrate is acceptable over 2.4 GHz WiFi — worth testing before
 > committing, since this is a $5 camera on a printed-circuit antenna.
 
-Quality is decent but latency is high, at roughly 5–15 fps effective.
+Quality is decent. Throughput is **15.2 fps measured** (2026-08-06) — an earlier note here
+estimated "roughly 5–15 fps effective", which was directionally right and slightly
+pessimistic, and closer to the truth than the confident "20" that sat in the table beside
+it. **Latency has never been measured**; it is reported as high by observation only.
 
 ## Liveness testing
 
