@@ -1135,12 +1135,22 @@ Six one-byte variants ship on the card as
 
 * **Static analysis** (`lucid-camera`'s disassembly) — the offsets, the `N−1` mapping, the ioctl
   numbers. **Nobody read the codec's registers**, so these describe the *code*, not the silicon.
-* **Behavioural** (JP, 2026-08-06) — all six rungs and both speaker paths exercised and working.
-  Independent evidence for the mapping; it says nothing about the ioctl numbers.
+* **Behavioural** (JP, 2026-08-06) — the ladder exercised across its range by ear. Independent
+  evidence for the mapping; it says nothing about the ioctl numbers.
+  **Rung 1 produces audible output**, so the bottom of the range is *quiet, not silent* — which
+  also confirms the mapping is not **inverted**, something no off-device test can show.
 
 > ❔ **NOT established: that the ladder is evenly graded, or that adjacent rungs are
-> distinguishable.** The codec's gain table lives in the kernel DAC driver and is unread. **Do not
-> describe the rungs as even steps**, and do not promise that 3 is audibly different from 4.
+> distinguishable.** The codec's gain table lives in the kernel DAC driver and is unread — it
+> could be linear, logarithmic or bunched at one end. Nobody has tried 3 against 4.
+>
+> **"All six work" is not "six perceptually distinct steps", and two rungs at opposite ends is
+> not a ladder measurement** — 1-vs-6 says the control *moves*, not that it has *steps*. **Do not
+> describe the rungs as even**, and do not promise 3 is audibly different from 4.
+>
+> Per-path verification status for the Home Assistant callers — which do **not** all resolve their
+> level the same way, and one of which was verified *before* its mechanism changed — is tracked in
+> [backlog.md](backlog.md) rather than here, because it is about the integration, not the camera.
 
 #### ❌ RETRACTED: "there is no working volume control — attenuate the file instead"
 

@@ -317,9 +317,45 @@ The `strb → NOP` patch that would have disabled ASLC was **never applied** —
 chain (demo struct offset +44 → `filterObj[0xa8]`) was never closed, and it turned out
 to be unnecessary. Do not apply it.
 
-**Not established:** whether all six rungs are perceptually distinct. Only 6, 4 and 2
-have been listened to; 1, 3 and 5 have not, and the codec's gain table (in the kernel
-DAC driver) is unread. Do not describe the ladder as evenly graded.
+**Superseded — "only 6, 4 and 2 have been listened to" is out of date.** JP exercised
+the HA slider **across its range** on 2026-08-06 — *"all the volumes worked well on the
+ha slider then the speak button"* — corroborated by where the entity was found
+afterwards: left at 4, discovered at 1, so he moved **down through** the ladder.
+
+**But "verified" is per path, not global**, and `luna-volume`'s record keeps them apart
+because they do not all resolve their level the same way:
+
+| Path | Status |
+|---|---|
+| `media_player` (passes its own level) | ✅ **verified**, slider exercised across range. Unchanged by the centralisation, so the test still applies |
+| **Alive** button (`play`, level *resolved*) | ✅ **verified at both ends** — *"alive works at 1 and 6, volume changes"*. This is the path JP reported broken |
+| **Chime** button | ⚪ **by construction, not by test** — same script, same `shell_command`, different `clip`. *"Both buttons verified"* would be one press stronger than the evidence |
+| **Speak** button (`say`) | ⚠️ **verified *before* its mechanism changed** — it carried a Jinja template when JP tested it; the centralisation deleted that and moved resolution into `ctl_file()`. Re-verified by stub only, **not by ear** |
+
+> ⚠️ **The Speak row is a real open thread, not a formality.** Risk is low — it now uses
+> the same resolver Alive proves — but **it is not the same claim**, and *"it follows
+> mechanically"* is exactly the reasoning that produced five wrong path counts in one day.
+> It is also a textbook case of the rule above: **the centralisation deleted the mechanism
+> the verification was performed against**, so the evidence no longer points at the code
+> that runs.
+
+**Still not established:** that the ladder is **evenly graded**, or that **adjacent rungs
+are distinguishable** — nobody has tried 3 against 4, and the codec's gain table in the
+kernel DAC driver is unread. It could be linear, logarithmic, or bunched at one end.
+
+> 🔑 **"All six work" is not "six perceptually distinct steps".** What is established:
+> every rung produces audible output — **rung 1 included, so the bottom of the slider is
+> quiet rather than silent** — and the paths honour the entity. **Two rungs at opposite
+> ends is not a ladder measurement:** 1-vs-6 says the control *moves*, not that it has
+> *steps*.
+>
+> One separate thing the rung-2 pass did settle: *"audible much softer"* rules out an
+> **inverted** mapping, which no off-device test can — those prove the slider maps
+> consistently, not the right way round.
+>
+> **That one-clause upgrade — "all six work" → "six distinct steps" — is the same shape as
+> every retraction in this file, except it runs on good news.** Good news outruns its
+> evidence just as easily as bad news, and **meets far less resistance doing it.**
 
 The original analysis follows, kept because the reasoning is what made the fix findable.
 
