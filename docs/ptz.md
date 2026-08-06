@@ -157,7 +157,7 @@ device), not from upstream:
 
 | Pin | GPIO | Meaning | Writing it does something? |
 |---|---|---|---|
-| `IR_LED` | 6 | Infrared illuminator LEDs | ✅ **yes — measured** |
+| `IR_LED` | 6 | Infrared illuminator LEDs | ❔ **unverified** — accepts writes, [illumination not shown](#-ir-leds--unverified) |
 | `SPK_PA` | 7 | **Speaker** power amplifier (output side) | ✅ yes — required for [audio out](#speaker--audio-out-works) |
 | `WHITE_LED` | 24 | White LEDs on the ring | ❌ **no — see below** |
 | `wifi_en` | 34 | WiFi enable | ❌ no observable effect |
@@ -165,9 +165,15 @@ device), not from upstream:
 | `ircut_a` | 42 | IR-cut filter, coil A | ✅ yes — flips the filter |
 | `motor_switch` | −1 | — | no `/sys` node at all (negative pin) |
 
-**The table self-validates.** The three pins that measurably do something — `IR_LED` (6),
-`SPK_PA` (7), `ircut_a` (42) — are exactly the three that turned out to matter in testing, which
-is good evidence the decode is correct rather than a plausible-looking guess.
+**The table corroborates itself on two pins**, and it is worth being precise about which. Both
+`SPK_PA` (7) and `ircut_a` (42) do exactly what the table says, and — importantly — both are
+confirmed by **direct observation rather than inference**: you *hear* speech come out of the
+speaker, and you *see* the image go purple when the filter moves. Neither rests on measuring a
+number that could have moved for another reason.
+
+That is meaningful evidence the decode is right rather than a plausible-looking guess, but it is
+two pins out of seven, not a validated table. `IR_LED` is untested and the rest have no
+observable effect.
 
 > ⚠️ **Do not quote upstream's GPIO numbers for this camera.** They are a genuinely different
 > kernel build: `ircut_b` (41) exists here and is **absent** from the upstream firmware image,
@@ -185,15 +191,34 @@ Two cautions:
 
 The LED ring holds **4 infrared and 4 white LEDs**. They behave completely differently.
 
-### ✅ IR LEDs work
+### ❔ IR LEDs — unverified
 
 ```sh
 echo 1 > /sys/user-gpio/IR_LED
 ```
 
-Confirmed by measurement, which is the only honest way to test an emitter you cannot see:
-average frame luma rose on every on/off pair (119→124, then 101→119). **Test after dark** — in
-daylight the change is swamped and you will wrongly conclude it is dead.
+**GPIO 6 accepts the write. Whether it actually lights the LEDs has not been demonstrated.**
+
+An earlier attempt measured average frame luma rising across on/off pairs (119→124, then
+101→119) and was briefly recorded here as proof. It is not, and the reasons are worth keeping,
+because anyone testing an invisible emitter will be tempted by the same shortcut:
+
+* **The camera drives the IR LEDs itself, from a photoresistor.** A luma rise as the room got
+  darker is exactly what its own night-mode logic produces — with or without the GPIO write.
+* **Night mode also moves the IR-cut filter**, which changes luma far more than illumination
+  does. `ircut_a` is confirmed working, so that mechanism was definitely live during the test.
+* **Sensor AGC settles over seconds**, and the ambient baseline was drifting throughout.
+
+No A/B/A/B control was run, so nothing showed luma tracking the *command* rather than the
+*clock*. Two deltas of different magnitude (5 and 18) on a moving baseline is not a signal.
+
+There is also an open question about whether the value even persists: `dmesg` shows repeated
+`IR_LED store:0` / `store:1` transitions, so something else may be writing the node — a vendor
+or ptz-daemon night-mode loop would overwrite whatever you set.
+
+> **The decisive test is trivial and costs ten seconds: IR LEDs are visible to a phone camera.**
+> Point a phone at the ring and toggle the pin. Do that before believing any luma argument,
+> including this one.
 
 ### ❌ White LEDs do not light, and the pin is not the problem
 
@@ -214,6 +239,11 @@ contains **`0-0058`**, and **0x58 is the default address of the AW9523B** — a 
 expander whose channels are *constant-current LED sink drivers*, which is exactly the part you
 would use to drive an LED ring. `hw.conf` reads `HW=1115111751205…` with
 `whiteLightNegativeFlag=0`.
+
+Better still, the kernel already has a driver for it: `/proc/kallsyms` shows **`aw9523b_read`
+and `aw9523b_write`, both `EXPORT_SYMBOL`'d.** Note what kind of evidence that is — the I2C
+device node and the exported symbols are *directly observed*, not deduced from a measurement
+that could have moved for another reason.
 
 So the white LEDs most likely hang off the **AW9523B at I2C 0x58**, while the kernel driver's
 table points `WHITE_LED` at an unrelated SoC GPIO. That fits every observation: the write

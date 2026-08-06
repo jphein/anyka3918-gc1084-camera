@@ -101,13 +101,17 @@ muted in hardware.
 
 Pin numbers were decoded from **this camera's own kernel** (`mtd1` dumped from the live device).
 They do **not** match upstream's firmware image, which is a different build — `ircut_b` exists
-here and not there. Of the six, only `IR_LED`, `SPK_PA` and `ircut_a` have a measurable effect.
+here and not there. Of the six, only `SPK_PA` and `ircut_a` are confirmed to do anything — by
+direct observation (audible speech, visibly purple image) rather than by inference. `IR_LED` is
+[unverified](ptz.md#-ir-leds--unverified); the rest have no observable effect.
 
 ## I2C
 
 `/sys/bus/i2c/devices/` contains **`0-0058`**. **0x58 is the AW9523B's default address** — a
-16-channel I/O expander with constant-current LED sink drivers. This is the most likely home of
-the white LEDs, which do not respond to their nominal GPIO; see
+16-channel I/O expander with constant-current LED sink drivers. The kernel carries a driver for
+it too: `aw9523b_read` and `aw9523b_write` appear in `/proc/kallsyms`, both `EXPORT_SYMBOL`'d.
+
+This is the most likely home of the white LEDs, which do not respond to their nominal GPIO; see
 [ptz.md](ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem).
 
 ## Clock
