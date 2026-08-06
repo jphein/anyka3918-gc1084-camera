@@ -333,8 +333,28 @@ would be a longer single-stream hold on each, timed to sample boundaries.
 
 **What `encoder_cpu_jiffies` measures.** It is `libre_anyka_app`'s *total* CPU — encode plus
 RTSP packetisation and network I/O. A rise proves the app is working harder, **not** that the
-extra work is encoding. It does cleanly refute "both streams are always encoded, so the main
-is free": app CPU did not stay flat when a client attached.
+extra work is encoding.
+
+> ⚠️ **RETRACTED 2026-08-06, and the retraction is the instructive part.** This section
+> originally continued: *"It does cleanly refute 'both streams are always encoded, so the main
+> is free': app CPU did not stay flat when a client attached."* **That inference does not
+> survive the sentence immediately before it**, as `nebula-inventory` pointed out.
+>
+> The test was "if app CPU stays flat while a client pulls `/vs0`, both streams were already
+> being encoded". But if the counter also includes packetisation and network I/O, attaching a
+> client raises it **whether or not encoding was already running**. The flat reading was never
+> achievable, so the observation cannot separate the hypotheses — **a test that can only
+> return one answer.** That is this repo's own rule (a uniform result means a broken
+> instrument) applied to a test designed by the person who wrote the rule down.
+>
+> **Whether both streams are encoded continuously is UNKNOWN.** `nebula-inventory`'s frame
+> counts do not settle it either — both streams delivered identical counts at identical
+> cadence, which is equally consistent with one pipeline and with two independent encoders
+> sharing a sensor clock. Do not cite either measurement as evidence.
+>
+> The discriminating test is **pulling both streams simultaneously**: if both are always
+> encoded, the second consumer adds only packetisation; if encoded on demand, it adds roughly
+> a whole encode. `rtsp_clients` reads 2 during that phase, so it self-labels.
 
 Observer overhead: the sampler ran at 10 s intervals, ~0.5 s each, ≈5 % duty present in
 every phase equally. Absolute figures include it; the deltas do not.
