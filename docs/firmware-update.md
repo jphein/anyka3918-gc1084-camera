@@ -303,7 +303,7 @@ equality would fail for a reason that does not matter — and worse, would tempt
 someone to tune flags until it passed, which proves nothing about the
 filesystem.
 
-The two properties it does assert:
+The three properties it does assert:
 
 1. **Content equivalence** — unpack the dump, rebuild, unpack the rebuild,
    compare the trees including **modes, types, sizes and symlink targets**. A
@@ -311,9 +311,32 @@ The two properties it does assert:
 2. **Determinism** — build twice, compare bytes. Without it, "the image I
    tested" and "the image I flashed" are two artefacts that merely came from the
    same command.
+3. **Superblock equivalence** — every field but the creation timestamp. Content
+   equivalence proves the *files* match; it says nothing about how they are
+   packed, **and the vendor kernel mounts the packing, not the tree.** A rebuild
+   at the wrong block size unpacks to a perfect tree and may not mount at all.
 
 Vendor byte-identity is reported when it happens, as a bonus signal. It is never
 required and never the reason to proceed.
+
+### Measured against the real partition — 2026-08-06
+
+`/dev/mtdblock5` dumped read-only by `lucid-camera`
+(md5 `55cc1df1becd3d78d9ea84f99dd43370`, gated both ways) and run through the
+tool:
+
+| check | result |
+|---|---|
+| determinism | two builds byte-identical |
+| fits slot `B` | **2,826,240 of 3,100,672** — 91% full, **274,432 spare** |
+| content | tree identical, contents and symlinks |
+| metadata | modes, types, sizes, symlink targets preserved |
+| superblock | **matches on every field but the timestamp** — xz, 131072, 6 fragments, 281 inodes, and the same 2,824,044-byte filesystem size |
+| byte-identity | differs in 2,214,567 payload bytes — **expected**, a different xz encoder |
+
+**So a verified `usr.sqsh4` can be built from the camera's own `/usr` on demand,
+with 274 KB of headroom for anything added.** It is not armed: arming means
+passing it to `build-update-tar.sh --usr-sqsh4` and putting the result on a card.
 
 ---
 
