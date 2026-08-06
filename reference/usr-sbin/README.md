@@ -63,8 +63,9 @@ root is mounted from `mtdblock4` squashfs (= "A"), `/etc/jffs2` is `mtdblock6` (
 matching the recorded "64 KB, 88 % full"), and `/data` is `mtdblock7` (= "D", 2.16 MB ≈ the
 recorded 2.2 MB). Four independent facts agree.
 
-The actual flasher is **`/sbin/updater`** — not yet analysed. It is the only component whose
-behaviour here is inferred rather than read.
+The actual flasher is **`/sbin/updater`**, since disassembled — see the section at the end of
+this file. It confirms the mapping above is a **runtime sysfs lookup**, not a hardcoded table,
+and that **`D` (mtd7, `/data`) is reachable** even though `update.sh` never uses it.
 
 ## ⚠️ Verification: md5 only, NO signature — and the check is SKIPPED IF THE `.md5` IS ABSENT
 
