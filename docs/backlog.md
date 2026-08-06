@@ -39,6 +39,29 @@ interesting the problem is.
   was wrong, which is the usual direction — **prose drifts, data doesn't.**
   Trust the table; re-derive the sentence.
 
+  > **The mechanism, found 2026-08-06 by the person it happened to** — worth
+  > having, because the rule above describes the phenomenon without explaining it:
+  > **writing something down discharges the feeling of having handled it.**
+  >
+  > `nebula-inventory` documented a measurement trap (ffmpeg's `time=` is the
+  > *media* timestamp, so frames ÷ time is a declared number wearing a
+  > measurement's clothes) — **and then failed to apply it to the sentence three
+  > paragraphs above**, which used exactly that artifact as evidence. In its
+  > words: *"I didn't fail to know the rule — I documented it, and didn't apply it
+  > upward. The trap warning read as **complete** to me because it was
+  > **correct**."*
+  >
+  > It had propagated three ways before an outside read caught it: into the
+  > footnote, into the test script built *after* writing the warning, and into the
+  > assumption that the test would answer the question the warning invalidated.
+  > **One reading of a diff surfaced all three.**
+  >
+  > 🔑 **So the remedy is not "re-read harder".** Your own re-reads are least
+  > reliable on exactly the text you just wrote, and correctness makes it worse
+  > rather than better — a passage that is *right* feels finished. **The only
+  > mechanism that works is someone else reading it**, which is why review is
+  > cheap here and self-review is close to worthless.
+
   (True version, for the record: the cap is **per aligned 256-wide MAC window**,
   because the noun index is bits 8–12 and those are constant inside one. It is
   not a global ceiling.)
