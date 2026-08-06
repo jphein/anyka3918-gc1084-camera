@@ -84,24 +84,37 @@ The web UI exposes no absolute-position control. `t2p` is telnet-only.
 The IR-cut filter is the mechanical shutter that makes the audible **click**. It is not the IR
 LEDs. With it in the wrong position the image has a heavy pink/purple cast.
 
-There are two ways to drive it, and they are not equivalent.
-
-### The intended way — through the daemon
+### ✅ The only method shown to work: write the pin
 
 ```sh
-echo "set_ir_cut 1" > /tmp/ptz.daemon    # or 0
+echo 1 > /sys/user-gpio/ircut_a     # 1 = filter IN = normal colour
 ```
 
-or over HTTP, `command=iron` / `command=iroff`. This goes through the vendor's IR driver, the
-same path `libre_anyka_app` uses.
+**Polarity, because this project had it inverted for most of a day:** `1` puts the filter **in**,
+which is the normal daytime position. `0` takes it out, which is what makes the image purple.
 
-### The direct way — GPIO
+> ⚠️ **Allow ~10 seconds.** The filter takes **4–8 s** to move, so
+> [measuring sooner gives a false negative](troubleshooting.md#measuring-the-ir-cut-filter-use-the-green-fraction).
+> Judge by the image, not by re-reading the pin — the pin read is honest, but the solenoid is
+> downstream of it.
+
+### ❔ `set_ir_cut` through the daemon — unverified, and probably broken
 
 ```sh
-echo 1 > /sys/user-gpio/ircut_a
+echo "set_ir_cut 1" > /tmp/ptz.daemon    # or over HTTP: command=iron / iroff
 ```
 
-This works immediately but bypasses the driver.
+> ⚠️ **This page previously called this "the intended way" and implied it worked. Retracting
+> that.** The evidence for it was that issuing `set_ir_cut` produced no visible change *in a
+> situation where no change was needed* — and "nothing happened because nothing needed to" is
+> equally well explained by **"the daemon did nothing at all"**.
+>
+> And there is now a mechanism for the second reading: `ptz_daemon` has
+> [the same hard-coded-path bug](#-ptz_daemons-ir-cut-control-is-probably-broken-too) as
+> `libre_anyka_app`. On this build it cannot open the node.
+
+Treat daemon-mediated IR-cut control as **unproven**. The only thing demonstrated to move the
+filter on this camera is a direct sysfs write to `ircut_a`.
 
 ### ⚠️ The vendor app's day/night logic is half-broken on this build
 
@@ -131,6 +144,45 @@ reaching for a node that is not there, silently, on every day/night transition.
 
 > This is reported from another agent's analysis, along with a patch. **I have not verified
 > either the ENOENT or the patch directly** — recorded as their finding, not mine.
+
+### ⚠️ `ptz_daemon`'s IR-cut control is probably broken too
+
+**The same hard-coded-path bug is in a second binary, and nobody had looked.** `ptz_daemon`
+(2191668 bytes, md5 `9ce077f844d500b963b5adc6bc0b403b`) contains only prefixed paths:
+
+```
+/sys/user-gpio/gpio-ircut_a
+/sys/user-gpio/gpio-ircut_b
+/sys/user-gpio/gpio-rf_feed
+```
+
+**Zero unprefixed variants.** On the 2023 build all three are `ENOENT`. And the daemon clearly
+branches on whether it can reach them:
+
+```
+Ircut a & b interface all can access
+Ircut a & b interface can't access
+Ircut 1line mode, ir_feed:%d
+Ircut 2line mode, ir_feed:%d
+```
+
+So on this camera it takes the **"can't access"** branch — while `run_ptz_daemon=1` keeps it
+running. That is the mechanism behind
+[`set_ir_cut` being unproven](#-set_ir_cut-through-the-daemon--unverified-and-probably-broken).
+
+**It has not been patched.** `gpio-ircut_a` → `ircut_a` and `gpio-ircut_b` → `ircut_b` are both
+shortening replacements, so both are in-place patchable exactly like the other binary — but that
+is a separate authorisation and it needs testing first.
+
+> ⚠️ **`gpio-rf_feed` cannot be fixed by renaming.** There is **no `rf_feed` node at all** on the
+> 2023 build, prefixed or otherwise — the live list is exactly `IR_LED SPK_PA WHITE_LED ircut_a
+> ircut_b wifi_en`. That feature is simply unavailable here. **Do not patch it to another name
+> that also does not exist**; that would convert a clean `ENOENT` into a silent wrong-pin write.
+
+> **Design decision needed before both binaries are fixed.** Once `libre_anyka_app` *and*
+> `ptz_daemon` can both reach `ircut_a`, there are **two actors on one pin** — the app's
+> automatic day/night loop, and manual control via `set_ir_cut` (which is what Home Assistant
+> drives). Decide which wins before shipping cards that enable both, or they will fight.
 
 ### ❔ The filter has been seen to read back `off` — cause unknown
 

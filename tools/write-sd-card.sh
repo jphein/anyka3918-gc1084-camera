@@ -33,6 +33,13 @@ LAA_STOCK_MD5="3458b8598ca9525a0d5e693ff5fd5d5c"   # writes gpio-ircut_a (2022 b
 LAA_PATCH_MD5="351d54e853ee6774e50e9704986bd6b6"   # writes ircut_a      (2023 build)
 LAA_PATCH_SRC="$REPO/reference/patches/libre_anyka_app.node-ircut_a"
 
+# The pre-auth root RCE fix for cgi-bin/header. UNLIKE the binary patch this is
+# NOT kernel-build-specific, so it applies unconditionally with no detection.
+# Pending lucid-ledhunt re-verifying the exploit is dead against the live camera
+# - its first attempt passed a harness while still permitting PATH/IFS/LD_PRELOAD
+# hijacking, so a harness pass is not sufficient evidence here.
+HEADER_FIX_SRC="$REPO/reference/patches/cgi-bin-header.hardened"
+
 # Fixes applied to gergesettings.txt on the card. POSIX TZ counts hours WEST of
 # Greenwich, so the shipped GMT-08:00 actually means UTC+8 - 15 hours out.
 FIX_TIME_ZONE="PST8PDT,M3.2.0,M11.1.0"
@@ -135,6 +142,15 @@ if [ "$STOCK" -eq 0 ]; then
   else
     warn "ctl not found at $CTL_SRC - skipping"
     NOTES+=("cgi-bin/ctl was NOT installed (source missing).")
+  fi
+
+  # --- 3b. hardened cgi-bin/header (pre-auth root RCE fix), if present
+  if [ -f "$HEADER_FIX_SRC" ]; then
+    echo "==> installing hardened cgi-bin/header (pre-auth RCE fix)"
+    install -m 755 "$HEADER_FIX_SRC" "$MNT/anyka_hack/web_interface/www/cgi-bin/header"
+  else
+    NOTES+=("cgi-bin/header is UNPATCHED - the pre-auth root RCE on port 80 is live on this card.")
+    NOTES+=("  -> the camera VLAN's isolation is the only thing mitigating it. See docs/web-ui.md.")
   fi
 
   # --- 4. somewhere for ctl's play/sounds commands to look

@@ -46,6 +46,11 @@ switching that has never worked**.
 | Missing `]` in `Factory/config.sh` | [Upstream's bracket bug](#-latent-bug-in-factoryconfigsh), which stops the sensor symlink ever being recreated |
 | IR-cut node detection | See below |
 
+> ⚠️ **`ptz_daemon` has the same bug and is *not* patched.** It carries only prefixed paths, so
+> its `set_ir_cut` is very likely broken on a 2023 camera too — meaning a fresh card fixes the
+> app's **automatic** day/night switching but **not** manual IR-cut control through the daemon.
+> See [ptz.md](ptz.md#-ptz_daemons-ir-cut-control-is-probably-broken-too).
+
 ### 🔑 One card works in any of these cameras
 
 **This is the property that makes the tool trustworthy with a bag of cameras, and it is
@@ -91,11 +96,26 @@ Four properties follow, and they are the point:
 > binary actually depends on. Testing the node directly handles a third vendor build for free
 > and does not bet on a username.
 
-> ⚠️ **The patched binary is not in this repo yet.** Until it is, the tool installs the stock
-> build under its detected-name and warns. **Nothing is broken by that** — the card is still
-> correct on a 2022 camera, and on a 2023 camera it behaves exactly as it does today. The
-> expected path is `reference/patches/libre_anyka_app.node-ircut_a`, and the tool checks its md5
-> before installing it.
+The patched binary ships at
+[`reference/patches/libre_anyka_app.node-ircut_a`](../reference/patches/), with its offset, bytes
+and md5 [documented there](../reference/patches/README.md). The tool **verifies the md5 before
+installing** and refuses on a mismatch.
+
+> ⚠️ **Verified applied — effect NOT yet validated.** On the live camera the patched binary is
+> running, its md5 matches, and `strings` confirms the corrected path with `IR_LED` untouched.
+> **But the day/night code path has not been exercised**: it was applied at 09:00 in stable
+> daylight, when the app has no reason to switch. A watcher is capturing the first real
+> transition.
+>
+> **Read this as "the binary is correct and running", not "day/night switching is fixed."** This
+> project has been caught by exactly that gap more than once.
+
+> ⚠️ **The discriminator is `ircut_b`, not `ircut_a`.** Both would work, but `ircut_b` exists
+> **only** in the 2023 build — verified by decompressing the 2022 kernel and counting
+> NUL-delimited string-table entries, which found `gpio-ircut_a` and **no `ircut_b` at all**.
+> Whereas `ircut_a` appears as a **substring inside `gpio-ircut_a`**, so a less careful test
+> could match the wrong build. The launcher falls back to `uname -v` if no node is present, logs
+> which branch it took, and defaults to stock when ambiguous.
 
 The backup lives **outside the repo** at `~/Backups/anyka-yicam-sd-2026-08-05/`, because it
 contains real credentials:

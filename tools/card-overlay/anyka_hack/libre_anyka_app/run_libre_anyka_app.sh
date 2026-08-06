@@ -10,8 +10,12 @@
 # libre_anyka_app hard-codes the sysfs path it uses to move the IR-cut filter.
 # Two vendor kernel builds disagree about that path:
 #
-#   2023 build (chensheng)   /sys/user-gpio/ircut_a         <- unprefixed
-#   2022 build (zhoujiahui)  /sys/user-gpio/gpio-ircut_a    <- prefixed
+#   2023 build (chensheng)   ircut_a + ircut_b        <- unprefixed
+#   2022 build (zhoujiahui)  gpio-ircut_a, no ircut_b <- prefixed
+#
+# Verified by decompressing the 2022 kernel and counting NUL-delimited string
+# table entries: it has gpio-ircut_a and NO ircut_b at all. The live 2023 camera
+# lists exactly: IR_LED SPK_PA WHITE_LED ircut_a ircut_b wifi_en.
 #
 # The stock binary writes the PREFIXED name, so on a 2023 camera it gets ENOENT
 # on every day/night transition and automatic IR-cut switching has never worked.
@@ -50,18 +54,33 @@ insmod /usr/modules/akcamera.ko
 insmod /usr/modules/ak_info_dump.ko
 
 # --- pick the binary that matches THIS camera's sysfs naming
-if [ -e /sys/user-gpio/ircut_a ]; then
+#
+# We test ircut_b, not ircut_a. Both discriminate, but ircut_b is unambiguous:
+# it exists ONLY in the 2023 build - the 2022 kernel's string table has zero
+# occurrences of it, prefixed or otherwise. Whereas "ircut_a" appears as a
+# SUBSTRING inside "gpio-ircut_a", so anything less careful than an -e test on
+# the exact path could match the wrong build.
+if [ -e /sys/user-gpio/ircut_b ]; then
   BIN="$BIN_UNPREFIXED"
-  echo "ircut: node is /sys/user-gpio/ircut_a (unprefixed) -> using patched binary"
+  echo "ircut: /sys/user-gpio/ircut_b present -> 2023 build -> patched binary"
 elif [ -e /sys/user-gpio/gpio-ircut_a ]; then
   BIN="$BIN_PREFIXED"
-  echo "ircut: node is /sys/user-gpio/gpio-ircut_a (prefixed) -> using stock binary"
+  echo "ircut: /sys/user-gpio/gpio-ircut_a present -> 2022 build -> stock binary"
+elif [ -e /sys/user-gpio/ircut_a ]; then
+  # unprefixed ircut_a but no ircut_b: not a build we have seen. Treat as 2023,
+  # since the name it exposes is the unprefixed one, but say so.
+  BIN="$BIN_UNPREFIXED"
+  echo "ircut: WARNING - ircut_a present but ircut_b absent; unrecognised build."
+  echo "ircut: assuming unprefixed naming -> patched binary. Verify day/night works."
 else
-  echo "ircut: ERROR - NEITHER /sys/user-gpio/ircut_a NOR gpio-ircut_a exists."
-  echo "ircut: this camera does not match either known firmware build."
-  echo "ircut: falling back to the stock binary; automatic day/night IR-cut"
-  echo "ircut: switching will probably not work. Investigate before trusting it."
-  BIN="$BIN_PREFIXED"
+  # sysfs says nothing useful - fall back to the kernel build date. This is a
+  # PROXY for the node naming rather than the fact itself, so it is last resort
+  # and the branch is logged so a future mismatch is diagnosable, not silent.
+  echo "ircut: no ircut node found; falling back to kernel build date"
+  case "$(uname -v)" in
+    *2023*) BIN="$BIN_UNPREFIXED"; echo "ircut: uname says 2023 -> patched binary" ;;
+    *)      BIN="$BIN_PREFIXED";   echo "ircut: uname is not 2023 -> stock binary (fail-safe)" ;;
+  esac
 fi
 
 # --- fall back rather than fail to start video
