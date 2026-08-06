@@ -78,11 +78,12 @@ Everything you need before touching it, because getting any of these wrong has c
 | `ircut_a=1` | filter **IN** → **normal colour** (daytime position) |
 | `ircut_a=0` | filter **OUT** → **magenta / pink cast** (IR-pass) |
 | Transition time | **4–8 s.** Allow **≥10 s** before measuring — sampling at 2–4 s guarantees a false negative |
-| Green fraction, filter IN | **≥ 1.00** (observed 1.02 – 1.39) |
+| Green fraction, filter IN | **≥ 1.00** (observed 1.019 – 1.39) |
 | Green fraction, filter OUT | **≤ 0.90** (observed 0.45 – 0.90) |
 | Best instrument | **A human hearing the solenoid click.** Beats every image metric |
 | Chromatic test is blind when | **the scene has little IR** — under blue-dominant indoor light the filter can swing with almost no colour change |
-| Symptom: *toggles then reverts* | The vendor app's day/night loop is fighting you — [see ptz.md](ptz.md#-root-cause-patching-libre_anyka_app-is-what-broke-manual-ir-cut-control) |
+| Symptom: *toggles then reverts* | Somebody patched `libplat_drv.so` — the driver is in 2-line pulse mode and releases the pin 10 ms after asserting it. Restore md5 `f5769ff013d7a3094e73ee76e312cad0` — [see ptz.md](ptz.md#-root-cause-the-libplat_drvso-patch-tipped-the-driver-into-a-mode-for-other-hardware) |
+| Symptom: *`OK` but nothing moves, ever* | You are on a vendor route. **All three are dead** — write `/sys/user-gpio/ircut_a` directly, which is what `ctl` now does |
 
 ### Measuring the IR-cut filter: the best instrument is your ears
 
@@ -121,7 +122,7 @@ sample**):
 
 | Filter | Green fraction | Look |
 |---|---|---|
-| **IN** (normal colour) | **≥ 1.00** (observed 1.02 – 1.39) | normal |
+| **IN** (normal colour) | **≥ 1.00** (observed 1.019 – 1.39) | normal |
 | **OUT** (IR-pass) | **≤ 0.90** (observed 0.45 – 0.90) | magenta / pink cast |
 
 > ⚠️ **Do not classify against a single boundary value, and specifically not `0.8`.** A run was
