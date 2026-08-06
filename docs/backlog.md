@@ -116,6 +116,56 @@ interesting the problem is.
   volunteered the answer within minutes of being told what we believed —
   **because we told him what we believed.**
 
+- **"What does this do?" and "does this actually run?" are different questions,
+  and code answers only the first — very convincingly.** A script or function is
+  self-contained and legible: reading it gives you a complete, correct, confident
+  account of its behaviour, with real filenames, real defaults and real addresses
+  you can put in a table. **What it cannot tell you is whether its preconditions
+  hold, because what defeats it is outside the text.**
+
+  **The tell, every time, was checking a dependency rather than following the
+  logic.** Four instances on 2026-08-06, all in this firmware:
+
+  | Reads as | Actually |
+  |---|---|
+  | `/usr/sbin/wifi_ap.sh` — a complete soft-AP: SSID fallback `AKIPC_XXX`, open network, camera at `192.168.0.1`, `udhcpd` for DHCP | **Nothing calls it, and the `hostapd` it invokes is not on the filesystem.** Confirmed dead by a live 90-second scan |
+  | `camera_set_ircut()` — a function that writes a GPIO. It does | …then **hardcodes `return 0`**, so every caller sees success whether or not the write landed. *The logic is correct; the reporting is a lie* |
+  | `libre_anyka_app`'s day/night thread — working IR-cut control | writes `/sys/user-gpio/gpio-ircut_a`, **a path this kernel does not expose**. `ENOENT`, silently, forever |
+  | `update.sh`'s md5 verification — integrity checking. It is | …inside `if [ -e <file>.md5 ]`. **Omit the `.md5` and no verification happens**, and the flash proceeds |
+
+  **Before reporting what a code path does, establish that it runs:** does
+  anything call it, do the files it names exist, does anyone check what it
+  returns.
+
+  > 🔑 **This is the boundary condition on ["read the artifact before measuring
+  > the device"](#improvement-backlog), which is why it belongs near the top.**
+  > That rule held four-for-four today and is still right. But **reading the
+  > artifact tells you *intent*, not *liveness*** — and intent is the more
+  > persuasive of the two, because it arrives with detail.
+  >
+  > The near-miss is the argument: `lucid-camera` had the SSID, the IP, the
+  > interface and the DHCP server ready to hand JP. **All accurate. All describing
+  > code that cannot execute.** A reader would have gone looking for a network
+  > that does not exist.
+
+  Two smaller ones in the same family — **a source that reads authoritative and
+  answers a different question than the one you asked:**
+
+  * **A binary's `--help` is documentation, and documentation lies.** BusyBox's
+    `ftpd` in this build prints *"Anonymous FTP server"* and lists no auth flag.
+    **It authenticates.** Reported as-read that becomes *"every stock camera
+    offers unauthenticated root file-write"* — false, alarming, and the kind of
+    claim that gets repeated. Only a probe caught it.
+  * **`grep -rl` gave an incomplete answer that looked complete.** Searching
+    `/usr/sbin` for `Factory` returned only `camera.sh`; a direct single-file
+    grep found the real referrer in `service.sh`. **When a recursive search
+    underpins a structural conclusion, spot-check one file you *expect* to
+    match** — a search that silently under-reports is indistinguishable from a
+    system that genuinely lacks the thing.
+
+  Full context for all six in
+  [`docs/stock-attack-surface.md`](stock-attack-surface.md) (`ad81d5d`).
+
 - **A sweep built from what you expect to find will miss what you didn't expect to
   be there.** A real address survived four separate scrubs on 2026-08-06 because
   every sweep was assembled from a mental model of where addresses live, and the
