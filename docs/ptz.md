@@ -356,6 +356,17 @@ and the image is normal.
 (sleep 60; echo 1 > /sys/user-gpio/ircut_a) &
 ```
 
+> ⚠️ **`ctl` handles button presses. `config.sh` handles boot. Neither covers the other.**
+>
+> Do not read the `ctl` fix as making this line redundant — they address different moments. `ctl`
+> only runs when somebody presses something; nothing presses anything at 3 a.m. after a power cut.
+> **A camera with the `ctl` fix and no boot line comes up magenta and stays magenta until a human
+> notices.**
+>
+> This is worth stating because the two fixes look interchangeable — both end in
+> `echo 1 > /sys/user-gpio/ircut_a`, and it is tempting to conclude one supersedes the other. They
+> are the same *write* at different *times*, and the times are what matter.
+
 **This is not a workaround this project invented.** JP has relied on it for a long time — in his
 words, *"we used to apply the ircut filter to fix the magenta on startup bug"* — and it is on his
 live card at `/Factory/config.sh` with that comment.
@@ -475,17 +486,36 @@ statements, and everything downstream followed from conflating them.
 > the photoresistor that does not exist. The pattern is now the single most reliable predictor of
 > wasted effort in this repo: *we keep finding real defects in code that does not run.*
 
-> ⚠️ **Consequence for Home Assistant — the previous claim here is retracted.** This page said
-> `switch.anyka_cam_ir_cut_filter` was "a no-op switch with a truthful state". **The reverse of
-> the command half is now established: the switch works**, and has for weeks.
+> ### 🔑 The sibling lesson: a prescriptive clause riding on a verified observation
 >
-> ❔ **The state half is now the open one, and it is deliberately not being flipped.**
-> `command_state` reads `/sys/user-gpio/ircut_a`. If the daemon moves the filter without touching
-> sysfs, it is **no longer established that this read tracks the real filter position** — it may
-> still, since the driver call could drive GPIO 42 by another route and
-> [the pad read is known honest](#-readback-works-and-it-reads-the-physical-pad), or it may not.
-> **Unknown, and recorded as unknown.** Asserting the inverse would repeat today's mistake facing
-> the other way.
+> Found by `luna-ha` in `packages/anyka_camera.yaml`, where **all three errors shared one shape**:
+> a **correct, verified factual half** with an **unverified "so you should…" half attached** — the
+> polarity note, an `init_ir` consequence, and a *"fixable by renaming pins the way the ircut path
+> was"* clause.
+>
+> **The verified half lends its authority to the unverified one.** A reader checks the first
+> clause, finds it sound, and carries that confidence across the comma.
+>
+> **The tell, and it generalises well past this project:** a **"…the way X was"** or **"…so you
+> should Y"** clause hanging off a sentence whose factual half you *did* check. Those clauses need
+> their own evidence, and they almost never get it — precisely because the sentence already feels
+> verified.
+>
+> **It is the sibling of the lesson above**, one level up: that one says do not trust your account
+> of what a thing *does not do*; this one says do not trust the advice you *attach* to something
+> you confirmed. Note that this page's own *"fixable by renaming"* framing is the ancestor of the
+> regression — the observation (the string is wrong) was right, and the prescription (so rename
+> it) was never independently justified.
+
+> ✅ **Consequence for Home Assistant — resolved, and both earlier claims retracted.** This page
+> called `switch.anyka_cam_ir_cut_filter` "a no-op switch with a truthful state", then said the
+> command half worked and had for weeks. **Neither was right.** The command half was dead the
+> whole time; the state half was honest throughout, faithfully reporting a pin nothing was moving.
+>
+> **Both halves now refer to the same node by construction**, because
+> [`ctl` writes `/sys/user-gpio/ircut_a` directly](#-route-2-cgi-binctl--what-home-assistant-uses-fixed-2026-08-06)
+> and `command_state` reads it. The open question about whether the state read tracked the filter
+> is **gone rather than answered** — the configuration that made it hard no longer exists.
 
 #### ❌ ALSO RETRACTED: "`ptz_daemon` has the same bug"
 
