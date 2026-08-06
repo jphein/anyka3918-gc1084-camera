@@ -33,11 +33,33 @@
 # which update.sh never writes. See reference/usr-sbin/README.md, which resolved
 # the slot->mtd mapping out of /proc/mtd and the updater binary.
 #
+# State the claim NARROWLY, because the strong version is false and would be
+# inherited as a safety guarantee: **update.sh never invokes `D=`** - a property
+# of the SCRIPT, verified across all five of its update functions. It is NOT a
+# property of the partition.
+#
 # Two caveats recorded there, both respected here:
-#   * "D" is REACHABLE - `updater local D=<file>` would resolve, there is no
-#     name whitelist. /data is unwritten by the shipped scripts, not unwritable.
-#   * update_factory_data.sh does `rm -rf /data/audio_file/*`. So the marker
-#     goes at the TOP of /data and never inside audio_file/.
+#
+#   * "D" is REACHABLE. `updater` holds no partition table and no name
+#     whitelist - it builds /sys/kernel/partition_table/<NAME>/mtd_index from
+#     whatever string it is handed, and the live table exposes D -> 7. So
+#     `updater local D=<file>` WOULD flash /data. The usage text listing only
+#     KERNEL/A/B/C is documentation, not enforcement.
+#
+#     >>> IF YOU ARE WRITING UPDATE TOOLING FOR THIS CAMERA: `D=` IS FORBIDDEN.
+#     >>> Invoking it erases this marker on every camera it touches, and the
+#     >>> fleet then re-derives identities with no error anywhere. Backlog gap 3
+#     >>> now points at building exactly that tooling, which is why the
+#     >>> constraint is written here, next to the thing it protects, rather than
+#     >>> only in a disassembly note nobody will re-read.
+#
+#     (What softens it, and only here: see the idempotence note below. A wiped
+#     MAC-derived name comes back identical. A wiped --unit-name does not.)
+#
+#   * update_factory_data.sh does `rm -rf /data/audio_file/*` before untarring
+#     an audio package, with no integrity check. So the marker goes at the TOP
+#     of /data, never inside audio_file/, and never using one of the four
+#     wifi_* names that script also writes into /data.
 #
 # /etc/jffs2 remains a last-resort fallback, loudly logged, and the marker
 # records which store it landed in.

@@ -115,6 +115,43 @@ EOF
 out="$(IDENTITY_TEST_ROOT="$r" $SH "$r/mnt/anyka_hack/identity/whoami.sh" 2>&1)"
 case "$out" in *"Bellowed Foundry"*) ok "whoami.sh reports the build version" ;;
                *) bad "whoami.sh did not report the build: $out" ;; esac
+
+# --- 6b. --json is the enumerator's contract. Every key ALWAYS present, null
+#         when unknown, and fw_version read LIVE rather than from a marker.
+mkdir -p "$r/usr"; printf '6.0.24.10_202401091113\n' > "$r/usr/fw_version"
+j="$(IDENTITY_TEST_ROOT="$r" $SH "$r/mnt/anyka_hack/identity/whoami.sh" --json 2>&1)"
+printf '%s' "$j" | python3 -m json.tool >/dev/null 2>&1 \
+  && ok "--json emits valid JSON" || bad "--json is not valid JSON: $j"
+missing="$(printf '%s' "$j" | python3 -c '
+import json,sys
+want = ["unit_name","unit_short","unit_mac","unit_source","unit_store","unit_named",
+        "card_build","card_hash","card_branch","card_dirty","card_built","card_stock",
+        "fw_version","read_at"]
+d = json.load(sys.stdin)
+print(" ".join([k for k in want if k not in d] + [k for k in d if k not in want]))' 2>&1)"
+[ -z "$missing" ] && ok "--json carries exactly the 14 agreed keys" \
+                  || bad "--json key mismatch: $missing"
+printf '%s' "$j" | grep -q '"fw_version": "6.0.24.10_202401091113"' \
+  && ok "--json reads fw_version LIVE from /usr/fw_version" \
+  || bad "--json did not pick up the live fw_version"
+printf '%s' "$j" | grep -q '"card_dirty": false' \
+  && ok "--json emits card_dirty as a bare boolean, not a string" \
+  || bad "card_dirty is not a bare boolean: $j"
+printf '%s' "$j" | grep -qi '"version":' \
+  && bad "--json contains a bare 'version' key - ambiguous across three concepts" \
+  || ok "--json has no bare 'version' key (three version facts stay distinct)"
+
+# unknowns must be null, never absent - the enumerator must not have to tell
+# "this camera has no card marker" from "I forgot to emit the key".
+rm -f "$r/mnt/anyka_hack/build.json" "$r/usr/fw_version"
+j2="$(IDENTITY_TEST_ROOT="$r" $SH "$r/mnt/anyka_hack/identity/whoami.sh" --json 2>&1)"
+printf '%s' "$j2" | python3 -c '
+import json,sys
+d = json.load(sys.stdin)
+assert d["card_build"] is None and d["card_dirty"] is None and d["fw_version"] is None, d
+assert d["unit_name"], d
+' 2>/dev/null && ok "--json nulls unknown fields instead of dropping them" \
+             || bad "--json dropped keys when the build marker was absent: $j2"
 rm -rf "$r"
 
 # --- 7. a marker left in the LEGACY store is honoured, never duplicated.
