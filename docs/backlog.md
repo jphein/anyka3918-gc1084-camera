@@ -46,15 +46,45 @@ Three consequences worth holding onto:
 
 1. **A camera has no identity.** Every card is the same card. There is no
    per-unit name, no way to tell from the device which build it is running, and
-   the DHCP reservation is the only thing distinguishing them. A `/etc/jffs2`
-   marker written at card-write time (unit name, card build date, patch set)
-   would make a fleet inspectable.
+   the DHCP reservation is the only thing distinguishing them.
+
+   ⚠️ **Do not put the unit marker in `/etc/jffs2`** — an earlier version of this
+   item recommended exactly that, and it was wrong. `/etc/jffs2` is `mtd6`, which
+   is slot **`C`** of the stock updater: any firmware update carrying a
+   `usr.jffs2` overwrites the whole partition. Every camera would lose its
+   identity and silently re-derive a *new* one — no error, no fault, just a fleet
+   of strangers. Use **`/data`** (`mtd7`), which `update.sh` does not write.
+
+   The durable split: **unit identity belongs to the camera** (`/data`, survives
+   updates and card swaps); **build identity belongs to the card** (written at
+   card-write time, travels with the artefact).
 2. **No inventory.** Nothing enumerates which cameras exist, what card each is
    running, or which are behind. On one camera that is fine; on ten it is the
-   whole problem.
-3. **No upgrade path.** A fix today means writing a new card and physically
-   swapping it. Bearable for a bench unit, expensive for one on a pole. Worth
-   knowing the cost before deciding a fix is "cheap".
+   whole problem. Note there are **three** distinct version-ish facts, and an
+   inventory reporting one field called "version" will be wrong about two of
+   them: the vendor's `fw_version` (what the flash contains), the card build
+   stamp (which commit of this repo wrote the SD card), and the unit identity.
+3. **An upgrade path exists — it was never missing, just unread.** This item
+   previously said a fix meant writing a new card and physically swapping it.
+   That was too pessimistic. `/usr/sbin/update.sh` is a complete self-contained
+   updater with **two** entry points, no cloud and no account:
+
+   | mode | trigger | version gate |
+   |---|---|---|
+   | TF (SD card) | `/mnt/update/update.tar` | `tar_ver != dev_ver` — any change, **including downgrade** |
+   | OTA (network) | `/tmp/update.tar` | `tar_ver > dev_ver` — newer only |
+
+   So the task is *packaging for the mechanism that is there*, not designing one.
+   Be accurate about the risk: in-place, non-atomic, **no A/B slots, no
+   rollback**, and the watchdog is deliberately killed before flashing — safe to
+   let finish, dangerous to interrupt. Verification is md5 **only when the
+   `.md5` is present** (the check is inside an `if [ -e ]`), and the hash ships
+   inside the artefact it verifies: integrity against corruption, not
+   authenticity.
+
+   This is what makes gaps 1 and 2 urgent rather than tidy. A remote update
+   mechanism with no identity and no inventory is how you brick a fleet one
+   camera at a time.
 4. **Kernel-build variance is real and unmapped.** Two builds already seen —
    2022 `zhoujiahui` (prefixed `gpio-ircut_a`) and 2023 `chensheng` (`ircut_a`
    plus `ircut_b`). The writer detects by node name on every boot, which is right,
