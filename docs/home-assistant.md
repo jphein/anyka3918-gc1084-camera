@@ -227,10 +227,17 @@ rest_command:
     method: get
 ```
 
-Clips live in `/mnt/sounds/` on the SD card and must be **16 kHz mono, pre-attenuated** — the
-decoder ignores the file's own sample rate and has no working volume control. Both traps, and
-the `ffmpeg` one-liner that avoids them, are in
-[ptz.md](ptz.md#speaker--audio-out-works). `command=sounds` lists what is available.
+Clips live in `/mnt/sounds/` on the SD card and must be **16 kHz mono** — the decoder ignores the
+file's own sample rate and uses the number it is given. That trap, and the `ffmpeg` one-liner that
+avoids it, are in [ptz.md](ptz.md#speaker--audio-out-works). `command=sounds` lists what is
+available.
+
+> ⚠️ **Do not pre-attenuate clips, and set the volume on the camera instead.** An earlier version
+> of this page said clips must be *"pre-attenuated"* because the decoder had no working volume
+> control. **Both halves are retracted.** There is a
+> [six-rung volume ladder](ptz.md#-volume-a-six-rung-ladder-shipped-on-the-card) on the card, and
+> attenuating the file is undone by a compressor downstream of it — measured at 10.3 dB into the
+> camera and inaudible coming out.
 
 The same token caveat as PTZ applies — see [above](#alternative-http-instead-of-telnet).
 

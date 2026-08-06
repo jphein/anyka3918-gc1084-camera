@@ -67,7 +67,7 @@ mtd7  2.20 MB  D          -> /data
 ```
 
 **That 64 KB `/etc/jffs2` partition is the constraint that shapes the whole hack.** It is the
-only writable place that persists to flash, and it has about 8 KB free. Consequences that show
+writable flash partition *the hack uses*, and it has about 8 KB free. Consequences that show
 up all over this project:
 
 * `isp_gc1084.conf` is 104 KB and physically cannot be stored there, so it is a **symlink** to a
@@ -80,17 +80,43 @@ up all over this project:
 ```
 /dev/root        /            squashfs  ro
 /dev/mtdblock5   /usr         squashfs  ro
-/dev/mtdblock6   /etc/jffs2   jffs2     rw     <- the only persistent writable flash
-/dev/mtdblock7   /data        jffs2     rw
+/dev/mtdblock6   /etc/jffs2   jffs2     rw     <- 64 KB, ~8 KB free, and slot C of the updater
+/dev/mtdblock7   /data        jffs2     rw     <- 2.20 MB, slot D. THE ROOMY ONE.
 /dev/mmcblk0p1   /mnt         vfat      rw     <- the SD card
 tmpfs            /tmp         tmpfs     rw     <- token, PTZ FIFO, extracted sensor conf
 tmpfs            /var         tmpfs     rw
 tmpfs            /mnt                          (before the card mounts over it)
 ```
 
-The root filesystem is **read-only squashfs**. Anything you want to survive a reboot goes in
-`/etc/jffs2` (tiny) or on the SD card (roomy). Anything in `/tmp` is gone on reboot — including
+The root filesystem is **read-only squashfs**. Anything in `/tmp` is gone on reboot — including
 `/tmp/token.txt` and `/tmp/sensor_ko_and_isp_conf/`.
+
+### Where persistent state actually goes — three places, not two
+
+| Target | Size | Survives a firmware update? | Use it for |
+|---|---|---|---|
+| **`/data`** (`mtd7`, slot **D**) | **2.20 MB** | ✅ **yes** — no stock update path writes slot D | **device-local state**, e.g. [the identity marker](identity.md#why-data-and-not-etcjffs2) |
+| `/etc/jffs2` (`mtd6`, slot **C**) | 64 KB, ~8 KB free | ❌ **no** — a `usr.jffs2` update overwrites the whole partition, *including the hack* | vendor config the hack must edit in place |
+| SD card | GBs | ✅ (it is not flashed at all) | binaries, sounds, sensor conf, anything large |
+
+> ❌ **RETRACTED: "`/etc/jffs2` is the only writable place that persists to flash."** This page
+> said that twice — in prose and as an inline comment in the mount table — while **the line
+> directly below the comment listed `/data` as `jffs2 rw`.** `/data` is **34× larger** and equally
+> persistent.
+>
+> The consequential half was the guidance that followed: *"anything you want to survive a reboot
+> goes in `/etc/jffs2` (tiny) or on the SD card (roomy)"* steered readers toward the two
+> constrained options and away from the right one. `/data` is where
+> [identity](identity.md) writes, and `/etc/jffs2` is *explicitly wrong* for it.
+>
+> 🔑 **A table refuting its own prose, one line apart, is now the most common defect in these
+> docs.** The mount table is a device dump — measured. The sentence summarising it was unsourced
+> and drifted. **Prose drifts, data doesn't: trust the table and re-derive the sentence.**
+
+> ⚠️ **`/data` being safe from updates is not the same as `/data` being unreachable.**
+> `updater local D=<file>` *would* flash it — the usage text simply does not advertise `D`. It is
+> safe from the **stock update flow**, not armoured. See
+> [identity.md](identity.md#why-data-and-not-etcjffs2).
 
 ## GPIO
 

@@ -425,7 +425,7 @@ statements, and everything downstream followed from conflating them.
 > happened because nothing needed to." The page caught the error, wrote it down, and then
 > committed it again in the opposite direction within the same day. Both readings (1.066 and
 > 1.048) are inside the **filter-IN band** of
-> [1.06–1.39](troubleshooting.md#the-bands-and-the-boundary-that-does-not-exist) anyway, so the
+> [≥ 1.00](troubleshooting.md#the-bands-and-the-boundary-that-does-not-exist) anyway, so the
 > numbers agree with each other and say nothing about the daemon.
 
 #### The rollback sequence, and a correction to how it was first written up
@@ -1037,16 +1037,28 @@ populated and supplied at all on a shaking-head board. Continuity or a scope wou
 ## Speaker — audio out works
 
 The camera can play audio out of its built-in speaker using the stock
-`/usr/bin/ak_adec_demo` decoder. Two things have to be right:
+`/usr/bin/ak_adec_demo` decoder:
 
 ```sh
-echo 1 > /sys/user-gpio/SPK_PA                       # 1. enable the amplifier
-ak_adec_demo 16000 1 mp3 /mnt/sounds/doorbell.mp3    # 2. decode and play
+ak_adec_demo 16000 1 mp3 /mnt/sounds/doorbell.mp3    # rate and channels are ARGUMENTS
+echo 1 > /sys/user-gpio/SPK_PA                       # belt-and-braces; see below
 ```
 
-**`SPK_PA` is the speaker power amplifier and sits at `0` on a cold boot.** Without raising it
-the decoder runs happily, reports no error, and you hear nothing. This is the single most
-confusing part of getting audio out.
+**`SPK_PA` is the speaker power amplifier, and it reads `0` before every run — not just after a
+cold boot.** Raising it by hand is harmless and may be unnecessary: **the play path raises it for
+you.**
+
+> ❔ **Being precise about what is established, because two sources say different things.**
+> `lucid-camera` measured that **`ak_adec_demo` raises it itself** — `main` calls
+> `ak_ao_enable_speaker`, and the binary contains **no `/sys/user-gpio` strings at all**.
+> [web-ui.md](web-ui.md#sound-playback) says the **`ctl` handler** raises it. **Both can be true**
+> — `ctl` may also raise it before invoking the player — and they imply different things for the
+> telnet path.
+>
+> **Until that is settled, treat the `echo 1` above as belt-and-braces rather than a
+> precondition.** This page previously called it *"step 1 of 2"* and said the pin was `0` only
+> *"on a cold boot"*; both framings are withdrawn. `lucid-camera` owns `ctl` and the disassembly
+> and is resolving it.
 
 Over HTTP this is `command=play&file=<name>`, which does both steps for you — see
 [web-ui.md](web-ui.md#sound-playback).
@@ -1070,16 +1082,89 @@ The convention in this project is therefore to **standardise every clip to 16 kH
 hard-code `16000 1` at the call site, so there is no per-file rate to get wrong:
 
 ```sh
-ffmpeg -i input.mp3 -ac 1 -ar 16000 -af "volume=0.3" /mnt/sounds/output.mp3
+ffmpeg -i input.mp3 -ac 1 -ar 16000 /mnt/sounds/output.mp3
 ```
 
-### ⚠️ There is no working volume control
+> ⚠️ **This line used to carry `-af "volume=0.3"`. Removed — it does nothing.** Attenuating the
+> file is undone by the compressor downstream of it; [see below](#-volume-a-six-rung-ladder-shipped-on-the-card).
+> Convert for **rate and channels only**, and set the volume on the device.
 
-`ak_adec_demo`'s volume control does not work, and the speaker is **far too loud** at default —
-loud enough to make the plastic casing resonate. There is no runtime fix.
+### ✅ Volume: a six-rung ladder, shipped on the card
 
-**Attenuate the file before you upload it.** `volume=0.3` is a reasonable starting point and
-upstream went as low as `volume=0.1` for indoor use.
+**The volume control was never missing — it was pinned at maximum and never exposed.**
+`ak_adec_demo` hard-codes `mov r1, #6` into `ak_ao_set_dac_volume`, against a valid range of
+`0–6`. One byte changes it.
+
+Six one-byte variants ship on the card as
+`/mnt/anyka_hack/ak_adec_demo/ak_adec_demo.vol1..6`, with the original kept as `.orig`.
+**`/usr/bin` is untouched**, so pulling the card recovers the stock player.
+
+| | |
+|---|---|
+| **Rung 1** | quietest — **the codec floor**, not "very quiet" |
+| **Rung 6** | the stock behaviour, loud enough to resonate the casing |
+
+> ### ⚠️ Two numbers, and conflating them caused an off-by-one four people repeated
+>
+> | | |
+> |---|---|
+> | `ak_ao_set_dac_volume` **argument** | **N** — what you select, range `0–6` |
+> | driver's **`DEV volume`** | **N−1** — a *separate downstream value* |
+>
+> One instruction is the whole story: `sub r3, r5, #1` at **`0xba84`** passes argument-minus-one
+> to the driver ioctl. The binary prints both in a single run, which is how it was caught:
+>
+> ```
+> [ak_ao_set_dac_volume:1112] set volume 6
+> [pcm_dac_set_volume:766]    set DEV volume 5
+> ```
+>
+> Measured three ways — arguments 6, 4, 2 → `DEV` 5, 3, 1 — so it is not a single-sample
+> inference. **When you read a log line, check which of the two numbers it is quoting.**
+
+> ### ⚠️ `dac 0` is a separate mute ioctl, not a seventh rung
+>
+> At **`0xba1c`**, `cmp r5, #0` / `bne 0xba78` branches value `0` **away from the volume path
+> entirely**. The zero branch calls `ioctl(fd, 0x40045010, &0)` — **a different ioctl number** —
+> and tears down the ASLC filter handle at `[r4+0x68]`.
+>
+> **So rung 1 (`DEV 0`) is the codec floor.** A `.vol0` variant would be **silence, not a quieter
+> step**, which is why the ladder starts at 1.
+
+**Evidence classes, kept separate because they support different claims:**
+
+* **Static analysis** (`lucid-camera`'s disassembly) — the offsets, the `N−1` mapping, the ioctl
+  numbers. **Nobody read the codec's registers**, so these describe the *code*, not the silicon.
+* **Behavioural** (JP, 2026-08-06) — all six rungs and both speaker paths exercised and working.
+  Independent evidence for the mapping; it says nothing about the ioctl numbers.
+
+> ❔ **NOT established: that the ladder is evenly graded, or that adjacent rungs are
+> distinguishable.** The codec's gain table lives in the kernel DAC driver and is unread. **Do not
+> describe the rungs as even steps**, and do not promise that 3 is audibly different from 4.
+
+#### ❌ RETRACTED: "there is no working volume control — attenuate the file instead"
+
+This section said the control did not work and that the only fix was pre-attenuating the mp3.
+**Both halves were wrong, and the second was actively counter-productive.**
+
+**The workaround cannot work, and the reason generalises.** Automatic Sound Level Control is
+enabled (`## ASLC OPEN OK ena:1`), and **the file is *upstream* of the compressor** — so
+attenuating it just hands ASLC more headroom to normalise straight back up. Measured: the same
+clip at gain 0.307 and 1.0 differs by **10.3 dB in the file** (−26.7 vs −16.4 dB) and is
+**inaudible** out of the speaker.
+
+The DAC value works precisely because it goes out **by ioctl, downstream of ASLC**, where the
+compressor cannot undo it. Confirmed: device volume moved 5 → 1 while every ASLC parameter stayed
+byte-identical (`ena:1`, `aslc volume 6`).
+
+> **Upstream found the symptom and stopped.** The card's own `ak_adec_demo/README.md` says *"it is
+> waaayyyy too loud (this is probably because volume control fails when running)"*. The control
+> never failed — **it was never exposed.** "Volume control fails" and "volume control is not on
+> the command line" look identical from outside the binary, and only one of them has a fix.
+
+> ⛔ **ASLC was never disabled and must not be.** A `strb → NOP` patch to disable it was drafted
+> and **never applied** — its proof chain was never closed, and it turned out to be unnecessary.
+> With ASLC on, quiet clips stay audible. **Do not apply it.**
 
 ### Practical notes
 

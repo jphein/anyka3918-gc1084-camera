@@ -368,8 +368,8 @@ rejected, so `../`, absolute paths and command substitution cannot survive the c
 directory (`/mnt/sounds/`) and the `.mp3` suffix are supplied by `ctl`, never by the caller. A
 name that passes validation but does not exist returns `ERR nofile`.
 
-The handler then raises `SPK_PA` (the speaker amplifier, which is `0` on a cold boot — without
-it the decoder runs and you hear nothing) and launches the decoder detached, so the clip
+The handler then raises `SPK_PA` (the speaker amplifier, which reads `0` before **every** run,
+not just after a cold boot) and launches the decoder detached, so the clip
 outlives the CGI request rather than being killed when it exits:
 
 ```sh
@@ -382,8 +382,11 @@ setsid ak_adec_demo 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 
 > **16 kHz mono**. Upstream's README suggests `41100`, which is both a typo for `44100` and wrong
 > for a 16 kHz file — that combination plays speech about 2.5× too fast.
 >
-> There is also **no working volume control**, so clips must be attenuated before upload.
-> Full detail in [ptz.md](ptz.md#speaker--audio-out-works).
+> ❌ **RETRACTED: "there is no working volume control, so clips must be attenuated before
+> upload."** There is one — a [six-rung DAC ladder](ptz.md#-volume-a-six-rung-ladder-shipped-on-the-card)
+> shipping on the card as `ak_adec_demo.vol1..6`. **And attenuating the file does not work**: the
+> file sits *upstream* of the ASLC compressor, which normalises it straight back up (10.3 dB
+> measured into the camera, inaudible out). Convert clips for **rate and channels only**.
 
 > ⚠️ It is not a fix for the stock CGIs. `webui`, `system`, `settings`, `settings_submit.sh`,
 > `events`, `video`, `del_video.sh` and `pwd_change` sit in the same directory and remain

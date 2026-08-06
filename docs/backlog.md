@@ -42,6 +42,45 @@ interesting the problem is.
   (True version, for the record: the cap is **per aligned 256-wide MAC window**,
   because the noun index is bits 8–12 and those are constant inside one. It is
   not a global ceiling.)
+
+  **The same failure also runs at FILE scale, and that is why the rule above did
+  not catch it.** An audit on 2026-08-06 found five live contradictions with one
+  shared cause: **today's findings landed in this backlog, and the reference docs
+  were never revisited.** The volume ladder, the ASLC result, the OTA analysis and
+  the identity rationale were all correct *here* while `ptz.md`, `web-ui.md`,
+  `home-assistant.md` and `hardware.md` still said what they said that morning.
+
+  The existing rule says to grep for contradictions when you learn something — and
+  it failed because the sweep looks *near* the new fact, and the contradiction was
+  in a different file with a different reader. **Nobody greps their own working
+  notes.**
+
+  > **The backlog is what we read. The reference docs are what a stranger reads.**
+  > A doc set can be **collectively correct and individually misleading**, and the
+  > stranger gets the wrong answer every time.
+
+  So: **when a finding lands here, it is not documented — it is queued.** Landing
+  it means editing the page a stranger would open.
+
+- **When a file contains both a table and a summary sentence, re-derive the
+  sentence.** Three of the four worst rows in that audit were a table refuting its
+  own prose — the `identity.md` cap above, `hardware.md` calling `/etc/jffs2` "the
+  only writable place that persists to flash" one line above a mount table listing
+  `/data` as `jffs2 rw`, and a green-fraction band contradicted by the readings
+  beside it. At that frequency it is not bad luck, it is **the dominant mode**.
+  Tables are usually dumps — measured. Summaries are usually unsourced and drift.
+
+- **A sweep built from what you expect to find will miss what you didn't expect to
+  be there.** A real address survived four separate scrubs on 2026-08-06 because
+  every sweep was assembled from a mental model of where addresses live, and the
+  file was a new directory added mid-session. It was caught by a mechanical pass
+  that **extracted every token of an identifier shape and printed the distinct
+  values to classify**, rather than grepping for known-bad ones.
+  **Enumerate from the artifact, not from memory.** Second instance the same day:
+  "there are two paths to the speaker" when there were eight.
+
+  Corollary that falls out of it: **sort such a list by frequency and read the
+  bottom first.** A value appearing once is the one no convention covers.
 - **A uniform result across varied inputs means a broken instrument, not a
   conclusion.** Six different `&level=` values that all report the same thing are
   telling you about your *test*, not the system. Seen four times today: a `ps`

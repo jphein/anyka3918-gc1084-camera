@@ -27,10 +27,37 @@ Device firmware version (`/usr/fw_version`): **`6.0.24.10_202401091113`**
 | mode | trigger | version gate |
 |---|---|---|
 | **TF (SD card)** — `UPDATE_WAY=0` | `/mnt/update/update.tar` exists | `tar_ver != dev_ver` — **any different version installs, including a DOWNGRADE** |
-| **OTA (network)** — `UPDATE_WAY=1` | `/tmp/update.tar` exists | `tar_ver > dev_ver` (shell string compare) — newer only |
+| **OTA (network)** — `UPDATE_WAY=1` | `/tmp/update.tar` exists | `tar_ver > dev_ver` (shell string compare) — newer only, **and it does not mean that** |
 
 The TF path is the interesting one for us: it needs no cloud, no account, and its gate is
 merely *different*, not *newer*.
+
+### ⚠️ The "newer only" gate is a **string** compare, and it inverts at this firmware version
+
+Line 277 is `[ "$tar_ver" \> "$dev_ver" ]`. That is lexicographic, not numeric. Tested in `sh`,
+`dash` and **`busybox sh` — the real interpreter on this device** — against the installed
+`6.0.24.10_202401091113`:
+
+```
+6.0.24.9  > 6.0.24.10 : TRUE     <- a DOWNGRADE passes the "newer only" gate
+6.0.24.10 > 6.0.9.1   : FALSE    <- .24 reads as OLDER than .9
+same prefix, later timestamp     : TRUE (correct)
+```
+
+It sorts correctly within an identical prefix and **inverts whenever a component crosses a
+digit-width boundary** — `"9" > "1"` compares the first character and stops.
+
+> 🔴 **The installed version is already past that boundary.** `6.0.24.x` means the comparison is
+> live, not theoretical: **the OTA path's only safety property does not hold on this camera.**
+> Treat the OTA gate as "any version, arbitrarily", exactly like the TF path — the difference
+> between the two entry points is **presentational, not protective.**
+
+*Evidence class: read from the script, then executed against three shells including the device's
+own. Measured, not inferred.*
+
+> **Why this is recorded here rather than only in the working notes:** this is the page a stranger
+> opens to understand the updater, and the gate reads as a safety property on line 30. A reader
+> who trusts it will conclude a downgrade cannot be pushed. It can.
 
 `update.tar` is expected to contain any of:
 

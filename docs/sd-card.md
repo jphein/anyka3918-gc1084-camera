@@ -368,7 +368,7 @@ working sensor config. Fix it if you rebuild the card.
                                       (scripts vendored; 37 MB binary excluded)
 /anyka_hack/*_demo/                   audio and motion-detection demos
 /sounds/                              MP3 clips for ctl's play command, 16 kHz mono
-                                      (see docs/ptz.md — rate and volume both matter)
+                                      (rate matters; do NOT pre-attenuate - see docs/ptz.md)
 /anyka_hack/dropbear/                 SSH (host keys stripped from this repo)
 /isp_gc1084.conf, /sensor_gc1084.ko   the GC1084 files, symlink target for /etc/jffs2
 ```
