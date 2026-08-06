@@ -350,8 +350,9 @@ and a "No SD card Inserted!" banner when the card is missing.
 
 * `video?token=<t>&file=<name>` plays `/video/<name>.mp4` in a `<video>` element.
 * `video?token=<t>&scan=true` runs `/mnt/anyka_hack/ffmpeg/wrap_mp4.sh` to wrap new `.h264`
-  captures into MP4. **This stops the main app while it runs, to free memory.** It also needs
-  the `ffmpeg` directory, which is not in this repo.
+  captures into MP4. **This stops the main app while it runs, to free memory** — which is why
+  the watchdog treats a running `wrap_mp4.sh` as a reason *not* to restart the app. It needs the
+  37 MB `ffmpeg` binary, which is not in this repo; `wrap_mp4.sh` itself is vendored.
 * `del_video.sh?token=<t>&file=<name>` "deletes" by renaming both the `.h264` in
   `/mnt/video_encode/` and the `.mp4` to `delete.bak`, and offers an Undo that renames them
   back. Only **one** deletion is undoable — the next delete overwrites `delete.bak`.

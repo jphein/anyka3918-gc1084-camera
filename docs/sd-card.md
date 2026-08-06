@@ -186,7 +186,8 @@ working sensor config. Fix it if you rebuild the card.
 /anyka_hack/web_interface/www/cgi-bin/ctl   fast control endpoint — OURS, not upstream
 /anyka_hack/snapshot/, jpeg_snapshot/ stills helpers
 /anyka_hack/rtsp/                     standalone RTSP
-/anyka_hack/ffmpeg/                   MP4 wrapping + app_restarter  (NOT in this repo)
+/anyka_hack/ffmpeg/                   MP4 wrapping + app_restarter watchdog
+                                      (scripts vendored; 37 MB binary excluded)
 /anyka_hack/*_demo/                   audio and motion-detection demos
 /anyka_hack/dropbear/                 SSH (host keys stripped from this repo)
 /isp_gc1084.conf, /sensor_gc1084.ko   the GC1084 files, symlink target for /etc/jffs2
