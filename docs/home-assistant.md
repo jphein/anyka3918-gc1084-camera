@@ -377,6 +377,48 @@ extra work is encoding.
 > The discriminating test is **pulling both streams simultaneously**: if both are always
 > encoded, the second consumer adds only packetisation; if encoded on demand, it adds roughly
 > a whole encode. `rtsp_clients` reads 2 during that phase, so it self-labels.
+>
+> **✅ RESOLVED — that test was run. See the next section.**
+
+## Stream encoding is ON DEMAND, and the main stream is expensive — MEASURED
+
+Six-phase run with `nebula-inventory`, phases self-labelled by `rtsp_clients`, first and last
+sample of each phase discarded so boundary intervals cannot dilute:
+
+| phase | n | cpu | app-cpu | Δ cpu vs idle |
+|---|---|---|---|---|
+| idle | 20 | 32.4 % | 20.9 % | — |
+| `/vs1` alone (640×360) | 9 | 41.1 % | 29.1 % | **+8.1** |
+| `/vs0` alone (1280×720) | 8 | 71.9 % | 61.3 % | **+39.5** |
+| **both at once** | 8 | 82.1 % | 71.7 % | **+49.7** |
+
+**Two conclusions, both now on evidence that can actually support them.**
+
+**1. Encoding is ON DEMAND, not continuous.** Pulling both streams costs approximately the
+**sum** of pulling each alone (app-cpu deltas: 8.2 + 40.4 = 48.6 predicted, 50.8 measured).
+Had both streams been encoded continuously, the second consumer would have added only
+packetisation — a few points, not forty. Additivity is the signature of a second encode
+starting.
+
+> Note this agrees with the inference retracted above, and that changes nothing about the
+> retraction. **The old reasoning was invalid and stays invalid**; this is a different test
+> that can distinguish the hypotheses. A conclusion being right does not retroactively make a
+> broken test good — it just means we got lucky, and luck is not transferable.
+
+**2. The earlier "720p is cheaper than 360p" reading was pure artifact.** With clean n and
+boundaries dropped, `/vs0` costs **~5× more** than `/vs1` (+39.5 vs +8.1). The dilution
+hypothesis was right and the inverted-pipeline hypothesis is dead.
+
+**So "point detection at the substream" is CORRECT on this hardware**, not backwards. That
+advice was briefly in doubt; it is now measured rather than assumed.
+
+### Practical limits
+
+- **One substream consumer is cheap** — +8 pp, entirely comfortable.
+- **The main stream is expensive** — +40 pp for one consumer.
+- **Two at once reaches 82 % CPU**, with `mem_free` down to 2924 kB. That is near the
+  ceiling: do not plan on two simultaneous consumers, and if you need 720p, budget for it
+  being most of the camera.
 
 Observer overhead: the sampler ran at 10 s intervals, ~0.5 s each, ≈5 % duty present in
 every phase equally. Absolute figures include it; the deltas do not.
