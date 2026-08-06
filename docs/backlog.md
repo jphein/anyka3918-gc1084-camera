@@ -93,6 +93,35 @@ interesting the problem is.
   beside it. At that frequency it is not bad luck, it is **the dominant mode**.
   Tables are usually dumps — measured. Summaries are usually unsourced and drift.
 
+- **A correction is trusted more than the original — so a wrong correction costs
+  more than the error it replaced.** On 2026-08-06 a firmware doc said *"196 KB
+  before `KERNEL`, none of it inside a named partition."* **True.** One piece of
+  contradicting evidence turned up — `erase_env=sf erase 0x20000 0x2000`, an
+  address below `KERNEL` — and the layout was rewritten around it, with a
+  prominent ⚠️ admitting the earlier "over-claim". **The admission was the
+  error.** `MAC` and `ENV` sit at `0x1B1000`/`0x1B2000`, *after* the kernel.
+  Reading the bytes at `0x20000` settles it in seconds: u-boot code and strings
+  (`Check read OK`), no environment anywhere near it.
+
+  **The evidence was real; the reading of what it pointed at was not.** And the
+  failure mode is specific: *finding something that contradicts your claim is
+  not the same as finding your claim wrong.* The other possibility — that the
+  new evidence means something else — never got tested, because a correction
+  feels like rigour and rigour feels like a stopping point.
+
+  > **The tell: correcting a claim without measuring the thing the new evidence
+  > supposedly shows.** `erase_env` was read; `0x20000` was not.
+
+  Why it is worse than the original: a page that says *"this used to say X, and
+  X was wrong"* has spent its credibility on the new statement. The next reader
+  does not re-derive a claim that has already survived one correction — and
+  everything downstream of it (here, a whole risk analysis about a redundant
+  environment pair) inherits the mistake with confidence attached.
+
+  **Same-day companion:** the redundancy argument built on that anchor was
+  refuted too. Both collapsed the moment someone dumped the address instead of
+  reasoning about it.
+
 - **The repo is not the world. "No evidence here" is not "it never happened."**
   On 2026-08-06 a firmware write-up stated *"nobody has had a serial console on
   one of JP's cameras"* and gated a whole plan on the cost of getting one —
