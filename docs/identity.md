@@ -49,12 +49,40 @@ is `mtd7`, slot `D`, which `update.sh` never writes. See
 [`reference/usr-sbin/README.md`](../reference/usr-sbin/README.md), which resolved
 the slot→mtd mapping out of `/proc/mtd` and the updater binary.
 
-Two caveats recorded there, both respected:
+**State that narrowly.** The only claim proved is: **`update.sh` never invokes
+`D=`** — a property of the *script*, verified across all five of its update
+functions. It is **not** a property of the partition, and "survives firmware
+updates" as a general statement is false.
 
-- `D` is **reachable** — `updater local D=<file>` resolves and there is no name
-  whitelist. `/data` is *unwritten by the shipped scripts*, not unwritable.
-- `update_factory_data.sh` does `rm -rf /data/audio_file/*`, so the marker sits
-  at the top of `/data` and never inside `audio_file/`.
+Two caveats, both respected:
+
+- `D` is **reachable**. `updater` holds no partition table and no name
+  whitelist — it builds `/sys/kernel/partition_table/<NAME>/mtd_index` from
+  whatever string it is handed, and the live table exposes `D → 7`. So
+  `updater local D=<file>` *would* flash `/data`. The usage text listing only
+  `KERNEL`/`A`/`B`/`C` is documentation, not enforcement.
+
+  > ⚠️ **Any update tooling we write must treat `D=` as forbidden.** Invoking it
+  > erases this marker on every camera it touches. Backlog gap 3 now points at
+  > building exactly that tooling, so the constraint is also written in
+  > `name-unit.sh`, next to the thing it protects.
+
+- `update_factory_data.sh` does `rm -rf /data/audio_file/*` before untarring an
+  audio package, with no integrity check. So the marker sits at the top of
+  `/data`, never inside `audio_file/`, and never uses one of the four `wifi_*`
+  names that script also writes there.
+
+### Why this marker matters more than inventory convenience
+
+`updater` performs exactly two checks on a local image: it opens, and it fits.
+No squashfs magic, no header consistency, no md5 on the local path. A truncated
+image is erased in and written verbatim, and the device **reports success and
+reboots**, then fails later at first read of the missing region.
+
+So the flashing process never tells the truth and the failure is *delayed*. That
+makes this marker the only post-flash verification available — the sole way to
+establish whether a flash actually took. It needs to be readable early and to
+survive a partially-bad flash, not just a good one.
 
 `/etc/jffs2` remains a last-resort fallback if `/data` is somehow absent. It is
 warned about loudly and the marker records which store it landed in.
@@ -250,15 +278,70 @@ with a single field called "version" will be wrong about two of the three.
 | Where you are | How |
 |---|---|
 | On the camera | `/mnt/anyka_hack/identity/whoami.sh` |
+| Enumerating a fleet | `whoami.sh --json` over telnet/dropbear |
 | On the camera, raw | `cat /data/unit.json /mnt/anyka_hack/build.json` |
 | Holding the card | mount it and read `/anyka_hack/build.json` — **build only**; the unit name is in the camera, not on the card |
 | Watching it boot | every line the naming hook prints is prefixed `identity:` |
 
-**There is deliberately no HTTP endpoint.** `ctl` could carry an `identity` verb
-and that is the obvious next step, but post-auth on this web UI already means
-root by design, and a pre-auth endpoint on a camera with this project's history
-is a cost with no matching need yet. When inventory (backlog gap 2) needs a
-network read path, decide it then — with the auth question in front of you.
+### `--json` — the enumerator's contract
+
+Fourteen keys, **every one always present**, `null` when unknown. A reader must
+never have to tell "absent" from "unknown"; that distinction is where
+inventories start guessing.
+
+```
+unit_name  unit_short  unit_mac  unit_source  unit_store  unit_named
+card_build card_hash   card_branch card_dirty card_built  card_stock
+fw_version
+read_at
+```
+
+**Nothing is called bare `version`**, because three different facts answer to
+that word:
+
+| concept | key | source | changes when |
+|---|---|---|---|
+| vendor firmware | `fw_version` | `/usr/fw_version`, read **live** | slot `B` is actually flashed |
+| our card build | `card_build` / `card_hash` | the card's `build.json` | a card is written or swapped |
+| unit identity | `unit_name` | the camera's `unit.json` | never — it *is* the unit |
+
+`fw_version` is read **live on every invocation and never cached into a
+marker**. The markers are written once while the flash can change underneath
+them, so a marker carrying a firmware version would report a stale one with
+total confidence. `read_at` is stamped live for the same reason — a caller can
+tell a fresh read from a cached one.
+
+**`card_build` is cosmetic. Never compare it.** Two sigil names can sort any
+way at all. Compare `card_hash` against git history.
+
+### Reading identity costs no token — and that is load-bearing
+
+The camera holds **exactly one** web session token in `/tmp/token.txt`, so
+minting a new one silently invalidates every other session. That is not
+theoretical: `docs/home-assistant.md` records it flipping an HA switch off in
+production. An enumerator that logged into every camera would reproduce that
+fleet-wide, and the symptom — HA switches misbehaving — would point nowhere near
+the sweep.
+
+**telnet and dropbear never touch `/tmp/token.txt`**, so `whoami.sh --json` over
+a shell is already token-free. It also never touches port 3000, where a bare TCP
+connect kills the snapshot server.
+
+**A `ctl?command=identity` verb would not be equivalent, and this is the trap
+worth naming.** `ctl` *validates* `/tmp/token.txt`; it does not mint one. So an
+enumerator would first have to log in to obtain a token — which is exactly the
+minting that breaks HA. Routing identity through `ctl` would *create* the
+problem it was meant to avoid. `status` and `sounds` are token-checked too; they
+only look token-free.
+
+**The unauthenticated-HTTP option, deliberately not taken.** A static copy of
+the marker under `/mnt/anyka_hack/web_interface/www/` would be served by busybox
+httpd with no CGI and no new code, and the incremental disclosure is close to
+zero — the MAC is already ARP-visible on that VLAN and the git hash points at a
+public repo. It is not implemented because it is a **policy** call about an
+unauthenticated surface on a camera fleet, not a technical one, and this is a
+project where defaulting into things has cost real time. It is four lines in the
+writer plus a per-boot refresh if wanted.
 
 ---
 
