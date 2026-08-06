@@ -72,7 +72,7 @@ Three consequences worth holding onto:
    | mode | trigger | version gate |
    |---|---|---|
    | TF (SD card) | `/mnt/update/update.tar` | `tar_ver != dev_ver` — any change, **including downgrade** |
-   | OTA (network) | `/tmp/update.tar` | `tar_ver > dev_ver` — newer only |
+   | OTA (network) | `/tmp/update.tar` | `tar_ver > dev_ver` — newer only, **but see below** |
 
    So the task is *packaging for the mechanism that is there*, not designing one.
    Be accurate about the risk: in-place, non-atomic, **no A/B slots, no
@@ -82,9 +82,65 @@ Three consequences worth holding onto:
    inside the artefact it verifies: integrity against corruption, not
    authenticity.
 
-   This is what makes gaps 1 and 2 urgent rather than tidy. A remote update
-   mechanism with no identity and no inventory is how you brick a fleet one
-   camera at a time.
+   ### 🔴 Two rules that are not optional
+
+   **Never put `usr.jffs2` in a tarball aimed at a hacked camera.** Slot `C` is
+   `/etc/jffs2`, and `C=` is a whole-partition erase (`erase_info.start = 0`,
+   `length = mtd_info.size`). That partition holds **the entire hack**:
+   `time_zone.sh` (the exploit entry point that launches telnet),
+   `gergehack.sh`, `gergedaemeon.sh`, `shadow`/`passwd` symlinked to `/etc`
+   (the root login), `webui.hash`, `gergesettings.txt` — **and `anyka_cfg.ini`,
+   which holds the WiFi SSID and password.**
+
+   So one write costs telnet, the hack, both passwords *and the network
+   config*. **A remote flash including slot C is a remote strand**, recoverable
+   only by pulling the card or attaching UART. A camera that has lost its SSID
+   is this project's signature disaster — it is why `--ssid` is a required
+   argument — and it presents as a unit that is simply *gone*: no association,
+   no auth failure, no console. The tarball format makes including it the easy
+   mistake.
+
+   (Related, smaller: `update_ispconfig()` runs `rm -rf /etc/jffs2/isp*.conf`
+   unconditionally on **every** update, even a kernel-only one. And
+   `update_factory_data.sh`'s `update_audio_file()` runs
+   `rm -rf /data/audio_file/*` — so `/data` survives an update but that
+   subdirectory does not.)
+
+   **Do not trust the "newer only" gate.** Line 277 is
+   `[ "$tar_ver" \> "$dev_ver" ]` — a **string** compare. Tested in `sh`, `dash`
+   and `busybox sh` (the real interpreter) against the installed
+   `6.0.24.10_202401091113`:
+
+   ```
+   6.0.24.9  > 6.0.24.10 : TRUE    <- a downgrade PASSES the newer-only gate
+   6.0.24.10 > 6.0.9.1   : FALSE   <- .24 reads as older than .9
+   same prefix, later timestamp : TRUE (correct)
+   ```
+
+   It sorts correctly within an identical prefix and inverts when a component
+   crosses a digit-width boundary — **and the installed version is already past
+   one.** A gate that is right most of the time and silently wrong at the
+   boundary is worse than no gate, because it reads as a safety net.
+
+   **Consequence: version comparison belongs to us, not to the device.** The
+   enumerator deliberately does *not* order vendor versions — it reports them
+   verbatim and flags **divergence across the fleet**. "All report X, cam3
+   reports Y" is actionable, needs no ordering, and cannot be wrong. Ordering
+   only becomes meaningful once a declared target firmware exists, and there
+   isn't one; do not invent one to make a column sortable.
+
+   ### What this does to gaps 1 and 2
+
+   A remote update mechanism with no identity and no inventory is how you brick
+   a fleet one camera at a time. **Inventory stopped being a report and became a
+   safety interlock** — the thing standing between a correct flash and flashing
+   the wrong unit.
+
+   Note the direction, because it inverts the usual argument: *"we can fix it
+   remotely"* normally justifies **less** ceremony. Here it justifies **more**,
+   because the only thing that previously forced you to identify the right
+   camera — physically standing in front of it — has been removed. You can now
+   strand a camera from your desk, in one command, with nothing in the way.
 4. **Kernel-build variance is real and unmapped.** Two builds already seen —
    2022 `zhoujiahui` (prefixed `gpio-ircut_a`) and 2023 `chensheng` (`ircut_a`
    plus `ircut_b`). The writer detects by node name on every boot, which is right,
