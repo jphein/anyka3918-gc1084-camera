@@ -165,3 +165,125 @@ A/B slot scheme or rollback here — **the update is in-place and non-atomic.**
 
 These files are checked in as **reference for designing an update path**, not as tooling.
 Recovery from a bad flash means the UART console and a full reflash, not a reboot.
+
+---
+
+# `/sbin/updater` — disassembled 2026-08-06. The flasher, read rather than inferred.
+
+`updater` (26348 B, md5 `98c425be815862aa30b92cc2717694ed`, Jan 2024) was the one component
+above whose behaviour was *inferred*. It has now been read. **Static analysis only — it was
+never executed.** Stripped, no symbols; addresses below are from the disassembly.
+
+## Slot names are a RUNTIME sysfs lookup, not a hardcoded list
+
+`updater` does not contain a partition table. It builds a path from whatever name it is given:
+
+```
+sprintf("/sys/kernel/partition_table/%s", NAME)        -> must exist, else
+                                     "err:no this partition directory, partname: %s"
+sprintf("/sys/kernel/partition_table/%s/%s", NAME, "mtd_index")   -> read index
+open("/dev/mtd%d", index)
+```
+
+The live table:
+
+```
+/sys/kernel/partition_table/KERNEL/mtd_index : 1
+/sys/kernel/partition_table/MAC/mtd_index    : 2
+/sys/kernel/partition_table/ENV/mtd_index    : 3
+/sys/kernel/partition_table/A/mtd_index      : 4
+/sys/kernel/partition_table/B/mtd_index      : 5
+/sys/kernel/partition_table/C/mtd_index      : 6
+/sys/kernel/partition_table/D/mtd_index      : 7
+```
+
+### ⚠️ `D` IS reachable — `update.sh` merely never uses it
+
+The usage text documents only `KERNEL`, `A`, `B`, `C`. **That is documentation, not
+enforcement.** The lookup is generic and `D` is present with `mtd_index 7`, so
+`updater local D=<file>` would resolve and flash **`/data`**. No name whitelist was found.
+
+The correct, narrow statement — and the one to build on — is:
+
+> **`update.sh` never invokes `D=`.** That is a property of the *script*, verified by reading
+> all five of its update functions. It is **not** a guarantee that `mtd7` is unwritable, and
+> **not** a guarantee that some other caller cannot target it.
+
+**Second caveat for anything storing identity in `/data`:** `update_factory_data.sh`'s
+`update_audio_file()` runs **`rm -rf /data/audio_file/*`** before untarring an audio package.
+So `/data` survives a firmware update, but **`/data/audio_file/` does not** — do not put a
+unit marker under that subdirectory.
+
+## Q: whole-partition erase or in-place? — **WHOLE PARTITION, from offset 0**
+
+```
+b778:  ldr r3, [sp,#48]     ; mtd_info.size   <- FULL PARTITION SIZE
+b784:  str r3, [sp,#12]     ; erase_info.length = size
+b798:  str r1, [sp,#8]      ; erase_info.start  = 0
+b7a0:  pthread_create(...)  ; -> thread prctl(PR_SET_NAME,"erase_mtd")
+b09c:      ioctl(fd, MEMERASE 0x40084d02, &erase_info)
+```
+
+`erase_info = { start: 0, length: mtd_info.size }`. The **entire** partition is erased in a
+single `MEMERASE`, on a worker thread, before any write.
+
+Consequences:
+
+- **`C=usr.jffs2` IS a whole-partition replace.** mtd6 is erased `start=0 length=0x10000`
+  (all 64 KB), so **everything in `/etc/jffs2` is destroyed** by a `C=` update. Any per-unit
+  state kept there does not survive a firmware update.
+- An **undersized** image leaves the remainder **erased (0xFF)**, not stale data — which is
+  the clean state for both squashfs (defined by its own length) and jffs2.
+- The erase is why the script kills the watchdog first, and why interrupting it is fatal:
+  between `MEMERASE` and the end of the write the partition is blank.
+
+## Q: bounds check against mtd size? — **YES, and it is sound**
+
+```
+b72c:  fstat(fd, &st)
+b744:  ldr sl, [sp,#116]    ; st.st_size
+b748:  ldr r3, [sp,#48]     ; mtd_info.size
+b74c:  cmp sl, r3
+b750:  bls b76c             ; size <= partition -> proceed
+b754:  fputs("image file large than mtd partition", stderr)
+b764:  mvn r4, #0           ; return -1
+```
+
+Unsigned compare (`bls`), checked **before** the erase. **An oversized image is rejected and
+nothing is touched.** This is the one safety property in the whole pipeline that actually works.
+
+## Q: short/corrupt image behaviour? — **NO FORMAT VALIDATION AT ALL**
+
+`updater` performs exactly two checks on a local image: it must **open**, and it must not be
+**larger than the partition**. There is:
+
+- **no squashfs superblock / magic check** — no `hsqs` or equivalent constant anywhere
+- **no length-vs-header consistency check**
+- **no md5 on the `local` path** — the `md5 check success/failure` strings belong to the
+  `http`/`ftp` download paths only
+
+So a truncated or garbage file that is merely *small enough* will be **erased-in and written
+verbatim**. Combined with `update.sh` skipping md5 whenever the `.md5` is absent, the
+end-to-end path from `update.tar` to flashed rootfs can contain **zero** integrity checking.
+
+A short `A=root.sqsh4` therefore yields a partition whose head is a valid-looking mount
+target and whose tail is 0xFF — i.e. **a device that fails at first read of the missing
+region, after the update reports success and reboots.**
+
+## Also present, not exercised
+
+`updater` links `socket`/`bind`/`listen`/`accept`/`connect`/`getaddrinfo` and carries `http`
+and `ftp` source options (`updater ftp K=/path/file1 A=a.b.c.d P=port U=aaa C=xxx`). So the
+same flasher can pull an image straight from the network. Not analysed; flagged because it
+widens the OTA surface beyond the SD card.
+
+`/dev/akfha_char` also appears alongside `/dev/mtd%d` — a second, Anyka-specific flash device
+used on at least one path. Which path takes it is **not established.**
+
+## Net assessment for building an update image
+
+Safe, in this order: the size check is real, the erase is complete and atomic-ish per
+partition, and an undersized image leaves clean 0xFF. Unsafe: **nothing validates that the
+bytes you supply are the filesystem you think they are** — not the script, not the flasher.
+Build the `.md5` files and include them; they are the only integrity mechanism available, and
+they only run because *you* chose to ship them.
