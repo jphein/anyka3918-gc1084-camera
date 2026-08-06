@@ -466,6 +466,27 @@ statements, and everything downstream followed from conflating them.
 > them wrong. One disassembly produced a mechanism precise enough to name *which single string*
 > caused it. On this device that has now been true repeatedly — **when a question survives two
 > rounds of symptom-based reasoning, stop reasoning and go read the binary.**
+>
+> #### How the wrong answer was manufactured: two true reports collapsed into one false one
+>
+> **Nobody involved said anything untrue.** There were two findings in flight:
+>
+> * *"The `libre_anyka_app` patch was not the culprit"* — **true.**
+> * *"Today's rolled-back patch was the regression"* — **true**, about `libplat_drv.so`.
+>
+> Both are correct. **Merged, they yield "the `libre_anyka_app` patch was the regression", which
+> is false** — and the merge is easy, because the two patches were applied within minutes of each
+> other, share a purpose, and are described by the same phrase *"the ircut patch"*.
+>
+> **The failure is in the summary, not in any of the inputs.** That makes it invisible to the
+> usual defence of checking your sources: every source was right. The tell was available and
+> nobody looked for it — **the two reports named different files**, and the third edit mentioned
+> in one of them (`ir-led`) exists in only one of the two binaries.
+>
+> **Practically: when two reports about "the patch" seem to conflict, check they are about the
+> same artefact before reconciling them.** Two correct statements about different things look
+> exactly like one contradiction about one thing. This matters most when several people are
+> investigating at once, which is precisely when it is hardest to notice.
 
 > ### 🔑 The lesson, and it is the sharpest one this project has produced
 >
