@@ -2,7 +2,8 @@
 # Write a ready-to-run Anyka AK3918 hack SD card from the backup taken 2026-08-05,
 # with this project's fixes baked in.
 #
-#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
+#   sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP]
+#                                        [--unit-name "Front Door"] [--stock]
 #
 # The card is the camera's brain: /Factory/config.sh is what the stock firmware
 # executes at boot (the SD exploit), and /mnt/anyka_hack/ holds every binary the
@@ -24,6 +25,10 @@ VOLID="8D1BDED7"
 # Repo root, so we can overlay files that live here rather than in the backup.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CTL_SRC="$REPO/reference/sd-card-original/web_interface/ctl"
+IDENTITY_SRC="$REPO/tools/identity"
+
+# Where the project lives, for build.json's commit_url. Public repo, no secrets.
+REPO_URL="https://github.com/jphein/anyka3918-gc1084-camera"
 
 # NO BINARY IR-CUT PATCH IS SHIPPED. This is deliberate and hard-won.
 #
@@ -93,18 +98,36 @@ DEV="${1:-}"; shift || true
 SSID=""
 KEEP_SSID=0
 TIME_SOURCE=""
+UNIT_NAME=""
 STOCK=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --ssid)        SSID="${2:-}"; shift 2 ;;
     --keep-ssid)   KEEP_SSID=1; shift ;;
     --time-source) TIME_SOURCE="${2:-}"; shift 2 ;;
+    --unit-name)   UNIT_NAME="${2:-}"; shift 2 ;;
     --stock)       STOCK=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
-[ -n "$DEV" ] || die "usage: $0 /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP] [--stock]"
+[ -n "$DEV" ] || die "usage: $0 /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP]
+                        [--unit-name NAME] [--stock]"
+
+# --unit-name is NOT the counterpart of --ssid, and deliberately so.
+#
+# --ssid is required because a wrong default strands a camera. A missing name
+# strands nothing: an unnamed camera names ITSELF at first boot, from its own
+# MAC, with no registry and no configuration. So the override is optional by
+# design - it exists for the one camera JP wants to call "Front Door", not as a
+# per-unit chore that has to be got right for every card.
+#
+# It only takes effect on a camera that has NEVER been named. Naming is
+# write-once in flash, so passing --unit-name for a camera that already has a
+# name does nothing at all. Say so out loud rather than let it look applied.
+case "$UNIT_NAME" in
+  *'"'*) die "--unit-name must not contain a double quote (it goes into JSON)" ;;
+esac
 
 # The SSID decision is REQUIRED, deliberately. Defaulting to the backup's baked-in
 # value is how you produce a camera that associates with nothing: no network path,
@@ -135,10 +158,41 @@ BASE="$(basename "$DEV")"
 ROOTSRC="$(findmnt -no SOURCE / || true)"
 case "$ROOTSRC" in *"$BASE"*) die "$DEV appears to host /. Refusing." ;; esac
 
+# --- build identity, resolved BEFORE the erase so a broken toolchain costs
+#     nothing. The card gets a marker saying which commit of this repo produced
+#     it; the camera gets its own name at first boot. See docs/identity.md.
+#
+# safe.directory is needed because this runs as root against a repo owned by the
+# invoking user - without it git refuses with "dubious ownership" and every card
+# would silently be stamped "dev".
+GIT_HASH="$(git -c safe.directory="$REPO" -C "$REPO" rev-parse --short=7 HEAD 2>/dev/null || true)"
+GIT_BRANCH="$(git -c safe.directory="$REPO" -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [ -n "$GIT_HASH" ]; then
+  if git -c safe.directory="$REPO" -C "$REPO" diff --quiet HEAD 2>/dev/null; then
+    GIT_DIRTY=false
+  else
+    GIT_DIRTY=true
+  fi
+else
+  # realm-sigil's own convention for "provenance unknown".
+  GIT_HASH="dev"; GIT_BRANCH="unknown"; GIT_DIRTY=true
+fi
+BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+BUILD_NAME=""
+if [ -x "$IDENTITY_SRC/sigil-name.sh" ]; then
+  BUILD_NAME="$("$IDENTITY_SRC/sigil-name.sh" --realm forge --hash "$GIT_HASH" 2>/dev/null || true)"
+fi
+
 SIZE_H="$(lsblk -dno SIZE "$DEV" | tr -d ' ')"
 MODEL="$(lsblk -dno MODEL "$DEV" | sed 's/ *$//')"
 echo "Target : $DEV  ($SIZE_H, ${MODEL:-unknown})"
 echo "Source : $BACKUP"
+echo "Build  : ${BUILD_NAME:-<unnamed>}  (branch $GIT_BRANCH, dirty=$GIT_DIRTY)"
+if [ -n "$UNIT_NAME" ]; then
+  echo "Unit   : $UNIT_NAME  (--unit-name; applies ONLY to a camera never named before)"
+else
+  echo "Unit   : self-named at first boot from the camera's own MAC"
+fi
 if [ "$STOCK" -eq 1 ]; then
   echo "Mode   : --stock (backup contents only, NO project fixes)"
 else
@@ -337,6 +391,131 @@ if [ "$STOCK" -eq 0 ]; then
 (sleep 60; echo 1 > /sys/user-gpio/ircut_a) &
 IRCUT
   fi
+
+  # --- 8. give the camera a name of its own, once, at first boot.
+  #
+  # Backlog gap 1: "a camera has no identity - every card is the same card".
+  # The fix has to be in TWO places because there are two different facts:
+  #
+  #   the UNIT  is the camera, and its name must survive a card swap
+  #             -> /data/unit.json (mtd7). NOT /etc/jffs2: that is mtd6, slot
+  #                "C" of the stock updater, so a firmware update erases it.
+  #                See reference/usr-sbin/README.md.
+  #   the BUILD is the card,   and its version must follow the card   -> here
+  #
+  # This installs the unit half. The camera derives its own name from its own
+  # MAC at first boot, so a camera taken out of the bag today names itself with
+  # zero configuration and no registry to keep in sync. Write-once: re-writing
+  # a card never renames a camera.
+  #
+  # The word tables are a pinned snapshot of realm-sigil's generated tables -
+  # see tools/identity/PINNED.md. They are pinned because the word COUNT is the
+  # modulus, so a word added upstream would rename every camera in the bag.
+  echo "==> installing the identity toolkit + first-boot naming hook"
+  ID_DST="$MNT/anyka_hack/identity"
+  mkdir -p "$ID_DST"
+  # `cp` for the data files, NOT `install -m 644`.
+  #
+  # FAT32 has no permission bits at all - a file's apparent mode is synthesised
+  # from the mount's fmask/dmask, so `install -m 644` asks the kernel for a mode
+  # the filesystem cannot store. Whether that is silently ignored or returns
+  # EPERM depends on the mount options, and under `set -e` the EPERM case would
+  # abort this script AFTER the card was erased. NOT MEASURED: no vfat mount was
+  # available on the workstation to settle which happens here.
+  #
+  # `cp` never asks the question. `install -m 755` is kept for the scripts only
+  # because the ctl install above already does exactly that and is known to work
+  # on a real card - so it is a proven path, not a fresh bet.
+  for f in sigil-name.sh name-unit.sh whoami.sh fleet.adjectives fleet.nouns; do
+    if [ -f "$IDENTITY_SRC/$f" ]; then
+      case "$f" in
+        *.sh) install -m 755 "$IDENTITY_SRC/$f" "$ID_DST/$f" ;;
+        *)    cp "$IDENTITY_SRC/$f" "$ID_DST/$f" ;;
+      esac
+    else
+      warn "identity file missing: $IDENTITY_SRC/$f"
+      NOTES+=("identity toolkit INCOMPLETE ($f missing) - this camera will not name itself.")
+    fi
+  done
+  # forge tables are NOT shipped: build names are resolved here, on the
+  # workstation, and baked into build.json. The camera never needs them.
+
+  if [ -n "$UNIT_NAME" ]; then
+    echo "==> pre-naming this camera \"$UNIT_NAME\" (only if it has never been named)"
+    printf '%s\n' "$UNIT_NAME" > "$ID_DST/unit-name.override"
+    NOTES+=("--unit-name only applies to a camera with NO existing name. Naming is")
+    NOTES+=("  write-once in flash, so a camera that already has one keeps it.")
+  fi
+
+  # Same seam and same shape as the IR-cut line above: appended to config.sh,
+  # backgrounded, and idempotent on re-write. name-unit.sh does its own waiting
+  # for the MAC rather than guessing a sleep, because the interface only appears
+  # once gergehack.sh has run wifi_manage.sh.
+  if grep -q 'identity/name-unit.sh' "$CONFIG_SH" 2>/dev/null; then
+    echo "==> first-boot naming hook already present in Factory/config.sh"
+  else
+    echo "==> adding the first-boot naming hook to Factory/config.sh"
+    # Invoked via `sh`, and tested with -f rather than -x, ON PURPOSE. On FAT32
+    # the execute bit comes from the mount's fmask, not from the file, so an -x
+    # test is really a test of how the kernel happened to mount the card.
+    #
+    # MEASURED, on the real camera: exec off the card does work - gergehack.sh
+    # runs /mnt/anyka_hack/ptz/run_ptz.sh and start_web_interface.sh directly.
+    # So this is not fixing a known breakage; it is refusing to make a
+    # write-once naming decision depend on a mount option. A hook that silently
+    # never runs is this project's signature failure.
+    cat >> "$CONFIG_SH" <<'IDENTITY'
+
+# name this camera once, from its own MAC (docs/identity.md)
+[ -f /mnt/anyka_hack/identity/name-unit.sh ] && sh /mnt/anyka_hack/identity/name-unit.sh &
+IDENTITY
+  fi
+fi
+
+# --- the build marker. Written on EVERY card including --stock.
+#
+# --stock means "no project FIXES", and this is not a fix - it is a label, and
+# nothing on the camera executes it. An unlabelled stock card is precisely the
+# "every card is the same card" problem, and it is the card you least want to be
+# holding unlabelled when you are comparing it against a patched one.
+#
+# Field names follow realm-sigil's version response where they apply. The
+# server-only fields (started, uptime, pid, runtime) are omitted - a card is not
+# a running process.
+#
+# DELIBERATELY ABSENT: wifi_ssid, wifi_password and time_source. Only booleans
+# saying whether each was set. This file is the one that gets copied into
+# tickets and pasted into chat; it must not be the second place the real SSID
+# and the real VLAN address live.
+echo "==> writing build marker /anyka_hack/build.json"
+COMMIT_URL=""
+[ "$GIT_HASH" != "dev" ] && COMMIT_URL="$REPO_URL/commit/$GIT_HASH"
+cat > "$MNT/anyka_hack/build.json" <<JSON
+{
+  "kind": "build",
+  "name": "anyka3918-gc1084-camera",
+  "description": "AK3918 + GC1084 camera SD card",
+  "version": "${BUILD_NAME:-unknown}",
+  "hash": "$GIT_HASH",
+  "branch": "$GIT_BRANCH",
+  "dirty": $GIT_DIRTY,
+  "built": "$BUILT_AT",
+  "realm": "forge",
+  "repo": "$REPO_URL",
+  "commit_url": "$COMMIT_URL",
+  "stock": $([ "$STOCK" -eq 1 ] && echo true || echo false),
+  "backup": "$(basename "$BACKUP")",
+  "writer_host": "$(hostname)",
+  "ssid_set": $([ -n "$SSID" ] && echo true || echo false),
+  "time_source_set": $([ -n "$TIME_SOURCE" ] && echo true || echo false)
+}
+JSON
+if [ "$GIT_HASH" = "dev" ]; then
+  NOTES+=("build.json says hash=dev - git could not identify this checkout, so this")
+  NOTES+=("  card cannot tell you which commit produced it. Fix the checkout and rewrite.")
+elif [ "$GIT_DIRTY" = "true" ]; then
+  NOTES+=("build.json is marked dirty=true - the working tree had uncommitted changes,")
+  NOTES+=("  so \"$GIT_HASH\" does NOT fully describe what is on this card.")
 fi
 
 echo
@@ -344,6 +523,17 @@ echo "==> settings on this card:"
 grep -E '^(wifi_ssid|sensor_kern_module|time_source|time_zone|ptz_init_on_boot|run_)' "$SETTINGS" \
   | sed 's/^/    /'
 echo "    (wifi_password is set but not shown)"
+
+echo
+echo "==> identity on this card:"
+echo "    build : ${BUILD_NAME:-unknown}   [$GIT_BRANCH, dirty=$GIT_DIRTY]"
+if [ "$STOCK" -eq 1 ]; then
+  echo "    unit  : NOT installed (--stock ships no scripts, so no self-naming)"
+elif [ -n "$UNIT_NAME" ]; then
+  echo "    unit  : \"$UNIT_NAME\" if this camera has never been named, else unchanged"
+else
+  echo "    unit  : self-named at first boot from the camera's own MAC"
+fi
 
 # Both inherited-value hazards are surfaced in the preflight above, before the
 # erase, where they can still change the outcome. Repeated here only so they
@@ -381,6 +571,14 @@ echo "    /sys/user-gpio/ircut_a directly, and Factory/config.sh sets the filter
 echo "    the non-magenta position 60s into every boot. Automatic day/night is NOT"
 echo "    fixable on this board - the sense input the vendor driver wants does not"
 echo "    exist here. See docs/ptz.md before trying."
+echo "  * IDENTITY IS SPLIT ON PURPOSE. The camera's name lives in its own flash"
+echo "    (/data/unit.json, mtd7 - the partition the stock updater does not touch)"
+echo "    and survives both a card swap and a firmware update; the build version lives"
+echo "    on the card (/anyka_hack/build.json) and follows it. So moving a card"
+echo "    between cameras moves the BUILD, never the NAME - which is what makes a"
+echo "    bag of identical cameras inspectable. Ask a camera who it is with:"
+echo "        /mnt/anyka_hack/identity/whoami.sh"
+echo "    Naming is write-once: rewriting this card never renames a camera."
 echo "  * The card sets the root password from Factory/config.sh on every boot."
 echo "  * sensor_kern_module points at the GC1084 module ON THIS CARD. If the new"
 echo "    camera has a different image sensor, video will not come up until that"
