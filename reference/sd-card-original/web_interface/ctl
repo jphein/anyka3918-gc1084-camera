@@ -45,10 +45,18 @@ case "$c" in
     echo "$c" > /tmp/ptz.daemon ;;
   init_ptz|init_ir)
     echo "$c" > /tmp/ptz.daemon ;;
+  # Write the pin DIRECTLY. Do NOT route this through the ptz daemon's
+  # `set_ir_cut`: on this kernel the daemon's ak_drv_ir_init stats
+  # /sys/user-gpio/gpio-ircut_a and gpio-ircut_b, both of which are absent
+  # (this build names them ircut_a/ircut_b), so init returns -1 and
+  # ak_drv_ir_set_ircut bails before writing anything. It reports success
+  # regardless - camera_set_ircut is a sprintf into a shell call that always
+  # returns 0 - which is why the FIFO route looked like it worked for months.
+  # 1 = filter IN = normal colour. 0 = filter OUT = magenta. Allow 4-8s to move.
   ircut_on)
-    echo "set_ir_cut 1" > /tmp/ptz.daemon ;;
+    echo 1 > /sys/user-gpio/ircut_a ;;
   ircut_off)
-    echo "set_ir_cut 0" > /tmp/ptz.daemon ;;
+    echo 0 > /sys/user-gpio/ircut_a ;;
   white_led_on)
     echo 1 > /sys/user-gpio/WHITE_LED ;;
   white_led_off)
