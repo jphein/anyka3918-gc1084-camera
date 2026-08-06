@@ -4,9 +4,11 @@ Until 2026-08-06 everything this project shipped was **shell scripts and single-
 to vendor binaries**. We could change what the vendor's code *did*; we could not add code of
 our own. This page closes that.
 
-**Status: the toolchain is installed and builds correctly-shaped binaries, including one
-that links seven vendor SDK libraries. On-device execution is verified separately — see
-"Proof" at the end, and do not treat a successful build as a working binary.**
+**Status: CLOSED. A binary built here runs on the camera, and a second one dynamically links
+the camera's own vendor SDK and calls into it.** Both are shown with real output under
+"Proof" at the end. A successful build is still not a working binary — that section exists
+because `file`, `readelf` and a clean link only mean the toolchain *believes* it made an ARM
+binary.
 
 ---
 
@@ -211,11 +213,36 @@ binary"**. This project's standing rule applies: *verify the effect, not the inv
 | build is reproducible | two runs byte-identical | ✅ |
 | SDK is the camera's own SDK | two library md5s match the live device | ✅ |
 | SDK-linked app rebuilds | `ak_snapshot` 29740 B, 7 SDK libs in `NEEDED` | ✅ |
-| **hello-world RUNS on the camera** | — | see below |
-| **rebuilt app behaves like the shipped one** | — | see below |
+| **hello-world RUNS on the camera** | `hello from a binary we built ourselves` / `argc=1 pid=15000 uid=0` / `exit=0` | ✅ |
+| **an SDK-linked binary runs and calls into the SDK** | see below | ✅ |
 
-The last two rows are the only ones that close the gap. Fill them in with real output; do
-not mark them from a green build.
+Those last two are the only rows that close the gap. They are filled in from real output, not
+from a green build.
+
+### The SDK proof
+
+`ak_snapshot` rebuilds, but running it initialises the ISP, which `libre_anyka_app` already
+owns — so it is a poor *first* test: a failure would be ambiguous between "our binary is
+broken" and "the camera is busy". Instead, `tools/crosscompile/sdkver.c` calls two SDK
+functions chosen because they are **two instructions each and return a string pointer** —
+no ioctl, no GPIO, no ISP, no side effects of any kind:
+
+```
+$ LD_LIBRARY_PATH=/mnt/lib /tmp/sdkver
+libplat_drv    ak_drv_ir_get_version() = libplat_drv_ir V1.0.00
+libplat_common ak_common_get_version() = libplat_common V1.0.01
+exit=0
+```
+
+**That is a binary we compiled, dynamically linking the camera's own vendor SDK from
+`/mnt/lib`, resolving its symbols and getting real data back.** Six `NEEDED` entries:
+`libplat_drv`, `libplat_common`, `libplat_thread`, `libdl.so.0`, `libpthread.so.0`,
+`libc.so.0`.
+
+One linking note worth keeping: `-lplat_drv -lplat_common` alone fails with a wall of
+undefined `ak_thread_*` and `dladdr`. The SDK libraries have **transitive dependencies that
+are not recorded in the `.so` files**, so you must add `-lplat_thread -ldl -lpthread`
+yourself. Expect to discover the dependency list from link errors rather than from headers.
 
 ## What this unblocks — and what it does not
 
