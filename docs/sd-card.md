@@ -12,6 +12,7 @@ these cameras, cloning cards is the normal workflow.
 ```sh
 sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) \
                             [--time-source IP] [--unit-name "Front Door"] [--stock]
+                            [--force-wipe]
 ```
 
 [`tools/write-sd-card.sh`](../tools/write-sd-card.sh) writes a ready-to-run card from the
@@ -34,6 +35,77 @@ sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) \
 | `--time-source IP` | Rewrites `time_source=`. Worth using — see the warning below. |
 | `--unit-name NAME` | Names this camera, e.g. `"Front Door"`. **Optional** — an unnamed camera [names itself from its own MAC at first boot](identity.md). Only takes effect on a camera that has never been named |
 | `--stock` | Writes the backup **unmodified**, with no project fixes. Escape hatch. |
+| `--force-wipe` | Overrides the "this does not look like a camera card" refusal. **Read the section below before using it.** |
+
+## The tool refuses a device that does not look like a camera card
+
+Before erasing anything, the writer checks the **shape** of the target. A camera
+card is one of exactly two things:
+
+- **blank / unpartitioned**, or
+- **a single FAT32 partition** — a card this tool wrote before, or a new card as
+  sold.
+
+Anything else is refused, by name:
+
+```
+error: /dev/sdc does not look like a camera card, so this tool is refusing it.
+
+  A camera card is blank, or a single FAT32 partition. This device has 3
+  partitions:
+
+      sdc1 ntfs     MULTITOOL
+      sdc2 vfat     BOOTSTRAP
+      sdc3 squashfs
+
+  and these are MOUNTED RIGHT NOW - something is using this device:
+
+      /dev/sdc1 -> /media/jp/MULTITOOL
+      /dev/sdc2 -> /media/jp/BOOTSTRAP
+      /dev/sdc3 -> /media/jp/disk
+
+  If that is genuinely the card you meant, pass --force-wipe. If it is a
+  multitool, an installer, a backup or somebody's photos, this refusal just
+  saved it.
+```
+
+### Why it exists
+
+That is not a hypothetical. On 2026-08-06, asked to write a card, **the only
+removable device present was JP's bootable Multitool card** — and it passed every
+check the tool had at the time. `removable=1`: yes. Not the system disk: correct.
+Backup present: yes.
+
+**The only thing between it and an erase was a human reading an `lsblk` listing
+at the ERASE prompt**, at the end of a long session. It then happened *again*,
+to a second person, thirty minutes later.
+
+> **Printing evidence and requiring interpretation is not a guard.** It fails
+> precisely when the operator is in a hurry — which is when destructive tools get
+> run.
+
+The `lsblk` print before the ERASE prompt is still there and is still right. It
+just needed a refusal behind it.
+
+### `--force-wipe` — and why the override is correct
+
+**Use it when the device really is the card you meant** and it happens to carry
+something else: a card previously used for another purpose, a multi-partition
+layout, a non-FAT filesystem.
+
+The override existing is not a weakness in the guard. **The guard's job is to
+convert *"an operator skims a partition table"* into *"a human is asked a direct
+question about a specific named artifact."*** It succeeded the first time it
+fired: the refusal named `MULTITOOL`, that was taken to JP rather than overridden,
+JP said *"yes, I don't even remember that multitool"*, and only then was
+`--force-wipe` used.
+
+> **The override has to cost a sentence, not a battle.** A guard with no escape
+> hatch teaches people to reach for `dd`, which has no guard at all — so an
+> undocumented override makes a correctly-working refusal *less* safe, not more.
+
+**Before typing `--force-wipe`, name out loud what is on the device and who owns
+it.** If you cannot, that is the answer.
 
 > **Why `--ssid` is required and `--unit-name` is not**, since the asymmetry looks arbitrary: a
 > wrong SSID **strands the camera**, and a missing name strands nothing — the camera derives one.
