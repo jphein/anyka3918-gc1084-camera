@@ -280,7 +280,7 @@ returns a few bytes.
 | `init_ir` | Initialise the IR-cut driver |
 | `ircut_on` / `ircut_off` | `set_ir_cut 1` / `set_ir_cut 0` |
 | `white_led_on` / `white_led_off` | Write `/sys/user-gpio/WHITE_LED` — **the write succeeds but no light appears**, see [ptz.md](ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
-| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--white-confirmed-dark-ir-unresolved) |
+| `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
 | `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — **but the values are meaningless**, [see below](#the-status-command-works) |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
 | `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
