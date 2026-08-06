@@ -108,13 +108,34 @@ direct observation (audible speech, visibly purple image) rather than by inferen
 ## I2C
 
 `/sys/bus/i2c/devices/` contains **`0-0058`**, which names itself `AW9523B` — a 16-channel I/O
-expander. The kernel carries a driver: `aw9523b_read` and `aw9523b_write` appear in
-`/proc/kallsyms`, both `EXPORT_SYMBOL`'d.
+expander — and the kernel carries a driver, with `aw9523b_read` / `aw9523b_write` `EXPORT_SYMBOL`'d.
 
-It was once the leading suspect for the non-working white LEDs. It is no longer: `aw9523b_probe`
-configures all 16 channels as plain GPIO rather than constant-current LED sinks, never touches
-the DIM registers, and no pin in the expander's range appears anywhere in the image. See
-[ptz.md](ptz.md#2-the-aw9523b-expander--possible-but-weaker-than-it-first-looked).
+> ⚠️ **There is no such chip on this board.** Re-running the probe shows the one discriminating
+> register write reading back `0xff` instead of the required `0x10`, while the GC1084 sensor on
+> the same bus keeps working — a dead address, not a dead bus. The node exists only because
+> platform code declares the device unconditionally and the probe ignores its return values.
+> **A populated `/sys/bus/i2c/devices/` entry is not evidence that hardware is present.** Full
+> writeup: [ptz.md](ptz.md#2-the-aw9523b-expander--experimentally-refuted).
+
+The real bus client is the sensor. `i2c-ak39` sits at `0x20150000–0x20150100` with **no IRQ** —
+`ak39_i2c_xfer` is polled.
+
+## Register map, and why you cannot poke it
+
+Anyone trying to reach hardware registers directly on this box will hit all of these:
+
+| Route | Status |
+|---|---|
+| `devmem` | **Does not exist.** `/sbin/devmem` is a busybox symlink and `devmem` is not a compiled-in applet — it answers `applet not found`. |
+| `/dev/mem` | **Cannot reach register windows.** ARM's `valid_phys_addr_range()` requires `addr ≥ PHYS_OFFSET`, and **`PHYS_OFFSET` here is `0x81800000`** — every register window is below it. Only `mmap()` could reach them, and nothing on the box can mmap. `dd` *can* read System RAM at `0x81800000`+. |
+| `/dev/uio0` | Maps **`video-base`** (`0x20020000`, size `0x430`) — not I2C, not GPIO. |
+| `/proc/iomem` | `i2c-ak39` at `0x20150000–0x20150100`. **No GPIO block is registered at all.** |
+
+> ⚠️ **`PHYS_OFFSET` is `0x81800000`, not the conventional `0x80000000`.** An analysis pass that
+> assumed the usual value had every physical address off by `0x1800000` — enough that a proposed
+> target would have fallen *below* `PHYS_OFFSET` and been rejected outright. Validate translated
+> addresses against `/proc/iomem` before trusting them. Worked example:
+> `VA 0xC03CA61C → PA 0x81BCA61C`.
 
 ## Motors
 

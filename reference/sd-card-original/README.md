@@ -29,12 +29,32 @@ upstream's defaults are the interesting ones:
 |---|---|---|
 | `wifi_ssid` | `my-iot-ssid` | See the WiFi section below — this is what broke. |
 | `sensor_kern_module` | `/mnt/sensor_gc1084.ko` | **The fix for the sensor mismatch.** Upstream defaults to `/usr/modules/sensor_h63.ko`, the wrong sensor. Pointing it at the `.ko` on the SD card is how this camera works. |
-| `time_source` | `192.168.8.1` | The camera lived on the IoT VLAN. |
+| `time_source` | `192.168.8.1` | The camera lived on the IoT VLAN. Repointed at the camera-VLAN router during the move; NTP works. |
+| `time_zone` | `GMT-08:00` | ⚠️ **Wrong by 15 hours — do not copy this.** See the warning below. |
 | `rootfs_modified` | `0` | Upstream default is `1`. |
 | `run_ipc` | `0` | Stock `anyka_ipc` cloud daemon stays off. |
 | `image_width`/`image_height` | `640` / `360` | Sub-channel resolution. |
 | `extra_args` | `-i 4 -u` | Passed to `libre_anyka_app`. |
 | `run_telnet`, `run_ftp`, `run_web_interface`, `run_ptz_daemon`, `run_libre_anyka` | all `1` | Matches what the root README reports working. |
+
+## ⚠️ `time_zone=GMT-08:00` in this directory is wrong — do not copy it
+
+The vendored `anyka_hack/gergesettings.txt` is preserved as recovered, and the `time_zone` value
+in it is **wrong by 15 hours**. Upstream's template in `../sd-card-hack/` is no better — it ships
+`GMT-02:00`.
+
+`gergehack.sh` passes this value straight to `export TZ=`, so it must be a **POSIX** `TZ` string,
+and **POSIX counts hours west of Greenwich** — the opposite of the ISO-style reading most people
+assume. `GMT-08:00` therefore means **UTC+8** (China), not UTC−8.
+
+This is worth flagging loudly because of how it fails: the clock is simply wrong, and the
+documented failure mode for a wrong clock on this camera used to be "NTP doesn't work" — so the
+natural reaction is to go debugging NTP, which is fine.
+
+**Use a full POSIX string with a DST rule instead of an offset at all.** The camera now runs
+`time_zone=PST8PDT,M3.2.0,M11.1.0`, which is tested on this hardware and handles the November
+transition automatically. Details and the test output:
+[`../../docs/troubleshooting.md`](../../docs/troubleshooting.md#-fixed--use-a-dst-aware-posix-string).
 
 ## ⚠️ Latent bug in `Factory/config.sh`
 

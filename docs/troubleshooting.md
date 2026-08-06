@@ -229,20 +229,50 @@ being **frozen in place by the firewall**. Restore cloud access, or reset flash,
 > `gergesettings.txt` copies are **directly observed**. That the vendor app rewrites
 > `time_zone.sh` comes from **upstream's write-up**, not from anyone watching it happen.
 
-#### There is no DST rule either
+#### ✅ Fixed — use a DST-aware POSIX string
 
-Neither `GMT-08:00` nor `GMT+07:00` carries one, so the displayed time drifts an hour off when
-daylight saving ends.
-
-**Recommended fix — not applied, and untested on this hardware:** give `time_zone` a full
-DST-aware POSIX string, which `export TZ=` accepts directly and uClibc's `tzset` supports:
+Neither `GMT-08:00` nor `GMT+07:00` carries a DST rule, so the displayed time would drift an hour
+off at every transition. Both problems are solved by giving `time_zone` a full POSIX string
+instead of a bare offset:
 
 ```ini
 time_zone=PST8PDT,M3.2.0,M11.1.0
 ```
 
-> ⚠️ [Settings precedence](sd-card.md#settings-precedence) applies: change it on **both** the SD
-> card and flash, or `gergehack.sh` will diff them, copy card→flash and reboot.
+**Applied and tested on the hardware**, in both copies of `gergesettings.txt`:
+
+```console
+camera$ TZ="PST8PDT,M3.2.0,M11.1.0" date
+Thu Aug  6 07:51:23 PDT 2026
+camera$ TZ=UTC date
+Thu Aug  6 14:51:23 UTC 2026
+```
+
+Exactly −7 — and note it prints **`PDT`, not `GMT`**. That is the real confirmation: uClibc
+0.9.33 is applying the DST *rule* rather than treating the string as a fixed offset, so the
+November transition is handled automatically. The old `GMT+07:00` printed `GMT`.
+
+`source` tolerates the commas — `gergehack.sh` sources `gergesettings.txt`, so the value is a
+shell assignment, and there are no spaces to word-split on.
+
+> ⚠️ [Settings precedence](sd-card.md#settings-precedence) applies. It was changed in **both**
+> `/etc/jffs2/gergesettings.txt` and `/mnt/anyka_hack/gergesettings.txt` and verified
+> byte-identical with `diff` afterwards — because `gergehack.sh` diffs the two on every boot and,
+> on any difference, copies card→flash **and reboots**.
+
+#### ⚠️ Two timezones are in play, deliberately
+
+The fix above does **not** make the whole camera agree with itself.
+
+`/etc/jffs2/time_zone.sh` still contains `export TZ=GMT+07:00`, and `anyka_ipc.sh` sources it, so
+the **vendor app's process tree keeps the old value** while `gergehack.sh`'s tree gets the
+DST-aware one. That file was left alone on purpose: it is the file the telnet exploit hooks, and
+breaking it would risk the hack's entry path for a cosmetic gain.
+
+Net effect is strictly better than before — a 15-hour error became at most a 1-hour one, confined
+to the vendor app's tree, and only after the November transition. But it is **not uniform**, so
+if you compare timestamps between the web UI and the ptz daemon and see an hour's difference,
+this is why. Do not go hunting.
 
 None of this affects Home Assistant, which timestamps its own frames. It affects the camera's own
 logs and any filename it generates.

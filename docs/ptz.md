@@ -284,8 +284,18 @@ Measured dead: frame luma **159 / 157 / 157** across on / off / on. (This is a l
 with all the caveats above — but here it is being used to show *nothing happened*, and a flat
 reading across a stable baseline is a much weaker claim than inferring that something did.)
 
-Whatever the cause, **it is a driver/table problem, not a pin-number problem.** Hunting for the
-"correct" GPIO is not the fix. Three candidates, best-supported first.
+> **Correction.** This section used to conclude, prominently, that the cause was "a driver/I2C
+> matter, not a pin-number problem". **That is now wrong** — it rested on the AW9523B theory,
+> which has since been [experimentally refuted](#2-the-aw9523b-expander--experimentally-refuted).
+> The pin number is back on the table.
+
+A sharper framing has replaced it. Of the seven pins, the three whose function is
+**independently validated** all work, and the two that were never validated both fail. With
+[`ircut_b` explained by the H-bridge pairing](#gpio-map), **`WHITE_LED = 24` is the only
+genuinely unexplained failure left** — which makes "is 24 even the right pin, and is it even
+wired to anything?" the live question rather than a settled one.
+
+Candidates, best-supported first.
 
 #### 1. This PTZ variant was never wired for white LEDs — best supported
 
@@ -307,30 +317,61 @@ This also closes the "read the vendor app" idea properly, and for a better reaso
 it is not merely that the vendor uses the same sysfs node, it is that **there is no working code
 path to trace on this variant.** There is nothing to copy.
 
-#### 2. The AW9523B expander — possible, but weaker than it first looked
+#### 2. The AW9523B expander — experimentally refuted
 
-`/sys/bus/i2c/devices/` contains **`0-0058`**, which names itself `AW9523B`, and `/proc/kallsyms`
-shows **`aw9523b_read` / `aw9523b_write`, both `EXPORT_SYMBOL`'d**. Those are directly observed.
+❌ **There is no working chip at 0x58 on this board.** This was once the leading theory here; it
+is now dead, and the way it died is instructive enough to keep.
 
-This was originally written up here as *strong* on the theory that the expander's
-constant-current LED sinks drive the ring. **That mechanism is wrong**, and the disproof is worth
-recording:
+The driver's probe was safely re-run — `echo 0-0058 > .../AW9523B/unbind` then `bind`, which is
+zero-risk because `remove` is a `return 0` stub — and `aw9523b_write` conveniently `printk`s its
+own read-back after every write:
 
-* `aw9523b_probe` writes `0x12=0xFF` and `0x13=0xFF`. Those are the LED-mode switches, where
-  **1 = plain GPIO mode and 0 = constant-current LED mode** — so all 16 channels are configured
-  as GPIO, and the DIM registers `0x20–0x2F` are **never touched**. The vendor never uses the
-  chip's LED-driver capability at all.
-* **No pin in the 79–82 expander range appears anywhere in the image.** The highest pin used is
-  42. The expander branch in `store` is real code that nothing routes to.
-* `anyka_ipc` contains **zero** occurrences of `aw9523`, `ch422`, `i2c` or `/dev/i2c`.
+```
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_write data=0x10, dummy=0xff      <-- wrote 0x10 to GCR 0x11, read back 0xff
+aw9523b_write fail!! dummy!=data
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_write data=0xff, dummy=0xff
+aw9523b_probe successed
+```
 
-What survives is the weaker form: an expander GPIO feeding a MOSFET. Possible, unevidenced.
+The `0xff` writes appear to succeed only because **`0xff` is also what an idle or absent bus
+returns.** The single discriminating write gives it away: `0x10` into GCR `0x11` reads back
+`0xff`, where a real AW9523B must return `0x10` — its reserved bits read as 0. Either the reads
+are NAKing (the driver returns −1, and its `and r0,r0,#255` masks that to exactly `0xff`) or SDA
+is simply floating high.
 
-#### 3. GPIO 24's pad muxed to another peripheral — unresolved
+**The control that makes this conclusive:** the GC1084 sensor is a client on the same `i2c-0`,
+and video kept working throughout. So this is not a dead bus — it is a dead address.
 
-A pad assigned to a different function would produce exactly this symptom: the write lands, the
-driver logs it, the pin toggles in software, and nothing reaches the LEDs. Nobody has checked the
-pinmux. **This is a perfect symptom match and the least investigated of the three.**
+> ⚠️ **Why the sysfs node fooled us, which generalises well beyond this camera.**
+> `aw9523b_init` calls `i2c_new_device(0x58)` **unconditionally**, and `aw9523b_probe` **ignores
+> every return value** — so it prints `probe successed` whether or not any chip answers.
+>
+> **A `/sys/bus/i2c/devices/0-0058` node naming itself `AW9523B`, and a bound driver, prove only
+> that platform code *declared* the device.** They are not evidence that the hardware exists.
+> This was a directly observed fact supporting a conclusion it could not carry — the same error
+> family as the confounded luma measurement, one level deeper.
+
+The `EXPORT_SYMBOL`'d `aw9523b_read` / `aw9523b_write` are therefore a **red herring**: exported
+for a board variant that does have the chip. This one does not.
+
+#### 3. GPIO 24 is the wrong pin, muxed elsewhere, or not wired at all — unresolved
+
+With the expander gone, this is where the remaining possibilities live, and none has been ruled
+out:
+
+* **Pad muxed to another peripheral.** The write lands, the driver logs it, the pin toggles in
+  software, and nothing reaches the LEDs. Nobody has checked the pinmux — and note
+  [`/proc/iomem` registers no GPIO block at all](hardware.md#register-map-and-why-you-cannot-poke-it),
+  so there is no easy sysfs route to inspect it.
+* **The pin number is simply wrong**, inherited along with the rest of the vestigial config.
+* **The LEDs are not populated, or have no boost rail.** A pin driven correctly into an absent
+  driver stage looks identical from software.
+
+All three produce the same observable — a successful write and no light — so software alone may
+not separate them. Continuity or a scope on the ring would.
 
 > **A dead end already closed off.** `write_gpio` / `read_gpio` look promising and are not: they
 > only store a hardware-ID string in `gpio.conf` and configure nothing.
