@@ -5,6 +5,7 @@
 #   sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid)
 #                                        [--time-source IP]
 #                                        [--unit-name "Front Door"] [--stock]
+#                                        [--force-wipe]
 #
 # The SSID decision is REQUIRED - see the block below. This header showed it as
 # optional for a while, contradicting the tool's own usage string two hundred
@@ -121,6 +122,7 @@ KEEP_SSID=0
 TIME_SOURCE=""
 UNIT_NAME=""
 STOCK=0
+FORCE_WIPE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --ssid)        SSID="${2:-}"; shift 2 ;;
@@ -128,12 +130,13 @@ while [ $# -gt 0 ]; do
     --time-source) TIME_SOURCE="${2:-}"; shift 2 ;;
     --unit-name)   UNIT_NAME="${2:-}"; shift 2 ;;
     --stock)       STOCK=1; shift ;;
+    --force-wipe)  FORCE_WIPE=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
 [ -n "$DEV" ] || die "usage: $0 /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP]
-                        [--unit-name NAME] [--stock]"
+                        [--unit-name NAME] [--stock] [--force-wipe]"
 
 # --unit-name is NOT the counterpart of --ssid, and deliberately so.
 #
@@ -202,6 +205,56 @@ BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 BUILD_NAME=""
 if [ -x "$IDENTITY_SRC/sigil-name.sh" ]; then
   BUILD_NAME="$("$IDENTITY_SRC/sigil-name.sh" --realm forge --hash "$GIT_HASH" 2>/dev/null || true)"
+fi
+
+# --- safety: does this device even LOOK like a camera card?
+#
+# Every check above answers "is this safe to erase in principle" - removable,
+# not the system disk. None of them answers "is this the RIGHT card", and that
+# is the question that actually goes wrong.
+#
+# THIS GUARD EXISTS BECAUSE IT ALMOST HAPPENED, 2026-08-06. Asked to write a
+# card, the only removable device present was /dev/sdc: 29.7 GB, three
+# partitions - NTFS "MULTITOOL", vfat "BOOTSTRAP", squashfs - all mounted. JP's
+# bootable multitool card. It passes `removable=1`, it is not the system disk,
+# and it would have been erased by anyone who typed ERASE at a prompt showing an
+# lsblk listing they skimmed.
+#
+# The lsblk print below is the right design and it is not enough on its own: a
+# listing you have to interpret is a guard that fails whenever the reader is in
+# a hurry, which is exactly when this is run. So refuse by DEFAULT and make the
+# operator override deliberately.
+#
+# A camera card is one of exactly two shapes: blank/unpartitioned, or a single
+# FAT32 partition (a card this tool has written before, or a new card as sold).
+# Anything else is somebody's else's data until proven otherwise.
+PARTS="$(lsblk -lno NAME,FSTYPE,LABEL "$DEV" 2>/dev/null | tail -n +2)"
+NPART="$(printf '%s' "$PARTS" | grep -c . || true)"
+ODD=0
+if [ "$NPART" -gt 1 ]; then
+  ODD=1
+elif [ "$NPART" -eq 1 ]; then
+  case "$(printf '%s' "$PARTS" | awk '{print $2}')" in
+    vfat|"") : ;;
+    *) ODD=1 ;;
+  esac
+fi
+if [ "$ODD" -eq 1 ] && [ "$FORCE_WIPE" -eq 0 ]; then
+  MOUNTED="$(lsblk -lno NAME,MOUNTPOINT "$DEV" | awk 'NF>1 {print "      /dev/"$1" -> "$2}')"
+  die "$DEV does not look like a camera card, so this tool is refusing it.
+
+  A camera card is blank, or a single FAT32 partition. This device has $NPART
+  partitions:
+
+$(printf '%s' "$PARTS" | sed 's/^/      /')
+${MOUNTED:+
+  and these are MOUNTED RIGHT NOW - something is using this device:
+
+$MOUNTED
+}
+  If that is genuinely the card you meant, pass --force-wipe. If it is a
+  multitool, an installer, a backup or somebody's photos, this refusal just
+  saved it."
 fi
 
 SIZE_H="$(lsblk -dno SIZE "$DEV" | tr -d ' ')"
