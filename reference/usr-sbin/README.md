@@ -288,3 +288,74 @@ partition, and an undersized image leaves clean 0xFF. Unsafe: **nothing validate
 bytes you supply are the filesystem you think they are** — not the script, not the flasher.
 Build the `.md5` files and include them; they are the only integrity mechanism available, and
 they only run because *you* chose to ship them.
+
+---
+
+# `updater`'s network sources — analysed 2026-08-06. Not a second flashing path.
+
+Follow-up to the two items left open above. **Static analysis only; never executed.**
+
+The question was whether the flasher can pull an image from the network with **the same
+zero validation as the `local` path**. It cannot, and the reason is structural rather
+than a difference in rigour.
+
+## What the network path actually is: download → md5 → `mv`
+
+`updater` carries a **built-in MD5** (the init vector `67452301 efcdab89 98badcfe
+10325476` sits at `0xb05c`) and a verify routine at **`0xad40`**:
+
+```
+fopen(path,"r")  -> NULL: puts("Can not open this file!"), return -1
+...compute md5 over the file...
+sprintf(buf, "%02x...", digest)
+strcmp(buf, expected)
+  match    -> puts("md5 check success")  return 0
+  mismatch -> puts("md5 check failure")  return -1
+```
+
+**Both call sites act on the result** — this is not a warning that gets ignored:
+
+```
+caller A @0x9f38   cmp r0,#0 ; mvnlt r5,#0        -> negative sets an error code
+caller B @0xc3cc   subs r4,r0,#0 ; bne 0xc174     -> mismatch branches away
+                   ...only on success...
+                   sprintf(buf, "mv %s %s", src, dst)
+                   system(buf)
+```
+
+That `system()` is the whole payoff of the network path: **`mv <downloaded> <dest>`.**
+So the HTTP/FTP support is a **verified downloader that renames a file into place** — it
+is *not* a second route into `MEMERASE`. The flashing still goes through the same local
+code, with the same properties documented above.
+
+## The answer, stated carefully
+
+| stage | network source | local source |
+|---|---|---|
+| fetch | HTTP `GET /%s HTTP/1.1` or FTP | n/a |
+| **integrity of the fetch** | **md5 enforced, aborts on mismatch** | n/a |
+| placement | `system("mv src dst")` on success only | n/a |
+| **flash** | **identical — same code, same rules** | fstat size ≤ partition; no format check |
+
+So the network path is **stricter at the download stage and identical at the flash
+stage.** "Drop a tar in `/tmp`" and "let `updater` fetch it" converge the moment the
+bytes are on disk. Nothing about network delivery weakens the flash, and nothing about
+it strengthens the flash either.
+
+**Practical consequence for update tooling we build:** the md5 gate you get for free from
+`updater`'s downloader protects against a corrupted *transfer*. It does not protect
+against a wrong or hostile *image*, because — as with everything else in this pipeline —
+the expected hash travels with the artefact rather than from an independent root of
+trust. Design as if the flash stage has no validation, because it doesn't.
+
+## Not established
+
+- **Whether the network path can run with no md5 at all.** The strings `md5 not exist 1`,
+  `md5 not exist 2` and a sentinel comparison against `"abcdefghijklmnopqrstuvwxyz"`
+  (`0xd39e`, treated as "unset") imply a path where the expected hash is absent. What
+  happens then — skip, or refuse — was **not** traced. Do not assume it refuses.
+- **Where the expected hash comes from** on the network path. If it is fetched from the
+  same server it is integrity, not authenticity, exactly like the `.md5`-inside-the-tar
+  case. Unread.
+- **`/dev/akfha_char` vs `/dev/mtd%d`** — which condition selects each is still unknown.
+  Lower priority; noted so it is not mistaken for settled.
