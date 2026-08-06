@@ -28,82 +28,102 @@ account. Nobody had read it until 2026-08-06. This is what it does, what it does
 
 ### The bootloader is out of the updater's reach — MEASURED
 
-The `ENV` partition (`mtd3`, read out 2026-08-06) gives the layout directly:
+Flash layout, anchored on `kernel_addr=0x31000` from the `ENV` partition and
+sized from `/proc/mtd`. **Every partition boundary below was confirmed by
+dumping 4 KB at the computed offset and md5-matching it against the
+corresponding `/dev/mtdblockN`** (`lucid-camera`, 2026-08-06) — not derived,
+checked:
 
-```
-kernel_addr=31000        erase_env=sf probe ...; sf erase 0x20000 0x2000
-```
-
-which matches the boot log's `SF: 1417200 bytes @ 0x31000 Read: OK`. So:
-
-| region | span | contents |
+| offset | region | size |
 |---|---|---|
-| **0x00000 – 0x20000** | **128 KB** | **u-boot — no partition name maps here** |
-| 0x20000 – 0x22000 | 8 KB | the u-boot environment (`erase_env` erases this) |
-| 0x22000 – 0x31000 | 60 KB | unaccounted |
-| 0x31000 → | | `KERNEL`, `A`, `B`, `C`, `D` in order |
-| 0x7E0000 – 0x800000 | 128 KB | spare at the end |
+| `0x000000` | **u-boot + strings** | ~196 KB — **no partition name maps here** |
+| `0x031000` | `KERNEL` | 0x180000 |
+| `0x1B1000` | `MAC` | 0x1000 |
+| `0x1B2000` | `ENV` | 0x1000 |
+| `0x1B3000` | `A` (`/`) | 0x100000 |
+| `0x2B3000` | `B` (`/usr`) | 0x2F5000 |
+| `0x5A8000` | `C` (`/etc/jffs2`) | 0x10000 |
+| `0x5B8000` | `D` (`/data`) | 0x22A000 |
+| `0x7E2000` | spare | ~120 KB |
 
-> ⚠️ **An earlier version of this page said "196 KB before `KERNEL`, neither
-> inside any named partition." The first half is right and the second is wrong.**
-> `MAC` and `ENV` *are* named partitions and they sit inside that 196 KB, at
-> 0x20000. The arithmetic was sound; the sentence summarising it over-reached —
-> the same shape as the collision-cap claim in
-> [identity.md](identity.md). **Prose drifts, data doesn't.**
-
-**The narrower claim is the true one, and it is still sufficient: u-boot
-occupies roughly the first 128 KB, and no partition name maps to it.**
-
-**ANSWERED 2026-08-06 (`lucid-camera`): nothing resolves to `mtd0` either.** The
-table is exactly `KERNEL→1 MAC→2 ENV→3 A→4 B→5 C→6 D→7`; `mtd0` is `"spi0.0"`,
-the whole 8 MB flash, and no name maps to it. Since `updater` builds
+**Nothing maps below `0x31000`.** Combined with the fact that nothing resolves
+to `mtd0` either — `updater` builds
 `/sys/kernel/partition_table/<NAME>/mtd_index` and errors when the directory is
-absent, **there is no string you can pass that reaches the bootloader.** Not a
-convention being honoured — there is no name to type.
+absent — **there is no string you can pass that reaches the bootloader.** Not a
+convention being honoured; there is no name to type.
+
+> ⚠️ **This page briefly claimed `MAC` and `ENV` were inside the pre-`KERNEL`
+> span. They are not — they sit at `0x1B1000`/`0x1B2000`, after the kernel.**
+>
+> That was a **correction that made a correct statement wrong**, which is worse
+> than the original error and worth recording as its own failure. The original
+> said "196 KB before `KERNEL`, none of it inside a named partition" — true. I
+> then found `erase_env=sf erase 0x20000 0x2000`, took `0x20000` to be the
+> environment, and rewrote the layout around it.
+>
+> **The single piece of contradicting evidence was real; my reading of what it
+> pointed at was not.** Reading the actual bytes at `0x20000` settles it: they
+> are u-boot's own code and strings (`Check read OK`), not an environment. See
+> [backlog](backlog.md) — *a correction is trusted more than the original.*
+>
+> `erase_env` therefore points **into u-boot's code region**. Stale, from another
+> board revision, or a vendor bug that would erase part of the bootloader —
+> unknown, and **not evidence about anything.**
 
 ### 🔴 `bootdelay=0` — MEASURED, and it is the open risk
-
-Straight out of the environment:
 
 ```
 bootdelay=0
 console=ttySAK0,115200n8
-bootargs=... root=/dev/mtdblock4 rootfstype=squashfs init=/sbin/init
+bootcmd=run boot_normal
+boot_normal=readcfg; run read_kernel; bootm ${loadaddr}
 ```
 
-**There is no countdown to interrupt.** Whether this u-boot build still polls
-for a keypress at zero delay is a compile-time option that **cannot be read from
-the environment** — it needs the case open to settle. Until then, *a prompt is
+**There is no countdown to interrupt.** Whether this build still polls for a
+keypress at zero delay is a compile-time option that **cannot be read from the
+environment** — it needs the case open to settle. Until then, *a prompt is
 reachable* is an assumption, not a fact.
 
-### The `ENV` slot is writable from a running system — and that cuts both ways
+### The `ENV` slot is writable — and nobody can build an image for it
 
 `ENV` is slot `3`, and `updater` resolves slots by generic sysfs lookup with **no
-name whitelist**. So `updater local ENV=<image>` would rewrite the u-boot
-environment **over the network, with no serial console** — and setting
-`bootdelay=3` would make every future flash recoverable at a prompt. `ipaddr`,
-`serverip` and `netmask` are already populated, which suggests network support
-is compiled in, so a reachable prompt plausibly means TFTP recovery rather than
-just a prompt.
+name whitelist**, so `updater local ENV=<image>` would rewrite the environment
+over the network with no console. Setting `bootdelay=3` that way would make every
+future flash recoverable at a prompt — turning "no partition is survivable" into
+a one-time setup step.
 
-**Not recommended yet, for three reasons — the third found by arithmetic:**
+**It is blocked on something simpler than risk: the format is not standard
+u-boot, so there is no way to produce a valid image.**
 
-1. **A bad `ENV` write is a brick upstream of everything, including the clip.**
-   If u-boot cannot parse its environment it falls back to compiled-in defaults,
-   which may or may not boot this board.
-2. **`updater local ENV=` has never been run.** The mechanism is established;
-   that it works is **inferred from how `updater` resolves names, not measured.**
-3. ⚠️ **`/proc/mtd` says `ENV` is 4 KB. `erase_env` erases 8 KB at 0x20000.**
-   That is the signature of a *redundant* u-boot environment — two 4 KB copies
-   with a flags byte, where u-boot picks the valid one. **Writing only `mtd3`
-   would update one copy and leave the other stale**, and which one wins is
-   decided by a flags byte a naive image would get wrong. A u-boot environment
-   is `crc32 + data`; a wrong CRC is silently rejected and you get defaults.
+```
+offset 0:  ff ff ff ff        offset 4:  b6 f1 7b fa
+offset 8:  backuppage=ffffffff\0baudrate=115200\0boot_normal=...
+variables end at 0x320; the remaining 3.3 KB is 0x00 padding
+```
 
-> **Order: get a console once with the clip and establish whether a prompt is
-> reachable at all. Only then consider setting `bootdelay` remotely.** Doing it
-> the other way risks bricking to gain a recovery path nobody has confirmed
-> exists.
+A standard u-boot environment is `crc32 || data`, or `crc32 || flags || data`.
+**This is neither.** crc32 was computed over every plausible range — `4..end`,
+`5..end`, `8..end`, `8..end+2`, `8..len`, `4..len`, `0..len`, `0..4`+`8..len`,
+with and without the terminating NUL — and **none matches the field at offset 4**
+in either endianness.
+
+Two leads if anyone ever reverses it: the first variable is literally
+**`backuppage=ffffffff`**, mirroring the first four bytes — so the vendor appears
+to have its own backup-page scheme rather than u-boot's redundant-env format.
+And `boot_normal` begins with **`readcfg`**, a *custom* u-boot command; whatever
+parses this partition is inside that.
+
+> **The practical upshot: a hand-built env would be rejected and u-boot would
+> fall back to compiled-in defaults — silently.** Which is the failure this
+> project keeps meeting, arriving by a new route.
+
+*(An earlier draft here argued the risk was a redundant 4 KB/8 KB env pair. That
+rested on `erase_env` pointing at the environment, which it does not. **Refuted —
+the inference was reasonable and the anchor beneath it was wrong.**)*
+
+> **Order stands: get a console once with the clip and establish whether a prompt
+> is reachable at all.** There is now no shortcut worth weighing it against — the
+> shortcut needs a format nobody has.
 
 ### The console IS reachable — and my earlier write-up was wrong about this
 
