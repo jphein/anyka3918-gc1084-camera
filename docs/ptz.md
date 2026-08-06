@@ -103,18 +103,33 @@ echo 1 > /sys/user-gpio/ircut_a
 
 This works immediately but bypasses the driver.
 
-### ⚠️ The filter drifts back on its own — hypothesis, not established fact
+### ❔ The filter has been seen to read back `off` — cause unknown
 
-`echo 1 > /sys/user-gpio/ircut_a` clears the purple cast, but the setting **re-engages by
-itself** — observed reverting three times in a single session, which matches an older note that
-it was "stuck on the next day".
+**Observation, which is solid:** after setting the filter on, the state has been seen to read
+back as `off` — three times in one session — matching an older note that it was "stuck on the
+next day".
 
-The current working theory is that **`libre_anyka_app` runs its own day/night state machine and
-re-asserts the IR-cut position**, so a raw GPIO write is a change the owning process does not
-know about and overwrites at the next transition. Driving it through `set_ir_cut` instead should
-let the driver and the app agree.
+**Everything beyond that is unresolved, and the obvious causal story is not safe to assume.**
+This was previously written up here as the filter physically drifting, probably because raw GPIO
+writes fight the owning process. That may be true, but there is a competing explanation that was
+demonstrably active at the time:
 
-Supporting evidence — but **this has not been confirmed**:
+* **The filter really is reverting** — something re-asserts the IR-cut position and overwrites a
+  raw GPIO write.
+* **Nothing physical happened at all, and the *readback* was wrong.** During exactly that period
+  there was a live bug in the Home Assistant integration: the camera keeps
+  [a single session token](web-ui.md#the-token) in `/tmp/token.txt`, overwritten by every login,
+  so concurrent polls invalidated each other, the helper exited non-zero, and the switch read
+  `off` as a result. **A switch reading `off` unexpectedly is precisely what that bug
+  produced.**
+
+The second explanation costs nothing to prefer and fits without invoking any hardware behaviour,
+so **treat "the filter drifts" as unproven**. Confirm the readback path is healthy before
+investigating the hardware.
+
+If it does turn out to be real, the leading mechanism would be that `libre_anyka_app` runs its
+own day/night state machine and re-asserts the position — a raw GPIO write being a change the
+owning process does not know about. Circumstantial support:
 
 * `libre_anyka_app`'s `-i` argument selects exactly this behaviour. The Settings page folds two
   checkboxes into it, and the mapping is:
@@ -126,14 +141,13 @@ Supporting evidence — but **this has not been confirmed**:
   | `-i 3` | **on** | **on** |
   | `-i 4` | **on** | off |
 
-  So the app definitely has an opinion about IR state. This camera runs `-i 4 -u`.
+  So the app has an opinion about IR state. This camera runs `-i 4 -u`.
 * The daemon exposes `init_ir` / `set_ir_cut`, implying a driver-level owner rather than a bare
   pin.
 
-**What has not been tested:** whether `set_ir_cut` actually holds where the GPIO write does not,
-and whether flipping `-i` between 3 and 4 fixes the drift at the source. Both are cheap
-experiments for the next session with the camera. Until then, treat the GPIO-versus-daemon
-interaction as unproven.
+**What has not been tested:** whether the readback is trustworthy once the token bug is out of
+the way; whether `set_ir_cut` holds where the GPIO write does not; and whether flipping `-i`
+between 3 and 4 changes anything. Do them in that order — the first may dissolve the other two.
 
 The current mitigation is a boot-time GPIO write from `/Factory/config.sh` on the SD card:
 
@@ -203,14 +217,23 @@ An earlier attempt measured average frame luma rising across on/off pairs (119�
 101→119) and was briefly recorded here as proof. It is not, and the reasons are worth keeping,
 because anyone testing an invisible emitter will be tempted by the same shortcut:
 
-* **The camera drives the IR LEDs itself, from a photoresistor.** A luma rise as the room got
-  darker is exactly what its own night-mode logic produces — with or without the GPIO write.
-* **Night mode also moves the IR-cut filter**, which changes luma far more than illumination
-  does. `ircut_a` is confirmed working, so that mechanism was definitely live during the test.
-* **Sensor AGC settles over seconds**, and the ambient baseline was drifting throughout.
+* **The ambient baseline moved between samples.** One pair started at luma 119, the other at
+  101 — the scene itself was getting darker, which is a luma change with no help from the pin.
+* **Sensor AGC responds to that independently**, and settles over seconds.
+* **Whatever drives day/night on this camera was live throughout**, including the IR-cut filter,
+  which shifts luma far more than illumination does. `ircut_a` is confirmed working, so that
+  mechanism was definitely in play.
 
 No A/B/A/B control was run, so nothing showed luma tracking the *command* rather than the
 *clock*. Two deltas of different magnitude (5 and 18) on a moving baseline is not a signal.
+
+> **On the day/night mechanism itself: we do not know what it is.** Upstream's
+> [`IR_shutter.txt`](../reference/IR_shutter.txt) says the LEDs are "automaticly controlled by a
+> photoresistor", and that is worth reading — but **nothing we have examined corroborates it.**
+> Not the decoded pin table, not `hw.conf`, not the vendor binaries. Cheap SoC cameras commonly
+> do day/night purely in software from the ISP's luma and gain registers rather than fitting a
+> CdS cell, so treat the presence of any ambient-light sensor as an open question rather than a
+> given.
 
 There is also an open question about whether the value even persists: `dmesg` shows repeated
 `IR_LED store:0` / `store:1` transitions, so something else may be writing the node — a vendor

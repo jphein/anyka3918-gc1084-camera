@@ -71,7 +71,13 @@ PTZ is wired as five `shell_command` services — `anyka_ptz_left`, `_right`, `_
 `packages/anyka_camera.yaml` in the `ha` repo and call a helper deployed to
 `/config/scripts/anyka_ptz.py`, which writes to the camera's `/tmp/ptz.daemon` FIFO over telnet.
 
-`switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live, for when it drifts back mid-session.
+`switch.anyka_cam_ir_cut_filter` toggles the IR-cut filter live.
+
+> ⚠️ If that switch reads `off` when you set it `on`, **suspect the readback before the
+> hardware.** The camera holds [one session token at a time](web-ui.md#the-token), so concurrent
+> polls can invalidate each other and make the helper exit non-zero — which surfaces as a switch
+> flipping itself off. That bug has bitten here before and was mistaken for the filter drifting.
+> See [ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
 Command semantics, the mandatory `init_ptz` homing step, and the IR-cut caveats are in
 [ptz.md](ptz.md).

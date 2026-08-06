@@ -21,7 +21,7 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ WiFi | 2.4 GHz only |
 | ✅ Web UI | Port 80, PTZ pad and live preview — [but see the security warning](#-security) |
 | ✅ Home Assistant | Generic Camera + go2rtc, PTZ buttons |
-| ⚠️ IR-cut filter | Controllable, but [drifts back on its own](docs/ptz.md#ir-cut-filter) |
+| ✅ IR-cut filter | Controllable. Has been [seen to read back `off` after being set](docs/ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown) — cause unresolved, and possibly a readback bug rather than the hardware |
 | ❔ IR LEDs | GPIO 6 accepts writes, but illumination is **not yet demonstrated** — [why the obvious test is confounded](docs/ptz.md#-ir-leds--unverified) |
 | ❌ White LEDs | Present in hardware (4 on the ring) but **not driveable from the hacked kernel's GPIO interface** — [likely an I2C expander, not a pin](docs/ptz.md#-white-leds-do-not-light-and-the-pin-is-not-the-problem) |
 | ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |

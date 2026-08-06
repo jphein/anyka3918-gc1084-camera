@@ -180,10 +180,12 @@ Two consequences worth knowing before you rely on it:
 
 ## Known rough edges
 
-### The IR-cut filter drifts back on its own
+### The IR-cut filter has been seen to read back `off`
 
-Observed reverting three times in one session. Mitigation, the GPIO-versus-daemon hypothesis,
-and what has *not* been tested are all in [ptz.md](ptz.md#-the-filter-drifts-back-on-its-own--hypothesis-not-established-fact).
+Observed three times in one session. **Check the readback path before the hardware** — a
+single-session-token bug in the HA integration produced exactly this symptom at the same time,
+so the filter may never have moved. Both explanations, and the order to test them in, are in
+[ptz.md](ptz.md#-the-filter-has-been-seen-to-read-back-off--cause-unknown).
 
 ### The camera's clock stays at 1969
 
