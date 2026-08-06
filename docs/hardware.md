@@ -111,11 +111,12 @@ g_ak39_gpio_getpin(pin)      ->  READS   0xf00a0018 + bank*4   (pin state)
 ```
 
 So a readback reflects the **physical pad**, not the output latch — which is what makes the LED
-results meaningful: [the pads swing and nothing lights](ptz.md#lights--white-confirmed-dark-ir-unresolved),
+results meaningful: [the pads swing and nothing lights](ptz.md#lights--neither-ring-lights),
 so whatever is wrong is downstream of the pin.
 
 `SPK_PA` and `ircut_a` are confirmed to drive real hardware by direct observation — audible
-speech, visibly purple image. `WHITE_LED` drives nothing. `IR_LED` is unresolved.
+speech, visibly purple image. **`WHITE_LED` and `IR_LED` drive nothing**: both pads swing and
+neither ring lights.
 
 ## I2C
 

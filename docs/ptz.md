@@ -183,7 +183,7 @@ device), not from upstream:
 
 | Pin | GPIO | Meaning | Writing it does something? |
 |---|---|---|---|
-| `IR_LED` | 6 | Infrared illuminator LEDs | ❔ **unverified** — accepts writes, [illumination not shown](#lights--white-confirmed-dark-ir-unresolved) |
+| `IR_LED` | 6 | Infrared illuminator LEDs | ❔ **unverified** — accepts writes, [illumination not shown](#lights--neither-ring-lights) |
 | `SPK_PA` | 7 | **Speaker** power amplifier (output side) | ✅ yes — required for [audio out](#speaker--audio-out-works) |
 | `WHITE_LED` | 24 | White LEDs on the ring | ❌ **no — see below** |
 | `wifi_en` | 34 | WiFi enable | ❌ no observable effect |
@@ -260,23 +260,26 @@ Still: do not write to it hoping to reset the radio. Something else owns it.
 
 > **Worth noting the pattern, because this is the fourth instance.** A sweeping theory — "all
 > readbacks are broken" — was invented to explain an observation that had a boring cause. Same
-> shape as [the photoresistor](#lights--white-confirmed-dark-ir-unresolved), the `init` spelling, and the IR-cut
+> shape as [the photoresistor](#lights--neither-ring-lights), the `init` spelling, and the IR-cut
 > "drift". **On this camera, the boring explanation has won every time.**
 
-## Lights — white confirmed dark, IR unresolved
+## Lights — neither ring lights
 
-The LED ring holds **4 infrared and 4 white LEDs**. The white ones are confirmed dark. **The IR
-ones are an open question.**
+The LED ring holds **4 infrared and 4 white LEDs**. **Neither lights**, and both pins
+demonstrably toggle [at the pad](#-readback-works-and-it-reads-the-physical-pad) — so whatever is
+wrong is downstream of the GPIO in both cases.
+
+The white ring has a firmware explanation. **The IR ring does not**, and that is left open.
 
 ### ❌ White: dark, and the reason is understood
 
 See [below](#-white-leds--the-vendor-firmware-disables-them-on-this-variant). The pad swings,
 nothing lights, and the vendor firmware declares this variant unsupported for white LEDs.
 
-### ❔ IR: unresolved — the test that looked decisive was not
+### ❌ IR: confirmed dark
 
 IR emitters are invisible to the eye but **plainly visible to a phone camera**, so the question
-should cost ten seconds:
+costs ten seconds:
 
 ```sh
 echo 1 > /sys/user-gpio/IR_LED     # assert and hold, do not pulse
@@ -284,25 +287,32 @@ echo 1 > /sys/user-gpio/IR_LED     # assert and hold, do not pulse
 
 then point a phone at the ring.
 
-> ⚠️ **This was briefly recorded here as a measured negative. It should not have been.**
->
-> The reading was reported alongside a calibration claim — that the same phone had been confirmed
-> able to see IR, by looking at a different camera's ring. **The calibration was performed on the
-> other camera, and it was assumed rather than checked that the phone was then pointed at this
-> one.** It may have been judged by eye here, and **940 nm is invisible to the naked eye**, so an
-> uncalibrated look proves nothing.
->
-> A properly calibrated re-test is pending. Until it lands, **IR is unresolved — neither working
-> nor confirmed dark.**
+**Result: no glow.** And critically, **the same phone demonstrably shows another camera's IR
+emitters** — so the instrument is validated and this is a **true negative**, not a phone that
+cannot see IR.
 
-The general point stands regardless of how this resolves: **a phone camera is the right
-instrument, but only if you verify on the same handset, in the same session, that it can see
-a known-good IR source.** Otherwise a negative result is indistinguishable from a phone with an
-IR-cut filter.
+That distinction is the whole test, and it took two attempts to get right:
 
-> **If the IR ring does light**, then "both rings dark" collapses to "white only" — which the
-> vendor's `not support white led` string already explains — and the remaining fault is the
-> day/night switching rather than the emitters.
+> ⚠️ **The first attempt was recorded as a measured negative and should not have been.** It came
+> with a calibration claim — that the phone had been confirmed able to see IR — but **the
+> calibration was performed on a *different* camera, and the transfer to this one was assumed
+> rather than checked.** It may have been judged by eye, and **940 nm is invisible to the naked
+> eye**, so an uncalibrated look proves nothing.
+>
+> **A phone camera is the right instrument, but only if you verify on the same handset, in the
+> same session, that it can see a known-good IR source.** Otherwise a negative is
+> indistinguishable from a phone with an IR-cut filter.
+
+Two earlier nulls are **retrospectively vindicated**: optical and supply-current measurements for
+IR had both come back negative and were honestly written off at the time as possible instrument
+failures. They were **true negatives all along**.
+
+**So both rings are dark, while both pins demonstrably toggle at the pad.**
+
+> ❓ **Why the IR ring is dark remains open**, and is deliberately not folded into the white-LED
+> explanation. The vendor's `not support white led` string says nothing about IR. Two dark rings
+> may share a cause — an unpopulated LED stage, a missing supply rail — but that is an assumption,
+> and this project's record on assumed shared causes is poor.
 
 > ⚠️ **Do not try to settle this with frame luma.** An earlier attempt measured average luma
 > rising across on/off pairs (119→124, then 101→119) and briefly recorded it here as proof that
