@@ -87,8 +87,15 @@ cloud daemon from starting.
 
 ## Deliberate exclusions
 
-- `ffmpeg` (37 MB) and `curl` (5.7 MB) from `anyka_hack/` — large general-purpose ARM builds,
-  re-downloadable from upstream, and not needed for the RTSP + PTZ + audio path this project uses.
+- The `ffmpeg` (37 MB) and `curl` (5.7 MB) **binaries** from `anyka_hack/` — large
+  general-purpose ARM builds, re-downloadable from upstream, and not needed for the RTSP + PTZ +
+  audio path this project uses.
+  **The shell scripts in `ffmpeg/` are kept**, because one of them is not optional:
+  `app_restarter.sh` is the watchdog that restarts `libre_anyka_app` when it dies, and a card
+  without it silently loses RTSP and snapshots at the first crash. `wrap_mp4.sh` is kept
+  alongside it since the watchdog's restart condition references it. See
+  [`../docs/troubleshooting.md`](../docs/troubleshooting.md#what-actually-restarts-the-app).
+  Only the MP4-wrapping path needs the missing binary.
 - `dropbear` host keys — the upstream archive ships a private `dropbear_ecdsa_host_key`. This repo
   is public, so all key material was filtered out. The `dropbear` binary is kept; generate a fresh
   host key on the camera instead of reusing a published one.
