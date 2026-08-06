@@ -257,3 +257,45 @@ iCam365 over ONVIF.
 
 * [web-ui.md](web-ui.md) — HTTP API, and why port 80 must stay on an isolated VLAN
 * [troubleshooting.md](troubleshooting.md) — when the entity goes dark
+
+## ⚠️ This camera's load average has a permanent +3 offset — do not alert on it
+
+`ctl?command=stats` reports `load1/5/15`, and the raw number is **misleading on this
+hardware**. Measured 2026-08-06:
+
+```
+load1 median 4.26        but    cpu_used median 30.6 %   (~69 % idle)
+```
+
+**MEASURED — three kernel threads sit permanently in `D` (uninterruptible sleep):**
+
+```
+D 796 (wlan_mgmt_00)
+D 797 (ap_00)
+D 798 (mlme_00)
+```
+
+Those are the `ZT9101UV20` WiFi driver's threads, and they are parked in D state from boot
+regardless of activity. `top` agrees with the CPU figure independently: `46.6% idle`.
+
+**INFERRED, from standard Linux load semantics** (load average counts uninterruptible-sleep
+tasks, not just runnable ones): those three threads contribute a constant **≈ +3.0** to every
+load reading. So the camera's *real* load is roughly `load1 − 3`, i.e. **~1.2, not ~4.3**.
+
+Consequences:
+
+- **Never treat this camera's load average as CPU pressure.** Use `cpu_total_jiffies` /
+  `cpu_idle_jiffies` differentiated across two polls; that is the honest number.
+- **Any alerting threshold must account for the +3 baseline**, or it fires permanently.
+- It is **not** caused by anything this project did — these are driver threads present from
+  boot, on a stock WiFi module.
+
+This was mis-stated twice on 2026-08-06 (including by the agent who then measured it), which
+is why it is written down: the load figure is the single most quotable and most misleading
+number the camera reports about itself. Same trap as `uptime` 7.14 vs `vmstat` 80 % idle on
+another host the same day.
+
+`hz` in the bundle is **100** — that is `USER_HZ`, the fixed Linux ABI unit for
+`/proc/stat` and `/proc/<pid>/stat`, confirmed on-device with `getconf CLK_TCK`. An earlier
+sanity check computed 96.6 from `total_jiffies / uptime`; that shortfall is unaccounted boot
+ticks, **not** evidence that `hz` is 96.6. Do not "correct" it.
