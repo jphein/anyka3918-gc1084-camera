@@ -299,3 +299,42 @@ another host the same day.
 `/proc/stat` and `/proc/<pid>/stat`, confirmed on-device with `getconf CLK_TCK`. An earlier
 sanity check computed 96.6 from `total_jiffies / uptime`; that shortfall is unaccounted boot
 ticks, **not** evidence that `hz` is 96.6. Do not "correct" it.
+
+## What a sustained RTSP consumer actually costs — MEASURED 2026-08-06
+
+Captured through `ctl?command=stats` while `nebula-inventory` held short streams. Phases
+self-labelled by the bundle's own `rtsp_clients` field, so no clock sync was needed:
+
+```
+no client (idle)     n=8   cpu 32.9 %   app-cpu 25.0 %   mem_free 4442 kB
+client attached      n=8   cpu 42.3 %   app-cpu 32.1 %   mem_free 4012 kB
+```
+
+**One sustained consumer costs roughly +9 pp CPU and +7 pp app-CPU**, on a camera that idles
+around 67 % free. An independent 8-sample baseline an hour earlier read 30.6 % / 24.1 %,
+matching the idle rows here — the instrument is consistent across runs.
+
+**So this camera can comfortably sustain a continuous RTSP consumer.** That question had been
+open, with the repo's existing caution recorded as *"precaution rather than a fix for a
+measured problem"*. It is now measured. Note this is the opposite of what the raw load
+average suggests — see the +3 offset section above.
+
+**Memory is the tighter resource, not CPU.** `mem_free_kb` fell to a low of 3456 kB with a
+client attached. That is the number to watch under a permanent consumer.
+
+### Two things deliberately NOT concluded
+
+**Per-stream cost.** The point estimates came out with the 720p main *cheaper* than the 360p
+substream (37.3 % vs 43.6 %), which is backwards. With n=3 against n=5 and 10 s samples
+straddling the start/stop boundaries, that is most likely dilution — but a real mechanism
+exists too (if the ISP encodes 720p natively and `/vs1` is a downscale, the substream costs
+an extra scale+encode). **Not established either way; do not quote the split.** The test
+would be a longer single-stream hold on each, timed to sample boundaries.
+
+**What `encoder_cpu_jiffies` measures.** It is `libre_anyka_app`'s *total* CPU — encode plus
+RTSP packetisation and network I/O. A rise proves the app is working harder, **not** that the
+extra work is encoding. It does cleanly refute "both streams are always encoded, so the main
+is free": app CPU did not stay flat when a client attached.
+
+Observer overhead: the sampler ran at 10 s intervals, ~0.5 s each, ≈5 % duty present in
+every phase equally. Absolute figures include it; the deltas do not.
