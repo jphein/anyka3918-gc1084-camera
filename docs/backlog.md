@@ -27,6 +27,15 @@ interesting the problem is.
   it itself; and `usr-sbin/README.md` calling `/sbin/updater` "not yet analysed"
   four paragraphs above the section analysing it. **The stale half is the
   dangerous half**, because it reads like the checked one.
+- **A uniform result across varied inputs means a broken instrument, not a
+  conclusion.** Six different `&level=` values that all report the same thing are
+  telling you about your *test*, not the system. Seen four times today: a `ps`
+  parse that showed all six volume variants as the same binary; six snapshot
+  frames returning luma `130.47` to two decimals because the server was serving
+  one cached frame; `ctl` returning `OK` for every command whether honoured or
+  not; and `camera_set_ircut` hardcoding `return 0`. **Before believing a null or
+  a uniform result, feed the instrument an input you already know differs** — if
+  it cannot tell those apart, it cannot tell anything apart.
 - **A repo copy and the deployed file are two different things.** The repo `ctl`
   had eight comment lines the camera's copy did not. Editing the device copy and
   committing it would have silently deleted them. Diff before you overwrite, and
@@ -261,6 +270,29 @@ change expect up to an hour's disagreement between the web UI and the ptz daemon
 Cosmetic; documented so nobody hunts it.
 
 ---
+
+## 8. Repo and device can drift, and `write-sd-card.sh` assumes they don't
+
+**Observed, not hypothetical.** The repo's `reference/sd-card-original/web_interface/ctl`
+(`17810bd0…`) carried eight comment lines about the ircut direct-write that the
+*deployed* copy on the camera (`2b85f044…`) did not. Editing the device copy and
+committing it would have silently deleted that comment block — a documentation loss
+with no diff conflict to warn anyone. Caught by diffing before overwriting; the change
+was merged onto the repo version instead and the device re-flashed from it, so both now
+hash `81237ee7…`.
+
+Best guess is the repo copy was edited for comments after the device was last flashed
+and never re-deployed — **a guess, not established.** Worth one look, low priority.
+
+**The generalisation is the part that matters:** `tools/write-sd-card.sh` carries md5
+constants that assume repo and device agree. If they can drift for `ctl` they can drift
+elsewhere, and the writer's gates would then be checking against a stale expectation —
+passing while installing something nobody reviewed. Worth an audit of every hardcoded
+md5 in that script once the card work settles.
+
+Cheap mitigation if an audit is too much: have the writer *report* the md5 of what it
+installed rather than only asserting a constant, so a drift shows up in the output
+instead of being silently absorbed.
 
 ## Closed — do not reopen
 
