@@ -149,15 +149,46 @@ else
 fi
 
 echo
-echo "== 5. byte-identity to the vendor image (BONUS - never required) =="
-if [ -n "$SQ_BYTES" ] && head -c "$SQ_BYTES" "$DUMP" | cmp -s - "$WORK/build1.sqsh4"; then
+echo "== 5. superblock equivalence - what the tree comparison CANNOT see =="
+#
+# Content equivalence proves the FILES match. It says nothing about how they are
+# packed, and the vendor kernel mounts the packing, not the tree. A rebuild with
+# the wrong block size or a compressor this kernel lacks unpacks to a perfect
+# tree and fails to mount - so this is the check that covers the gap between
+# "the same files" and "the same filesystem".
+#
+# Every field except the creation timestamp must match. The timestamp is the one
+# thing that SHOULD differ; if it did not, we would be looking at the input.
+sb() { unsquashfs -s "$1" 2>/dev/null | grep -v "^Creation or last append time" | tail -n +2; }
+if diff -u <(sb "$DUMP") <(sb "$WORK/build1.sqsh4") > "$WORK/sb.txt" 2>&1; then
+  ok "superblock matches the vendor's on every field but the timestamp"
+  sb "$DUMP" | grep -E "^(Compression|Block size|Number of inodes|Number of fragments)" | sed 's/^/     /'
+else
+  bad "superblock differs from the vendor image - the tree may match while the
+  filesystem does not. THIS IS THE ONE THAT STOPS IT MOUNTING:"
+  sed 's/^/     /' "$WORK/sb.txt" | head -20
+fi
+
+echo
+echo "== 6. byte-identity to the vendor image (BONUS - never required) =="
+# Compare PAYLOAD TO PAYLOAD. An earlier version compared the vendor's payload
+# against our WHOLE file, which is longer - mksquashfs pads its output up to a
+# 4 KB boundary while a raw dump carries the partition's erase padding instead.
+# That check would have reported "differs" on length alone even for a perfect
+# rebuild: the right verdict for the wrong reason, which is the failure mode
+# this whole tool exists to avoid.
+if [ -n "$SQ_BYTES" ] \
+   && cmp -s <(head -c "$SQ_BYTES" "$DUMP") <(head -c "$SQ_BYTES" "$WORK/build1.sqsh4"); then
   ok "our rebuild is byte-identical to the vendor's filesystem. Strong signal,"
   echo "     but not the reason to proceed - see the header."
 else
-  echo "info the rebuild differs from the vendor bytes. EXPECTED and fine: they"
-  echo "     built with a different mksquashfs. Content equivalence above is the"
-  echo "     claim. Do NOT tune flags to force this to pass - that proves nothing"
-  echo "     about the filesystem and would only be fitting to the artefact."
+  n=$(cmp -l <(head -c "$SQ_BYTES" "$DUMP") <(head -c "$SQ_BYTES" "$WORK/build1.sqsh4") 2>/dev/null | wc -l)
+  echo "info the rebuild differs from the vendor bytes in $n of $SQ_BYTES payload"
+  echo "     bytes. EXPECTED and fine: they built with a different mksquashfs, so"
+  echo "     the xz encoder output differs throughout. Content and superblock"
+  echo "     equivalence above are the claims. Do NOT tune flags to force this to"
+  echo "     pass - a test that can be made green by fiddling is not a test, it is"
+  echo "     a target."
 fi
 
 echo

@@ -46,6 +46,20 @@ case "$out" in *"modes, types, sizes and symlink targets all preserved"*)
 [ -f "$W/usr.sqsh4" ] && ok "writes an image only when every check passed" \
                       || bad "no image produced"
 
+case "$out" in *"superblock matches"*) ok "superblock equivalence is checked (block size / compressor / inode count)" ;;
+               *) bad "no superblock check ran: $out" ;; esac
+
+# The superblock check must be able to FAIL, or it is decoration. A dump built
+# at a different block size has an identical TREE and a filesystem the vendor
+# kernel may not mount - exactly the gap content equivalence cannot see.
+mksquashfs "$W/src" "$W/wrongblk.bin" -b 65536 -comp xz -no-progress >/dev/null 2>&1
+truncate -s 3100672 "$W/wrongblk.bin"
+out2="$("$DIR/roundtrip-squashfs.sh" --dump "$W/wrongblk.bin" --slot B --out "$W/x.sqsh4" 2>&1)" && rc2=0 || rc2=1
+case "$out2" in *"superblock differs"*) ok "the superblock check CATCHES a block-size mismatch" ;;
+                *) bad "a 64K-block dump rebuilt at 128K passed unnoticed" ;; esac
+[ "$rc2" -ne 0 ] && ok "and refuses to write an image when it fails" \
+                 || bad "wrote an image despite a superblock mismatch"
+
 # The exec bit is the one that would silently ruin a rebuild, so prove the
 # check can actually fail rather than trusting that it would.
 mkdir -p "$W/broken"; cp -a "$W/src/." "$W/broken/"; chmod 644 "$W/broken/bin/prog"
