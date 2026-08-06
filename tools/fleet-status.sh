@@ -307,8 +307,12 @@ if fws:
         print("vendor firmware: uniform (%s)" % uniq[0])
 
 if any("MARKER-ON-MTD6" in r[4] for r in rows):
-    print("\n⚠️  A unit marker sits in /etc/jffs2 (mtd6 = updater slot C). A firmware")
-    print("    update ERASES that whole partition. Migrate it to /data.")
+    print("\n⚠️  A unit marker sits in /etc/jffs2 (mtd6 = updater slot C), which a")
+    print("    firmware update ERASES whole. It self-migrates to /data on the next")
+    print("    boot (copied verbatim, mtd6 removed only after /data lands), so the")
+    print("    fix is usually a reboot — NOT a manual move. Seeing it here means the")
+    print("    camera has not rebooted since, or /data is absent entirely; the second")
+    print("    case does not self-heal and is the one to chase.")
 
 if overrides:
     print("\n⚠️  These units are named by --unit-name OVERRIDE, not derived from their")
