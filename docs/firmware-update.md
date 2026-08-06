@@ -12,6 +12,16 @@ account. Nobody had read it until 2026-08-06. This is what it does, what it does
 > **There is no network recovery from any bad flash**, because the exploit
 > trigger lives on `B`. See [the gate](#the-gate-recovery-first).
 
+> ⚠️ **Scope: this applies to two cameras, not the fleet.** JP has **two Anykas
+> and twelve icam365s**, and the icam365s are **EYEPLUS hardware** — a different
+> SoC, a different updater, a different everything. The card writer, this update
+> tooling and the OTA path are Anyka-only.
+>
+> **The parts that generalise are [identity](identity.md) and inventory**, and
+> even those would need a different *read* path on the EYEPLUS units — the
+> scheme travels, the transport does not. Do not mistake this page for the
+> fleet's upgrade path; it is the upgrade path for a sixth of it.
+
 ---
 
 ## The gate: recovery first

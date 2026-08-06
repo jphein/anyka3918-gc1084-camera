@@ -24,6 +24,17 @@ clock:
 
 ---
 
+> **Fleet scope.** JP has two Anykas and twelve **EYEPLUS icam365s**. Almost
+> everything else in this repo is Anyka-only — the card writer, the updater
+> work, the GPIO map. **This scheme is the part that travels**: a unit names
+> itself from its own MAC, write-once, with no registry, which is a property of
+> the *approach* rather than of this SoC.
+>
+> What does **not** travel is the transport. `whoami.sh` reads two files over
+> telnet because that is what this firmware offers. An EYEPLUS unit needs its
+> own read path emitting the same 14 keys. **Keep the key contract; expect to
+> rewrite the reader.**
+
 ## Two markers, because there are two different facts
 
 | | **Unit** | **Build** |
