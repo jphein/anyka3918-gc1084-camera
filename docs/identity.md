@@ -160,8 +160,33 @@ with a stride. Measured, distinct `Adjective Noun` pairs over K units:
 | sequential, stride 4 | 256 | 32 | 162 | 220 |
 | random MACs | 256 | 229 | 229 | 235 |
 
-**Fifty cameras at stride 4 collapse onto eight names** with a raw seed, and a
-raw seed caps at 32 distinct names however many cameras you own.
+> ⚠️ **Those raw figures are from a single base — `0x001000`, which is
+> 256-aligned — and alignment is the best case for the argument.** Median over
+> 2000 random bases: **16** (not 8) for stride-4/K=50, and **64** (not 32) for
+> sequential/K=256. A reader reproducing at a different base will get different
+> raw numbers; that is the base, not a disagreement.
+>
+> The conclusion is untouched, and the spread's figures are *stronger* than one
+> base suggests: across all 2000 bases the spread's **minimum** was 50/50 and
+> 256/256 respectively — it never once did worse.
+
+**Fifty cameras at stride 4 collapse onto 8–16 distinct names** with a raw seed.
+
+The mechanism, stated correctly — and the wrong version of this sentence sat in
+this file for a day, refuted by the table two lines above it:
+
+> With a raw seed the noun index is bits 8–12, which are **constant across any
+> aligned 256-wide MAC window**. So a bag whose MACs fall inside one window gets
+> **at most 32 names** — one noun, 32 adjectives — however many cameras are in
+> it.
+
+That cap is **per window, not absolute**. Spread far enough apart and raw
+seeding does recover: 8192 sequential MACs give all 1024 names, and 256 random
+MACs give 229. The earlier text claimed the 32 was a global ceiling, which the
+`random MACs | 256 | 229` row in this very table disproves. The cap is real and
+the fleet argument survives — a bag *is* one window — but the quantifier was
+wrong, and being wrong in a way the adjacent table refutes is worse than being
+wrong quietly.
 
 The spread also beats hashing on the case that actually occurs, and that is not
 luck. `2654435761` is odd, so `gcd(G, 32) = 1` and `id ↦ (id·G) mod 32` is a
@@ -178,11 +203,22 @@ read, i.e. only `product mod 2^13`:
 
 ```
 t = ((low24 mod 8192) × 6577) mod 8192          6577 = 2654435761 mod 8192
-adj = A[t % 32] ;  noun = N[(t >> 8) % 32]      largest intermediate 53,878,207
+adj = A[t % 32] ;  noun = N[(t >> 8) % 32]      largest intermediate 53,872,207
 ```
 
 Not an approximation. `tools/identity/verify-pin.sh` enumerates it against the
 reference over all 16,777,216 inputs.
+
+**It is exact only for table sizes that divide those bit fields**, and
+`sigil-name.sh` now asserts the precondition rather than assuming it.
+Truncating to 13 bits preserves `x % NADJ` only when `NADJ` divides 8192, and
+`(x >> 8) % NNOUN` only when `NNOUN` divides 32. `fleet` is 32 × 32 and
+satisfies both; `forge` is 14 × 14 and does not. Before the guard,
+`sigil-name.sh --realm forge --mac ...` returned `Forged Crucible` where every
+other sigil implementation gives `Anvilled Mold` — **a plausible wrong answer at
+exit 0**. Unreachable in this repo (`--mac` is only ever paired with `fleet`),
+but a naming tool that silently disagrees with its own reference is the failure
+class this project has spent a day cataloguing, so it now refuses.
 
 ---
 

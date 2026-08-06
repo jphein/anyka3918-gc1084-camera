@@ -27,6 +27,21 @@ interesting the problem is.
   it itself; and `usr-sbin/README.md` calling `/sbin/updater` "not yet analysed"
   four paragraphs above the section analysing it. **The stale half is the
   dangerous half**, because it reads like the checked one.
+
+  **A fourth instance closed the distance to two lines**, and that is the part
+  worth keeping. `identity.md` claimed *"a raw seed caps at 32 distinct names
+  however many cameras you own"* directly beneath a table whose own
+  `random MACs | 256 | 229` row disproves it. Nobody spotted it — not the
+  author, not two reviewers — until an adversarial read went looking. So
+  **proximity is not protection**: a refutation one line away is no more likely
+  to be noticed than one in another file, because nobody re-reads the paragraph
+  they just wrote. The measured table was right and the sentence summarising it
+  was wrong, which is the usual direction — **prose drifts, data doesn't.**
+  Trust the table; re-derive the sentence.
+
+  (True version, for the record: the cap is **per aligned 256-wide MAC window**,
+  because the noun index is bits 8–12 and those are constant inside one. It is
+  not a global ceiling.)
 - **A uniform result across varied inputs means a broken instrument, not a
   conclusion.** Six different `&level=` values that all report the same thing are
   telling you about your *test*, not the system. Seen four times today: a `ps`
