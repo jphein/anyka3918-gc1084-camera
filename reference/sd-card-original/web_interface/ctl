@@ -127,6 +127,78 @@ case "$c" in
     setsid "$BIN" 16000 1 mp3 "/mnt/sounds/$f.mp3" </dev/null >/dev/null 2>&1 &
     echo "OK"
     exit 0 ;;
+  stats)
+    # One call, one bundle, for the HA telemetry tile. Fixed key set, always
+    # present, null when unavailable - same convention as whoami.sh --json, so the
+    # HA side has one parser shape rather than two.
+    #
+    # COST IS THE DESIGN CONSTRAINT and fork() is what costs, not the data. Measured
+    # on this camera at load ~5: four $(...) substitutions = 0.414s median, while
+    # iwconfig alone = 0.105s. A glob of /proc/[0-9]*/stat to find the pid without
+    # pidof measured WORSE (0.437s vs 0.206s) - opening 78 files beats one fork only
+    # in theory. So: exactly two forks, pidof and one awk that reads every /proc
+    # source itself.
+    #
+    # DELIBERATELY NULL, do not "fix" these by filling them in:
+    #   signal_level / noise_level - the ZT9101UV20 driver reports these as a
+    #     CONSTANT 100/100 and 0/100. Sampled four times while link_quality moved
+    #     60->66->60->57, they never budged. They are stubs, not measurements.
+    #   fps - there is no source. Not in gergesettings, not in the app argv, and no
+    #     anyka/video entry under /proc. The "20fps" in docs/home-assistant.md has no
+    #     traceable origin. Reporting a number we cannot measure is worse than a gap:
+    #     use encoder_cpu_jiffies instead (below).
+    #
+    # video_width/height come from the RUNNING process argv, not the config file, so
+    # they describe what is actually encoding. Still "configured" - it is the app's
+    # input, not a measurement of its output - hence video_dims_source.
+    #
+    # encoder_cpu_jiffies is the honest substitute for fps: cumulative CPU of the
+    # encoder. HA already polls on a timer, so it can differentiate two samples into
+    # a rate for free:  pct = 100*(d_jiffies/hz)/d_uptime_s. Both fields are in this
+    # same bundle and uptime_s is monotonic, so the arithmetic survives NTP steps.
+    # A stalled encoder shows as a flat line - which is this camera's characteristic
+    # failure (silence with the process still alive).
+    PID=$(pidof libre_anyka_app)
+    iwconfig wlan0 2>/dev/null | awk -v PID="$PID" '
+      /ESSID:/        { if (match($0,/ESSID:"[^"]*"/))            ssid=substr($0,RSTART+7,RLENGTH-8) }
+      /Access Point:/ { if (match($0,/Access Point: [0-9A-Fa-f:]+/)) ap=substr($0,RSTART+14,RLENGTH-14) }
+      /Frequency:/    { if (match($0,/Frequency:[0-9.]+/))        fq=substr($0,RSTART+10,RLENGTH-10)*1000 }
+      /Bit Rate[:=]/  { if (match($0,/Bit Rate[:=][0-9.]+/))      br=substr($0,RSTART+9,RLENGTH-9) }
+      END {
+        while ((getline l < "/proc/loadavg") > 0) { split(l,a," "); l1=a[1]; l5=a[2]; l15=a[3] }
+        while ((getline l < "/proc/uptime")  > 0) { split(l,a," "); up=int(a[1]) }
+        while ((getline l < "/proc/net/wireless") > 0)
+          if (l ~ /wlan0:/) { gsub(/\./,"",l); split(l,a," "); lq=a[3] }
+        while ((getline l < "/proc/meminfo") > 0) { split(l,a,"[ \t]+")
+          if      (a[1]=="MemTotal:") mt=a[2]; else if (a[1]=="MemFree:") mf=a[2]
+          else if (a[1]=="Buffers:")  bu=a[2]; else if (a[1]=="Cached:")  ca=a[2] }
+        if (PID != "") {
+          while ((getline l < ("/proc/" PID "/stat")) > 0) { n=split(l,a," "); if (n>15) cpu=a[14]+a[15] }
+          nx=0
+          while ((getline l < ("/proc/" PID "/cmdline")) > 0) {
+            if (nx==1) { vw=l; nx=0 } else if (nx==2) { vh=l; nx=0 }
+            if (l=="-w") nx=1; else if (l=="-h") nx=2 }
+        }
+        q="\""
+        printf "{"
+        printf "%suptime_s%s:%d,", q,q, up
+        printf "%sload1%s:%s,%sload5%s:%s,%sload15%s:%s,", q,q,l1, q,q,l5, q,q,l15
+        printf "%smem_total_kb%s:%d,%smem_free_kb%s:%d,%smem_avail_kb%s:%d,", q,q,mt, q,q,mf, q,q,mf+bu+ca
+        printf "%slink_quality%s:%s,",  q,q, (lq==""   ? "null" : lq)
+        printf "%sssid%s:%s,",          q,q, (ssid=="" ? "null" : q ssid q)
+        printf "%sap_bssid%s:%s,",      q,q, (ap==""   ? "null" : q ap q)
+        printf "%sfreq_mhz%s:%s,",      q,q, (fq==""   ? "null" : sprintf("%d",fq))
+        printf "%sbitrate_mbps%s:%s,",  q,q, (br==""   ? "null" : br)
+        printf "%svideo_width%s:%s,",   q,q, (vw==""   ? "null" : vw)
+        printf "%svideo_height%s:%s,",  q,q, (vh==""   ? "null" : vh)
+        printf "%svideo_dims_source%s:%sconfigured%s,", q,q,q,q
+        printf "%sencoder_pid%s:%s,",   q,q, (PID==""  ? "null" : PID)
+        printf "%sencoder_cpu_jiffies%s:%s,", q,q, (cpu=="" ? "null" : cpu)
+        printf "%shz%s:100,", q,q
+        printf "%ssignal_level%s:null,%snoise_level%s:null,%sfps%s:null", q,q,q,q,q,q
+        printf "}\n"
+      }'
+    exit 0 ;;
   sounds)
     ls /mnt/sounds/ 2>/dev/null | sed 's/\.mp3$//' | tr '\n' ' '
     echo

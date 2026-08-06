@@ -4,8 +4,18 @@
 
 | | |
 |---|---|
-| Main | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @20 fps, PCM A-law 8 kHz |
-| Sub | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @20 fps, PCM A-law 8 kHz |
+| Main | `rtsp://192.168.1.20:554/vs0` — h264 **1280×720** @20 fps†, PCM A-law 8 kHz |
+| Sub | `rtsp://192.168.1.20:554/vs1` — h264 640×360 @20 fps†, PCM A-law 8 kHz |
+
+> † **The 20 fps figure is unsourced and was not measured.** Searched 2026-08-06: it is
+> not in `gergesettings.txt`, not in the app's argv (`-w 640 -h 360 -m 0 -i 4 -u`, no rate
+> flag), and there is no anyka/video/encoder entry under `/proc` that reports throughput.
+> Treat it as a stream property someone observed once, not a guarantee. The `640×360` half
+> *is* traceable — it is `image_width`/`image_height` in `gergesettings.txt`, passed through
+> to the running process, and `ctl?command=stats` reports it from the live argv.
+> **There is no fps counter on this camera and `stats` deliberately returns `"fps":null`.**
+> Use `encoder_cpu_jiffies` differentiated across two polls if you need a
+> "is the encoder actually working" signal.
 | Still | `http://192.168.1.20:3000/snapshot.jpeg` — ~32 KB JPEG, 640×360 |
 
 None of these use authentication. `/vs2` returns 404.
