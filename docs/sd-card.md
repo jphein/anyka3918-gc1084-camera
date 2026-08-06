@@ -10,11 +10,11 @@ these cameras, cloning cards is the normal workflow.
 ## Writing a card
 
 ```sh
-sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME]
+sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME] [--time-source IP] [--stock]
 ```
 
 [`tools/write-sd-card.sh`](../tools/write-sd-card.sh) writes a ready-to-run card from the
-2026-08-05 backup. What it does, in order:
+2026-08-05 backup, **with this project's fixes baked in**. What it does, in order:
 
 1. Refuses to run unless the target is a **removable whole disk** that is not hosting `/`, and
    makes you type `ERASE` to confirm.
@@ -23,8 +23,79 @@ sudo tools/write-sd-card.sh /dev/sdX [--ssid NAME]
    only carries FAT structures sized for the original 7.4 GB card, so the filesystem is always
    rebuilt to match whatever card is actually in hand.
 4. Extracts `yicam-files.tar.gz` onto it.
-5. With `--ssid NAME`, rewrites `wifi_ssid=` in `anyka_hack/gergesettings.txt`.
-6. Prints the resulting WiFi/sensor settings, with the password withheld.
+5. Applies the fixes below.
+6. Prints the resulting settings, with the password withheld, plus any warnings.
+
+| Flag | Effect |
+|---|---|
+| `--ssid NAME` | Rewrites `wifi_ssid=`. **Does not change the PSK.** |
+| `--time-source IP` | Rewrites `time_source=`. Worth using — see the warning below. |
+| `--stock` | Writes the backup **unmodified**, with no project fixes. Escape hatch. |
+
+### What gets fixed
+
+Without these, a fresh card boots a camera with a **15-hour-wrong clock** and **day/night IR-cut
+switching that has never worked**.
+
+| Fix | Why |
+|---|---|
+| `time_zone=PST8PDT,M3.2.0,M11.1.0` | The backup ships `GMT-08:00`, which POSIX reads as **UTC+8**. [Detail](troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service) |
+| `ptz_init_on_boot=1` | The daemon needs homing before it will move. [Detail](ptz.md#-the-homing-command-is-init_ptz-not-init) |
+| `cgi-bin/ctl` installed, mode 755 | Our fast control endpoint — not upstream's. [Detail](web-ui.md#cgi-binctl--our-fast-control-endpoint) |
+| `/sounds/` created | Where `ctl`'s `play` and `sounds` commands look |
+| Missing `]` in `Factory/config.sh` | [Upstream's bracket bug](#-latent-bug-in-factoryconfigsh), which stops the sensor symlink ever being recreated |
+| IR-cut node detection | See below |
+
+### 🔑 One card works in any of these cameras
+
+**This is the property that makes the tool trustworthy with a bag of cameras, and it is
+deliberate.**
+
+`libre_anyka_app` hard-codes the sysfs path it uses to move the IR-cut filter, and the two
+vendor kernel builds disagree about that path:
+
+| Build | Node |
+|---|---|
+| 2023 (`chensheng`) | `/sys/user-gpio/ircut_a` — **unprefixed** |
+| 2022 (`zhoujiahui`) | `/sys/user-gpio/gpio-ircut_a` — **prefixed** |
+
+The stock binary writes the prefixed name, so on a 2023 camera it gets `ENOENT` on every
+transition. A patched binary writes the unprefixed name — and is then wrong on a 2022 camera,
+for the same reason in reverse.
+
+So **the card carries both binaries and picks one at every boot**, by testing which node
+actually exists:
+
+```
+libre_anyka_app.node-ircut_a         patched  -> 2023 build
+libre_anyka_app.node-gpio-ircut_a    stock    -> 2022 build
+```
+
+The choice is made in `run_libre_anyka_app.sh`, which this tool replaces with
+[our own version](../tools/card-overlay/anyka_hack/libre_anyka_app/run_libre_anyka_app.sh)
+(upstream's is kept beside it as `.upstream`).
+
+Four properties follow, and they are the point:
+
+* **Swapping a card between cameras is safe and self-correcting.** It re-detects on the new
+  unit. A one-shot first-boot marker would have been silently wrong after a swap — which is a
+  thing that has already happened here.
+* **Nothing is written at boot.** No binary is patched in place, so a power cut mid-boot cannot
+  leave a corrupt executable.
+* **No state.** No marker file, nothing to go stale, no "has this run?" logic.
+* **It fails loudly.** If neither node exists, it says so on the console and falls back to stock
+  rather than guessing.
+
+> **Why the node name and not the kernel build string?** Parsing `/proc/version` for `chensheng`
+> vs `zhoujiahui` would work today, but the build string is only a *proxy* for the thing the
+> binary actually depends on. Testing the node directly handles a third vendor build for free
+> and does not bet on a username.
+
+> ⚠️ **The patched binary is not in this repo yet.** Until it is, the tool installs the stock
+> build under its detected-name and warns. **Nothing is broken by that** — the card is still
+> correct on a 2022 camera, and on a 2023 camera it behaves exactly as it does today. The
+> expected path is `reference/patches/libre_anyka_app.node-ircut_a`, and the tool checks its md5
+> before installing it.
 
 The backup lives **outside the repo** at `~/Backups/anyka-yicam-sd-2026-08-05/`, because it
 contains real credentials:
