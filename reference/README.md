@@ -94,7 +94,7 @@ cloud daemon from starting.
   `app_restarter.sh` is the watchdog that restarts `libre_anyka_app` when it dies, and a card
   without it silently loses RTSP and snapshots at the first crash. `wrap_mp4.sh` is kept
   alongside it since the watchdog's restart condition references it. See
-  [`../docs/troubleshooting.md`](../docs/troubleshooting.md#what-actually-restarts-the-app).
+  [`../docs/troubleshooting.md`](../docs/troubleshooting.md#the-watchdog-only-catches-death-not-hangs).
   Only the MP4-wrapping path needs the missing binary.
 - `dropbear` host keys — the upstream archive ships a private `dropbear_ecdsa_host_key`. This repo
   is public, so all key material was filtered out. The `dropbear` binary is kept; generate a fresh

@@ -195,9 +195,11 @@ These are general homelab lessons that came out of this hunt, not camera-specifi
   `/proc/net/nf_conntrack` on the router instead: the outbound destination port identifies the
   protocol (8883/8886 = MQTT/TLS = smart-plug class) and the byte counters separate telemetry
   (~3 KB) from video (megabytes).
-* **Do not trust an unregistered MAC OUI as a device fingerprint.** `18:DE:50` looked like a
-  camera marker but turned out to be shared with smart bulbs. The real camera is
-  `C0:4B:24:6D:9F:FD`.
+* **Do not trust an unregistered MAC OUI as a device fingerprint.** One OUI (`11:22:33`) looked
+  like a camera marker but turned out to be shared with smart bulbs, while the camera we were
+  actually hunting was on an entirely different one (`AA:BB:CC:DD:EE:FF`). Cheap devices from
+  the same contract manufacturer scatter across OUIs, and the same OUI shows up in unrelated
+  product categories — so an OUI is a hint, never an identification.
 
 ## Serial console
 
