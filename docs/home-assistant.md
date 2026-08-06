@@ -426,6 +426,36 @@ hypothesis was right and the inverted-pipeline hypothesis is dead.
 **So "point detection at the substream" is CORRECT on this hardware**, not backwards. That
 advice was briefly in doubt; it is now measured rather than assumed.
 
+### Independent corroboration from bandwidth
+
+`nebula-inventory` measured bytes on the wire across the same six phases, with no knowledge
+of the CPU figures:
+
+```
+/vs1 alone     240 kbit/s
+/vs0 alone    1712 kbit/s
+both at once  /vs1 265  +  /vs0 1686  =  ~1951 kbit/s
+```
+
+**Both instruments show additivity, independently.**
+
+| | predicted if additive | measured |
+|---|---|---|
+| app-cpu delta | 8.2 + 40.4 = **48.6** | **50.8** |
+| bitrate | 240 + 1712 = **1952** | **1951** |
+
+Neither stream was throttled when both were pulled (`/vs1` ×1.10, `/vs0` ×0.985). So the
+camera genuinely produces two independent streams rather than sharing any part of the
+pipeline — **CPU and bandwidth agree, from separate measurements by separate agents.**
+
+That also lines the two cost figures up in the same direction: `/vs0` costs **~5× the CPU**
+and **~7× the bandwidth** of `/vs1`, for 4× the pixels. The brief suggestion that the main
+stream might be *cheaper* is dead twice over.
+
+**Consequence for the docs' "free resolution upgrade" on `/vs0`: it is not free.** Measured
+fps also favours the substream — `/vs1` runs 15.8–16.2 fps and consistently ahead of its own
+timestamps, while `/vs0` runs 14.8–15.8 and is at or behind real time in half the samples.
+
 ### Practical limits
 
 - **One substream consumer is cheap** — +8 pp, entirely comfortable.
