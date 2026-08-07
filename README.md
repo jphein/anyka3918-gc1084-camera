@@ -25,7 +25,11 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ❌ Automatic day/night | **Not fixable on this board**, and not for want of patching: the driver's ambient input is `gpio-rf_feed`, a pin this hardware does not route, and its fallback ADC reads a constant. [Do not spend a day on it](docs/ptz.md#-automatic-daynight-is-not-fixable-on-this-board) |
 | ❌ IR LEDs | Pin and pad both toggle correctly, but **the ring is dark** — confirmed with a phone that demonstrably sees another camera's emitters. [Why is still open](docs/ptz.md#-ir-confirmed-dark) |
 | ❌ White LEDs | Present in hardware (4 on the ring) but dark. The **pad demonstrably swings** and nothing lights, the vendor firmware **declares this PTZ variant unsupported**, and there is **no software fix** — [all other candidates refuted](docs/ptz.md#-white-leds--the-vendor-firmware-disables-them-on-this-variant) |
-| ✅ Speaker | MP3 playback out of the built-in speaker — [raise `SPK_PA` first](docs/ptz.md#speaker--audio-out-works) |
+| ✅ Speaker | MP3 playback out of the built-in speaker. **You do not need to raise `SPK_PA`** — the player does it [(that was retracted)](docs/ptz.md#speaker--audio-out-works) |
+| ✅ Speaker volume | **Six rungs, `ak_adec_demo.vol1..6` on the card, default 4.** Upstream called the control broken; it was **hardcoded at maximum and never exposed** — one byte. ⚠️ Do **not** pre-attenuate clips: the file sits upstream of a compressor that undoes it. [Detail and the caveats](docs/ptz.md#-volume-a-six-rung-ladder-shipped-on-the-card) |
+| ✅ Identity | Each camera **names itself from its own MAC** at first boot, write-once, no registry — and the name stays with the camera while the build version follows the card. [How](docs/identity.md) |
+| ✅ Firmware update | The stock updater is documented, including **what it does not check** — no signature, and a "newer only" gate that is a string compare and inverts at this version. [Read the gate first](docs/firmware-update.md) |
+| ✅ Cross-compiling | A toolchain exists and is **proven on hardware**. [What it does — and does not — unblock](docs/cross-compiling.md) |
 | ✅ Clock | NTP syncs. No RTC battery, so it boots to 1969 and depends on it. The timezone was **15 hours wrong on every service** while `date` in a shell looked fine — [now fixed](docs/troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service) |
 
 ## Working configuration
@@ -96,23 +100,55 @@ sudo tools/write-sd-card.sh /dev/sdX --ssid <your-ssid>
 
 ## ⚠️ Security
 
-**These cameras must live on an isolated, cloud-blocked VLAN.** That is not generic caution —
-the hacked firmware has specific, verified problems:
+**These cameras must live on an isolated, cloud-blocked VLAN.** That is not generic caution, and
+it is **not a consequence of hacking them.**
+
+### 🔴 A stock, un-hacked camera is the worse case
+
+**This page used to scope the whole section to "the hacked firmware", which implied leaving a
+camera stock was the safe option. It is not.**
+
+`rc.local` line 12, on **every stock boot**, as root:
+
+```sh
+/usr/bin/tcpsvd 0 21 ftpd -w / -t 600 &
+```
+
+That is `0` = **all interfaces**, `-w` = **writes enabled**, `/` = **served from the filesystem
+root**. A stock camera runs a **permanently-enabled, network-facing, writable file service rooted
+at `/`** — and `run_ftp=0` does **not** reach it, because that is a *hack* setting and this is
+vendor `rc.local`.
+
+> ⚠️ **It is a complete root chain built entirely from vendor components.** Anyone who can
+> authenticate to that FTP can write `/tmp/update.tar`, which `update.sh` will flash **with no
+> signature check at all**. Gated only by the FTP credential.
+>
+> [The finding](docs/stock-attack-surface.md#1--the-finding-that-stands-regardless-of-everything-else)
+> · [the updater's missing checks](docs/firmware-update.md)
+
+**So "don't hack it" is not a mitigation. Isolation is the mitigation.**
+
+### Problems the hack adds or changes
 
 * **Unauthenticated remote root command execution on port 80 — ✅ now fixed, but only on cards
   written since 2026-08-06.** `cgi-bin/header` `eval`'d the query string as root *before* the
   token check, so `GET /cgi-bin/webui?a=1;id` returned `uid=0(root)`. **Any camera still running
   an older card remains fully exploitable.**
   [The hole, and the fix](docs/web-ui.md#security-the-auth-is-cosmetic).
+  **This one really is hack-only** — `gergehack` installs the web UI containing it; a stock unit
+  has nothing at that address.
+* **Telnet becomes a persistent root shell.** On stock it is a **boot-window race**, not a
+  service — `rcS` starts `telnetd`, and `service.sh` runs `killall telnetd` shortly after. The
+  hack keeps it up, which is the point of it.
 * **RTSP and the snapshot server have no authentication at all**, on any port.
-* **FTP is enabled by default**, writable, rooted at `/`, and serves the file containing your
-  WiFi PSK in cleartext.
-* **Telnet is plaintext** with a root shell.
-* No TLS anywhere on the device.
+* FTP serves the file containing your **WiFi PSK in cleartext** — a hack-specific file on a
+  vendor-enabled service.
+* No TLS anywhere on the device, stock or hacked.
 
-On a segregated camera VLAN with no untrusted clients, this is an acceptable trade for a $5
-camera. Anywhere else it is not. Do not port-forward it. If you cannot segregate it, set
-`run_web_interface=0` and `run_ftp=0` and drive PTZ over telnet.
+On a segregated camera VLAN with no untrusted clients, this is an acceptable trade for a $3–$8
+camera. Anywhere else it is not. **Do not port-forward it.** If you cannot segregate it, setting
+`run_web_interface=0` and `run_ftp=0` closes the hack's additions — **it does not close the stock
+FTP service above.**
 
 ## Documentation
 
@@ -124,8 +160,19 @@ camera. Anywhere else it is not. Do not port-forward it. If you cannot segregate
 | [docs/hardware.md](docs/hardware.md) | SoC, flash layout, mounts, serial console |
 | [docs/home-assistant.md](docs/home-assistant.md) | Streams, entities, WebRTC card, PTZ services |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Decision tree, the 2026 outage post-mortem, network debugging |
+| [docs/identity.md](docs/identity.md) | **Which camera is this, and what is it running?** Self-naming from the MAC, write-once, no registry |
+| [docs/firmware-update.md](docs/firmware-update.md) | The stock updater, what it does **not** check, and the recovery gate |
+| [docs/stock-attack-surface.md](docs/stock-attack-surface.md) | **What an un-hacked camera exposes** — read before assuming stock is safer |
+| [docs/cross-compiling.md](docs/cross-compiling.md) | The toolchain, proven on hardware — and what a compiler does **not** unblock |
+| [docs/backlog.md](docs/backlog.md) | Live queue, and **the rules section** — the part that transfers to devices that are not this one |
 | [reference/](reference/) | Vendored upstream material, provenance and licensing |
 | [reference/sd-card-original/](reference/sd-card-original/) | **This camera's real working config**, including `isp_gc1084.conf` |
+
+> **Every entry from `identity.md` down was written on 2026-08-06 and was missing from this
+> index until the same evening.** Worth stating rather than quietly fixing: nobody wrote anything
+> *wrong* — five documents were created and none were linked, and **an omission has no tell.**
+> The [rule this repo files for it](docs/backlog.md) is *"the backlog is what we read, the README
+> is what a stranger reads"*; this was that failure at **directory** scale.
 
 ## Four things that cost the most time
 
