@@ -313,6 +313,11 @@ brutal on a 400 MHz ARM926 — and then it renders the entire control page just 
 to a FIFO. `ctl` does neither. It parses three known parameters, dispatches on a whitelist, and
 returns a few bytes.
 
+> ⚠️ **"`ctl` is cheap" is true per verb, not per endpoint.** `play` is 0.133 s and `stats` is
+> 0.526 s quiet — up to **~2 s under load**. Anything polling on a timer should be reading
+> [the cost table](#-stats-is-not-in-the-same-cost-class-as-the-other-verbs) rather than assuming
+> the endpoint is uniformly fast.
+
 | `command=` | Effect |
 |---|---|
 | `up` `down` `left` `right` | Relative move, 10° |
@@ -324,7 +329,10 @@ returns a few bytes.
 | `ir_led_on` / `ir_led_off` | Write `/sys/user-gpio/IR_LED` — the write lands, but [illumination is unverified](ptz.md#lights--neither-ring-lights) |
 | `status` | Returns `ircut_a=<v> white_led=<v> ir_led=<v>` — the reads are **real**, [see below](#the-status-command-works). ❔ But whether `ircut_a` still tracks the filter when the *daemon* moves it is [an open question](ptz.md#-retracted-ir-cut-control-through-the-daemon-is-broken) |
 | `sounds` | Lists the playable clips in `/mnt/sounds/`, space-separated, extensions stripped |
-| `play` + `file=<name>` | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
+| `play` + `file=<name>` [`&level=1..6`] | Plays `/mnt/sounds/<name>.mp3` out of the speaker — [see below](#sound-playback) |
+| `playnow` + `file=<name>` [`&level=1..6`] | **Pre-empts** any running clip and plays this one. Returns `OK STOPPED n` / `OK IDLE` — [see below](#stop-and-playnow) |
+| `stop` | Kills any playing clip. Returns `STOPPED n` / `IDLE`, both success — [see below](#stop-and-playnow) |
+| `stats` | One JSON bundle: uptime, load, memory, WiFi, encoder, disk, RTSP clients — [see below](#stats). ⚠️ **Not in the same cost class as the other verbs** |
 
 Note it uses the **daemon command names directly** (`left`, `init_ptz`) rather than the stock
 UI's abbreviations (`ptzl`, `ptzinit`), and it exposes LED, `status`, `sounds` and `play`
@@ -347,6 +355,99 @@ build a stateful control on top of it.
 > Confirmed twice over: measured (`wrote 1 → reads 1`), then by disassembly —
 > `g_ak39_gpio_getpin` reads the **pin-state register**, twelve bytes away from the output data
 > register that `setpin` writes. It is a genuine hardware pad read.
+
+#### `stop` and `playnow`
+
+*Measured on the live camera by `lucid-camera`, 2026-08-06.*
+
+| | `stop` | `playnow` + `file=<name>` [`&level=1..6`] |
+|---|---|---|
+| Returns | `STOPPED n` or `IDLE` | `OK STOPPED n` or `OK IDLE` |
+| Both are success? | **Yes** — HTTP 200, exit 0 either way | Yes |
+| Errors | none of its own | `ERR file` (bad name) · `ERR nofile` (absent) |
+
+**`stop` kills *any* `ak_adec_demo`, not just clips `ctl` started** — it uses `pkill -f`, verified
+against a player launched directly over telnet. It leaves other audio paths alone. **It is
+idempotent**, so calling it speculatively is safe, and **no race was found** with a `play` issued
+0.0–0.3 s earlier: the HTTP round trip (~0.13 s) is longer than the window.
+
+**`playnow` pre-empts; it does not queue.** Two things a caller gets wrong:
+
+* ⚠️ **A bad request is a no-op, not a stop.** The file is validated **before** anything is
+  killed, so `playnow` with a missing file or a traversal attempt **leaves the current track
+  playing.** Verified both ways.
+* **No amp gap** — unlike `stop`, it does not drop `SPK_PA` between kill and launch.
+
+> **`stop` drops `SPK_PA` to 0, and it has to.** A *killed* player never reaches `ak_ao_close`,
+> so the amplifier would stay powered. A clip that finishes naturally goes `0→1→0` on its own.
+
+> ⚠️ **Verifying a kill: `ps` and `pgrep` lie for 1–2 seconds.** The dead process remains listed,
+> bracketed as `[ak_adec_demo]`, until it is reaped. **`ctl` filters those; a naive checker will
+> not** and will report a survivor that does not exist. This caught its author three times in one
+> session — see [the instrument rules](backlog.md).
+
+#### `stats`
+
+*Measured by `lucid-camera`, 2026-08-06.* One call, fixed keys, **every key always present and
+`null` when unavailable** — the same contract as `whoami.sh --json`, so a consumer never has to
+test for a missing field.
+
+```json
+{"uptime_s":8918,"load1":5.95,"load5":5.27,"load15":5.05,
+ "mem_total_kb":36540,"mem_free_kb":4212,"mem_avail_kb":18572,
+ "link_quality":72,"ssid":"my-iot-ssid","ap_bssid":"AA:BB:CC:DD:EE:FF",
+ "freq_mhz":2437,"bitrate_mbps":72.2,
+ "video_width":640,"video_height":360,"video_dims_source":"configured",
+ "encoder_pid":953,"encoder_cpu_jiffies":331613,
+ "cpu_total_jiffies":897842,"cpu_idle_jiffies":490299,"rtsp_clients":0,
+ "disk_sd_total_kb":7755940,"disk_sd_free_kb":7692860,
+ "disk_jffs2_total_kb":64,"disk_jffs2_free_kb":8,
+ "disk_data_total_kb":2216,"disk_data_free_kb":760,
+ "hz":100,"signal_level":null,"noise_level":null,"fps":null}
+```
+
+*(SSID and BSSID above are this repo's generic stand-ins, not the real values.)*
+
+> 🔴 **The CPU fields are raw counters and are meaningless in a single sample.** Nothing in the
+> payload says so, which is the easiest mistake to make with it — `cpu_total_jiffies` reads like a
+> level and is not. **You must poll twice and differentiate:**
+>
+> ```
+> cpu_pct     = 100 * (1 - Δcpu_idle / Δcpu_total)
+> encoder_pct = 100 * (Δencoder_cpu_jiffies / hz) / Δuptime_s
+> ```
+
+> ⚠️ **Three fields are permanently `null` and must not be "fixed".** `signal_level` and
+> `noise_level` are **driver stubs** — pinned at 100/0 across four samples while `link_quality`
+> moved 60→66→60→57. `fps` has **no source anywhere on the device**, which is why the frame rate
+> had to be [measured from outside](home-assistant.md#streams).
+
+##### ⚠️ `stats` is not in the same cost class as the other verbs
+
+Full HTTP round trip, **quiet camera**:
+
+| verb | median |
+|---|---|
+| `play` | 0.133 s ← cheapest on the box |
+| `status` | 0.188 s |
+| `stop` | 0.282 s |
+| `playnow` | 0.397 s |
+| **`stats`** | **0.526 s** — 2.8× `status` |
+
+**Under load it is much worse:** `stats` measured **1.200 s median, 2.087 s max** during a hammer
+test, while `status` went 0.188 → 0.548 s.
+
+> **Poll `stats` at 60 s, not 30 s.** On a single 400 MHz core that is roughly **0.9 % duty cycle
+> quiet, ~2 % loaded** — and this camera already carries three other Home Assistant pollers, two
+> of which force a JPEG encode.
+
+> **Scope, stated because the distinction matters:** what was measured is **latency**, not CPU.
+> On a single-core box with a synchronous CGI they track closely, but they are not the same
+> quantity and the duty-cycle figures above are *derived* from latency, not observed directly.
+
+**Why it is affordable despite being the slowest verb:** `stats` **opens no socket and forces no
+JPEG encode** — it is `/proc` reads plus three forks. That is the real difference from a health
+check that fetches a frame.
 
 #### Sound playback
 
