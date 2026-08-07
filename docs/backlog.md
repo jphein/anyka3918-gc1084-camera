@@ -397,6 +397,42 @@ interesting the problem is.
   that always says `OK` is internally consistent and externally useless. Expect
   the vendor's own success signals to be decorative until proven otherwise.
 
+- **A checker's silence is a finding, and it is the one nobody reads.** A tool
+  that *stops* reporting something is telling you the thing you believe has
+  changed — but **"clean" reads as "nothing to do"**, not as *"the item you are
+  still carrying is no longer true."* So the correction arrives and lands nowhere.
+
+  2026-08-06, and it is this repo's own docs watcher failing at its own job:
+
+  ```
+  15:10   drift-check: "--force-wipe is in write-sd-card.sh but in no docs/ flag table"   TRUE
+  15:15   10692b2 documents it                                        <- finding expired
+  15:43+  every later run: "clean"                                    <- the correction, unread
+  ```
+
+  **The checker was right on every single run.** It was run every pass. Its
+  silence was the answer, and the finding was still restated as outstanding in
+  three later reports — each honestly written and each wrong. **It took a human
+  saying so twice.**
+
+  > 🔑 **The mechanism is precise and worth more than the incident: a checker's
+  > output is a fact *about one run*, and it was promoted into a standing status
+  > line.** A finding is dated. A status is present tense. Copying the first into
+  > the second silently strips the date, and nothing in the sentence marks that it
+  > happened.
+
+  **Two remedies, and the second is the one with teeth:**
+
+  * **Read a checker's output as a *diff* against last time, not as a list of
+    positives.** Something that dropped off is information.
+  * **Never carry a finding into a "still outstanding" line from memory —
+    re-derive it from the run you just did.** If a status item cannot be traced to
+    output in front of you, it is a recollection wearing a report's clothes.
+
+  This is the same shape as *[a finding about a live system is a claim about a
+  moment](#improvement-backlog)*, turned inward: there, someone else's repo moved
+  under a report; here, **our own tooling corrected us and we did not listen.**
+
 - **Agreement is not corroboration when the instrument is broken.** The rule above
   catches an instrument returning **the same thing for everything**. This one
   catches an instrument returning **the right thing for no reason** — and it is
