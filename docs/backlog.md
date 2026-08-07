@@ -599,8 +599,36 @@ Three consequences worth holding onto:
 
 ### Platform gaps, in priority order
 
-1. **A camera has no identity — DONE, see [identity.md](identity.md).** Both
-   halves of the split now ship in `tools/write-sd-card.sh`:
+1. **A camera has no identity — ⚠️ NOT DONE. The design ships; the hook cannot
+   run.** See [identity.md](identity.md) for the design, which is unaffected.
+
+   > 🔴 **Measured 2026-08-06, after this item was written.** The first-boot
+   > naming hook is **appended to `Factory/config.sh` after the
+   > `/etc/jffs2/gergehack.sh` line**, and **`gergehack.sh` never returns** — it
+   > ends in `while [ 1 ]; do sleep 30; done`, entered whenever `run_ipc=0` and
+   > `rootfs_modified=0`, which is exactly what the backup every card is built
+   > from carries. `config.sh` calls it synchronously.
+   >
+   > `ps` on **both** cameras shows `config.sh` and `gergehack.sh` still resident
+   > with a `sleep 30` beneath them. A tracer appended as the *last* line of
+   > `config.sh` never ran across two reboots. **`/data/unit.json` exists on
+   > neither camera.**
+   >
+   > **The last line of this item was the load-bearing one**: *"Nothing here has
+   > run on a camera yet."* It was true, it was written down, and the item was
+   > marked DONE anyway — because the code was finished. **Shipped and executed
+   > are different claims, and only one of them was checked.**
+   >
+   > The same defect kills the boot-time IR-cut line. The isp symlink repair
+   > survives only because it is *inserted before* gergehack rather than appended
+   > after; SSH now uses that same seam and is verified by cold boot. See
+   > [`sd-card.md`](sd-card.md#what-gets-fixed) and [`ssh.md`](ssh.md).
+   >
+   > **Fixing it is not a one-line move.** `name-unit.sh` waits for the MAC
+   > itself, so it is probably safe to relocate — but nobody has run it on a
+   > camera, and this item's own history is the argument for not assuming that.
+
+   Both halves of the split ship in `tools/write-sd-card.sh`:
 
    | | Unit | Build |
    |---|---|---|

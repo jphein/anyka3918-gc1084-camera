@@ -144,6 +144,20 @@ default rather than a fallback.
 
 ## How a camera names itself
 
+> 🔴 **This section describes the design. It does not yet happen.** Measured
+> 2026-08-06: the hook is **appended to `Factory/config.sh` after the
+> `/etc/jffs2/gergehack.sh` line**, and `gergehack.sh` **never returns** — it
+> ends in `while [ 1 ]; do sleep 30; done`, entered whenever `run_ipc=0` and
+> `rootfs_modified=0`, which is what the backup every card is built from carries.
+> `/data/unit.json` exists on **neither** of JP's cameras.
+>
+> Nothing below is *wrong* — the derivation, the write-once rule and the
+> storage choice all stand, and `name-unit.sh` waits for the MAC itself so it is
+> probably safe to relocate to the live seam (*before* `gergehack.sh`, where the
+> isp repair and SSH now sit). **Probably is not verified**, and this page
+> claiming a thing worked when nobody had run it is exactly how the gap
+> survived. [Detail](sd-card.md#what-gets-fixed).
+
 At first boot, `/Factory/config.sh` launches `name-unit.sh` in the background.
 It waits for the MAC (up to five minutes — the interface only appears once
 `gergehack.sh` has run `wifi_manage.sh`), then:
