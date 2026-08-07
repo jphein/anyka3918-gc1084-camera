@@ -352,6 +352,11 @@ tar -xzf "$BACKUP/yicam-files.tar.gz" -C "$MNT"
 
 SETTINGS="$MNT/anyka_hack/gergesettings.txt"
 CONFIG_SH="$MNT/Factory/config.sh"
+
+# Vaultwarden item holding the camera's root password. Deliberately a NAME, not
+# a value: this file is in a public repo. Override with VAULT_ITEM=... if a
+# camera ever needs its own credential rather than the shared one.
+VAULT_ITEM="${VAULT_ITEM:-anyka-cam1-root}"
 APPDIR="$MNT/anyka_hack/libre_anyka_app"
 NOTES=()
 
@@ -416,6 +421,56 @@ if [ "$STOCK" -eq 0 ]; then
   if grep -q 'if \[ ! -e "\$FILE"; then' "$CONFIG_SH" 2>/dev/null; then
     echo "==> fixing the missing ']' in Factory/config.sh"
     sed -i 's|if \[ ! -e "\$FILE"; then|if [ ! -e "$FILE" ]; then|' "$CONFIG_SH"
+  fi
+
+  # --- 5a2. the root password comes from the VAULT, never from this repo.
+  #
+  # Factory/config.sh sets the root password on EVERY boot, so the card is the
+  # authoritative copy: changing it on a running camera and not here means the
+  # next reboot silently reverts it. That is exactly what happened on 2026-08-06
+  # -- the live camera and its own card were both updated, and this writer, the
+  # source every FUTURE card is generated from, was missed. A spare card written
+  # hours earlier still carried the old value.
+  #
+  # The same credential is accepted by telnet AND by the writable-root FTP that
+  # rc.local starts on all interfaces, so it is not a convenience password.
+  #
+  # Fails closed: no vault, no card. A card that silently falls back to the
+  # backup's placeholder would be worse than no card, because it would look
+  # identical to a correct one.
+  # The vault session belongs to the INVOKING user, not to root, so `bw` under
+  # sudo finds no session -- which looks identical to a locked vault, and
+  # `sudo -u "$SUDO_USER" -i bw ...` hangs on a login shell. Accept the value
+  # through the environment instead:
+  #
+  #     export ANYKA_ROOT_PW="$(bw get password anyka-cam1-root)"
+  #     sudo -E tools/write-sd-card.sh /dev/sdX --ssid NAME
+  #
+  # Passed in the ENVIRONMENT rather than as an argument, so it never appears in
+  # argv where any user on the box could read it out of `ps`.
+  ROOT_PW="${ANYKA_ROOT_PW:-}"
+  [ -z "$ROOT_PW" ] && ROOT_PW="$(bw get password "$VAULT_ITEM" 2>/dev/null || true)"
+  if [ -z "$ROOT_PW" ]; then
+    die "could not read '$VAULT_ITEM' from the vault (is bw unlocked?).
+  Refusing to write a card whose root password nobody has seen - the alternative
+  is a card that silently ships the backup's placeholder."
+  fi
+  case "$ROOT_PW" in
+    *[\'\"\\/]*) die "the vault password contains a quote, backslash or slash, which
+  this substitution cannot safely embed in Factory/config.sh. Regenerate it." ;;
+  esac
+  if grep -q '^NEW_PASSWORD=' "$CONFIG_SH" 2>/dev/null; then
+    sed -i "s|^NEW_PASSWORD=.*|NEW_PASSWORD='$ROOT_PW'|" "$CONFIG_SH"
+    # Verify the EFFECT, not the invocation: exactly one assignment, and it is
+    # not the placeholder we started from.
+    if [ "$(grep -c '^NEW_PASSWORD=' "$CONFIG_SH")" != "1" ] \
+       || grep -q "^NEW_PASSWORD=.donkey" "$CONFIG_SH"; then
+      die "the root-password substitution did not take. Refusing to ship this card."
+    fi
+    echo "==> root password set from vault item '$VAULT_ITEM' (not shown)"
+  else
+    die "Factory/config.sh has no NEW_PASSWORD= line - the card's password
+  mechanism has changed and this writer's assumption is stale. Stopping."
   fi
 
   # --- 5b. restore the isp_*.conf symlink on every boot.
