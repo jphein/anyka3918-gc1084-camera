@@ -173,18 +173,31 @@ neither ring lights.
 
 > ⚠️ **That last sentence is true about the pins and was wrong about the LEDs** (corrected
 > 2026-08-07, second unit). It read as *"the rings are dead"*. **Cam #2's IR ring works.**
-> Covering its lens makes the firmware's auto day/night switch illuminate it — measured, JP
-> observed it directly, and cam #1 stays dark under the identical test.
+> **[M]** Covering its lens lights the ring; cam #1 stays dark under the identical test. JP
+> observed both directly.
 >
-> So `IR_LED` is not a broken output, it is **the wrong output**. The firmware owns the
-> illuminator and drives it through a path that is **not in `/sys/user-gpio` at all** — a
-> 3-minute sampler at 2 s intervals recorded **no change on `ircut_a`/`ircut_b`** across the
-> whole night-mode transition, so it isn't the IR-cut pins either.
+> So `IR_LED` is not a broken output, it is **the wrong output**. **[M]** A 3-minute sampler at
+> 2 s intervals recorded **no change on `IR_LED`, `ircut_a` or `ircut_b`** across the entire
+> transition — so none of the three exposed pins drives it.
 >
-> The day/night machinery lives in `anyka_cfg.ini`: `auto_day_night_enable = 1`,
-> `day_night_mode = 2` (auto), `day_to_night_lum = 6400`, `night_to_day_lum = 2048`. These are
-> **byte-identical on both cameras**, as are all six pin values — so the divergence is
-> **hardware**, and cam #1's ring is unpopulated or unwired. **[I]** which, not established.
+> ⚠️ **What *does* drive it is not established.** This entry first said the *firmware's auto
+> day/night switch* illuminates it and labelled that **measured**. It was an **attribution**,
+> corrected within the hour: what was observed is that the ring lit. The GPIO silence above is
+> in fact evidence *against* a software path, not for one, so the original wording had the
+> inference pointing the wrong way as well as overstating its status.
+>
+> `anyka_cfg.ini` carries a day/night block — `auto_day_night_enable = 1`, `day_night_mode = 2`
+> (auto), `day_to_night_lum = 6400`, `night_to_day_lum = 2048`. **[I] Whether any of it relates
+> to the IR ring is unverified** — it is recorded here because it is byte-identical on both
+> cameras, as are all six pin values, which is what makes the divergence **hardware**. Cam #1's
+> ring is unpopulated or unwired; **[I]** which, not established.
+>
+> ⚠️ **Open, and it reopens README line 25.** `/sys/kernel/ain/` exposes **three** channels, not
+> one. `ain0` is the documented constant (2999, re-confirmed). **`ain1` is live** — observed
+> stepping 831 → 1155 and settling — and appears **nowhere** in this repo. The claim *"the
+> fallback ADC reads a constant"* was established on `ain0` alone. **What `ain1` measures is
+> unknown**, and *"photoresistor"* is specifically the mechanism this project has already
+> invented, found quoted upstream, and refuted once — it needs a reading, not an argument.
 >
 > The white-LED result is *unchanged and now stronger*: dark on both units under a
 > confirmed-live 1 Hz blink (300 rapid reads caught both `0` and `1` inside the window JP was
