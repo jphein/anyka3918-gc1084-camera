@@ -33,7 +33,7 @@ sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) \
 | `--ssid NAME` | Rewrites `wifi_ssid=`. **Does not change the PSK.** |
 | `--keep-ssid` | Accept the backup's baked-in SSID. **One of these two is required** — see below |
 | `--time-source IP` | Rewrites `time_source=`. Worth using — see the warning below. |
-| `--unit-name NAME` | Names this camera, e.g. `"Front Door"`. **Optional** — an unnamed camera [names itself from its own MAC at first boot](identity.md). Only takes effect on a camera that has never been named |
+| `--unit-name NAME` | Names this camera, e.g. `"Front Door"`. **Optional** — an unnamed camera is *designed* to [name itself from its own MAC at first boot](identity.md), ⚠️ **but that hook does not currently run** (see the dead-hook warning below). Only takes effect on a camera that has never been named |
 | `--stock` | Writes the backup **unmodified**, with no project fixes. Escape hatch. |
 | `--force-wipe` | Overrides the "this does not look like a camera card" refusal. **Read the section below before using it.** |
 | `--authorized-keys FILE` | The SSH public key(s) allowed to log in. Defaults to `tools/authorized_keys.local` (gitignored). **Must contain at least one ECDSA key** — [why](ssh.md#-ecdsa-only-and-it-is-not-a-preference) |

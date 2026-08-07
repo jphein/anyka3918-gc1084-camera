@@ -278,7 +278,7 @@ echo "Build  : ${BUILD_NAME:-<unnamed>}  (branch $GIT_BRANCH, dirty=$GIT_DIRTY)"
 if [ -n "$UNIT_NAME" ]; then
   echo "Unit   : $UNIT_NAME  (--unit-name; applies ONLY to a camera never named before)"
 else
-  echo "Unit   : self-named at first boot from the camera's own MAC"
+  echo "Unit   : self-naming is INSTALLED but does NOT RUN yet (hook is after gergehack)"
 fi
 if [ "$STOCK" -eq 1 ]; then
   echo "Mode   : --stock (backup contents only, NO project fixes)"
@@ -1033,7 +1033,8 @@ if [ "$STOCK" -eq 1 ]; then
 elif [ -n "$UNIT_NAME" ]; then
   echo "    unit  : \"$UNIT_NAME\" if this camera has never been named, else unchanged"
 else
-  echo "    unit  : self-named at first boot from the camera's own MAC"
+  echo "    unit  : self-naming INSTALLED but NOT RUNNING - the hook is appended after"
+  echo "            gergehack.sh, which never returns. /data/unit.json stays absent."
 fi
 
 # Both inherited-value hazards are surfaced in the preflight above, before the
