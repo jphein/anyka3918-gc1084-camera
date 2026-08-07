@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anyka AK3918 / GC1084 — a $20 camera, opened</title>
+<title>Anyka AK3918 / GC1084 — a $3 camera, opened</title>
 <meta name="description" content="Local RTSP, PTZ, audio and Home Assistant control for cheap Anyka AK3918 / GC1084 cameras — and a reference for the firmware's undocumented internals.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
@@ -142,7 +142,7 @@
     *, *::before, *::after { transition: none !important; animation: none !important; }
   }
 </style>
-  <meta name="realm-version" content='{"name": "anyka3918-gc1084-camera", "description": "Local RTSP, PTZ and Home Assistant for cheap Anyka AK3918 / GC1084 IP cameras", "version": "Resonant Lattice \u00b7 2e2ec2a", "hash": "2e2ec2a", "branch": "main", "dirty": false, "built": "2026-08-07T00:34:04Z", "realm": "signal", "repo": "https://github.com/jphein/anyka3918-gc1084-camera", "commit_url": "https://github.com/jphein/anyka3918-gc1084-camera/commit/2e2ec2a"}'>
+  <meta name="realm-version" content='{"name": "anyka3918-gc1084-camera", "description": "Local RTSP, PTZ and Home Assistant for cheap Anyka AK3918 / GC1084 IP cameras", "version": "Modulated Harmonic \u00b7 01f5445", "hash": "01f5445", "branch": "main", "dirty": true, "built": "2026-08-07T00:38:55Z", "realm": "signal", "repo": "https://github.com/jphein/anyka3918-gc1084-camera", "commit_url": "https://github.com/jphein/anyka3918-gc1084-camera/commit/01f5445"}'>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -150,7 +150,7 @@
 <header>
   <div class="wrap">
     <p class="eyebrow">Anyka AK3918 · GC1084 · Teruhal TC20</p>
-    <h1>A $20 camera, opened all the way up</h1>
+    <h1>A $3 camera, opened all the way up</h1>
     <p class="standfirst">
       Local RTSP, PTZ, audio and Home&nbsp;Assistant control for a cheap Chinese IP camera —
       no cloud, no app — plus a reference for the firmware's undocumented internals,
@@ -159,8 +159,13 @@
 
     <div class="finding">
       <p><strong>The speaker's volume control was documented as broken.</strong>
-      It was never broken. It was <em>welded shut</em> at maximum — one immediate
-      operand, compiled in, with no CLI flag and no environment variable to reach it.</p>
+      It was never broken — <em>it was never exposed</em>. The value was welded shut at
+      maximum: one immediate operand, compiled in, with no CLI flag and no environment
+      variable to reach it.</p>
+      <p style="font-size:.96rem;color:var(--ink-soft)">From outside the binary those two
+      look identical. A volume that will not change is a broken control and an unreachable
+      one, and only the second has a fix — which is why the finding took disassembly rather
+      than more experiments.</p>
       <div class="instr mono">
         <div><span class="label">shipped</span><span class="asm">mov&nbsp;r1,&nbsp;#<span class="byte">6</span></span><span class="note">→ ak_ao_set_dac_volume(h, 6)</span></div>
         <div><span class="label">patched</span><span class="asm">mov&nbsp;r1,&nbsp;#<span class="byte">1</span></span><span class="note">one byte, at offset 9356</span></div>
@@ -185,25 +190,28 @@
       <table>
         <thead><tr><th>Capability</th><th>State</th><th></th></tr></thead>
         <tbody>
-          <tr><td>RTSP video</td><td class="state on">WORKS</td><td>640×360 and 1280×720, ~15.2 fps measured, PCM A-law audio</td></tr>
+          <tr><td>RTSP video</td><td class="state on">WORKS</td><td>640×360 at <strong>~15.2 fps</strong> — measured 2026-08-06 by frame count, ffmpeg's own estimate and wall clock, all agreeing. A 1280×720 stream also exists, at <strong>7.1× the bitrate</strong> for 4× the pixels. PCM A-law audio</td></tr>
           <tr><td>Stills</td><td class="state on">WORKS</td><td>JPEG over HTTP</td></tr>
           <tr><td>PTZ</td><td class="state on">WORKS</td><td>Eight directions plus a home/centre routine</td></tr>
-          <tr><td>Speaker</td><td class="state on">WORKS</td><td>Text-to-speech and clips, with six real hardware volume steps</td></tr>
+          <tr><td>Speaker</td><td class="state on">WORKS</td><td>Text-to-speech and clips, with six hardware volume levels. All six produce audible output; whether they are <em>evenly graded</em> is untested, and level 1 is the codec floor rather than a midpoint</td></tr>
           <tr><td>IR-cut filter</td><td class="state on">WORKS</td><td>Manual day/night, by direct pin write</td></tr>
           <tr><td>Telemetry</td><td class="state on">WORKS</td><td>CPU, memory, disk, Wi-Fi quality, encoder load, viewer count</td></tr>
           <tr><td>Home Assistant</td><td class="state on">WORKS</td><td>Camera, switches, media player, sensors — no cloud</td></tr>
           <tr><td>Automatic day/night</td><td class="state off">CLOSED</td><td>No ambient light sensor exists on this board to trigger it</td></tr>
-          <tr><td>White LED ring</td><td class="state off">CLOSED</td><td>Not wired on this board — the vendor firmware says so itself</td></tr>
+          <tr><td>White LED ring</td><td class="state off">NO ROUTE</td><td>The vendor firmware declares this PTZ variant unsupported — <code>onf_shaking_head_cam not support white led</code> — and no software route exists. Whether the LEDs are even populated is <em>untested</em>: the pad swings, but nobody has put a meter on the board</td></tr>
           <tr><td>IR LED ring</td><td class="state off">CLOSED</td><td>Dark on this unit, checked with a phone camera that sees infrared</td></tr>
         </tbody>
       </table>
       </div>
       <div class="callout">
-        <p><strong>Closed means closed.</strong> Each of those has a refuted
-        hypothesis behind it, not a shrug — an expander that nothing answers on, a
-        pin-config theory disproved with a control, a rename that turned out to be a
-        regression. They are written up so the next person doesn't spend the evening
-        we already spent.</p>
+        <p><strong>These are dead ends with reasons, not shrugs.</strong> Behind
+        them sit an expander that nothing answers on, a pin-config theory disproved with a
+        control, and a rename that turned out to be a regression. They are written up so the
+        next person doesn't spend the evening this one already spent.</p>
+        <p style="margin-top:.7rem"><strong>Where a door is only half shut, it says so.</strong>
+        No software route to the white LEDs is established; whether the hardware is even
+        populated is a separate question nobody has answered with a meter. Those are
+        different claims and the docs keep them apart.</p>
       </div>
     </div>
   </section>
