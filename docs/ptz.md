@@ -347,8 +347,37 @@ path is dead. That answers the older question — the repeated
 > *driver* path may well still be unreachable — but the conclusion *"the feature needs a sensor
 > input this hardware does not expose"* is refuted: **the hardware exposes it, on `ain0`.**
 >
-> ⚠️ **[I] Why cam #1 differs is not established.** Sensor not populated, a different board
-> revision, or a fault — unknown. Do not guess; it is one comparison away from being measured.
+> ## ✅ Why cam #1 differs — now MEASURED, same day
+>
+> **cam #1 has `ain1`.** All three channels are present, so this is not a missing-channel or
+> different-kernel divergence. **But cam #1's `ain0` does not respond to light at all.** JP
+> covered and uncovered its lens while it was sampled at 2 s:
+>
+> | | `ain0` lit | `ain0` covered | samples below 500 |
+> |---|---|---|---|
+> | **cam #2** | 2999 | **~130–142** | 26 of 91 |
+> | **cam #1** | 2999 | **2999** | **0 of 77** — one distinct value, min 2999 |
+>
+> `ain0` is precisely the input `get_input_level` falls back to when `gpio-rf_feed` is absent.
+> **Dead fallback sensor → the unchanged-since-last-reading guard never trips → no automatic
+> day/night.** That is cam #1's broken behaviour and cam #2's working behaviour, from one
+> measurement.
+>
+> ⚠️ **[I] still not established:** *why* cam #1's `ain0` reads dead — unpopulated part, failed
+> component, or an unrouted trace. Do not guess it. `ain1` on cam #1 does move (508–788), but
+> with no sustained response to the lens being covered — its excursions were **spontaneous**, and
+> one nearly got attributed to JP before he confirmed he hadn't touched it.
+>
+> ### 🎯 So the original author was not sloppy — they were right about cam #1
+>
+> *"`ain0` pinned at a constant 2999"* is **an accurate measurement of the only camera that
+> existed when it was written.** Nothing was measured carelessly and no check was skipped.
+>
+> **The defect was scope, not rigour**: *measured on this unit* was written down as *measured on
+> this board*, and once it read as a property of the hardware there was no reason to ever
+> re-measure it. A second camera is the only thing that could have exposed it, and there wasn't
+> one. **Prefer "measured on cam #N" to "measured on this board" in every claim** — the cost of
+> the narrower phrasing is one word, and the cost of the wider one was this verdict.
 >
 > > 🎯 **How this survived: the constant was convincing.** `ain0` really did read 2999 every time
 > > anyone looked — because nobody varied the light. A constant reading does not look like a
