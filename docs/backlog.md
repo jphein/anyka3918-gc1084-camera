@@ -409,6 +409,19 @@ interesting the problem is.
   | First miss | reported a broken anchor that had been **fixed four commits earlier** — did not re-check *existence* |
   | Adopted | *"re-verify immediately before reporting"* |
   | Second miss | re-checked existence dutifully — **and never asked whether the leak was published**, which was the whole decision |
+  | Adopted | *"check existence **and** publication"* |
+  | Third miss | checked both, correctly — then reported **the wrong actor had fixed it**, having verified only that the state changed |
+
+  **The third one is the worst, because the check was already known to be
+  impossible.** Every agent here commits as `jp`, which
+  [this project had already written down](#improvement-backlog) — so *"who made
+  this change"* is **not answerable from git at all** and has to come from a
+  person. Knowing that, the claim was still made, because the change appeared in
+  that session's repo and the inference felt like it needed no work.
+
+  > **Verifying that a state changed is not verifying who changed it**, and a
+  > false attribution is worse than a missing one: it reads later as evidence that
+  > cross-session coordination happened when nobody relayed anything.
 
   The second report said *"not in history only — in the current tree"*, drawing a
   contrast **between two things, one of which had not been looked at.** The repo
