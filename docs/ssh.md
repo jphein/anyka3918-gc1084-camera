@@ -228,6 +228,19 @@ ssh-keyscan -t ecdsa <camera> 2>/dev/null | awk '{print $3}'
 
 On the camera, `/tmp/ssh-up.log` records what happened at boot.
 
+> ⚠️ **`PATH` over SSH is not the `PATH` you get over telnet.** Measured on a
+> dropbear session:
+>
+> ```
+> PATH=/usr/bin:/bin:/media/mmcblk0p2/data/usr/bin
+> ```
+>
+> **No `/sbin`, no `/usr/sbin`** — so `reboot`, `netstat`, `ifconfig`, `insmod`
+> and friends are *not found* unless you give the full path (`/sbin/reboot`).
+> Telnet logins get a fuller `PATH`, so a command pasted from a telnet session
+> can fail here for a reason that looks nothing like a `PATH` problem. Anything
+> scripted against these cameras should use absolute paths.
+
 ## See also
 
 - [`sd-card.md`](sd-card.md) — the writer, its flags, and the dead-hook warning

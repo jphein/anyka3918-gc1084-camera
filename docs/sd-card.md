@@ -176,13 +176,29 @@ RCE**, and an **IR-cut filter stuck in the magenta position**.
 > | boot-time IR-cut | appended after | ❌ |
 > | first-boot identity naming | appended after | ❌ |
 >
-> ⚠️ **OPEN, and it needs JP rather than the files.** The mechanism above is
-> certain, but **JP reports the magenta fix working** — and that is not yet
-> explained. Note the trap: reading `/sys/user-gpio/ircut_a` as `1` after a boot
-> proves nothing without a control, since the pin can be `1` for other reasons.
-> Do not "fix" the placement of the IR-cut line until someone has established
-> what JP actually observes — its 60 s timer is tuned to start *after* the module
-> loads, so moving it earlier is a behaviour change, not a relocation.
+> **The IR-cut line specifically is confirmed dead by a second, independent
+> observable** — not just by the tracer above. `ircut_a` was **forced to 0**, the
+> camera rebooted, and the pin sampled from uptime 27 s to 144 s, spanning the
+> line's own 60 s timer:
+>
+> ```
+> uptime=27 ircut_a=0    uptime=68 ircut_a=0    uptime=114 ircut_a=0
+> uptime=37 ircut_a=0    uptime=83 ircut_a=0    uptime=129 ircut_a=0
+> uptime=53 ircut_a=0    uptime=98 ircut_a=0    uptime=144 ircut_a=0
+> ```
+>
+> It never fired. **The control is the whole point**: an earlier uncontrolled
+> reading of `ircut_a` = `1` after a boot was briefly taken as evidence the hook
+> *had* run. It was worthless — the pin is `1` for other reasons, and reading it
+> without first forcing it low cannot distinguish the two.
+>
+> ⚠️ **Still OPEN, and it needs JP rather than the files.** The mechanism is now
+> doubly confirmed, but **JP reports the magenta fix working**, and that is not
+> reconciled. One plausible explanation — **untested** — is that what works is
+> the `ctl` / Home Assistant IR-cut path, which is verified, rather than this
+> boot line. Do not "fix" the placement until someone establishes what JP
+> actually observes: the 60 s timer is tuned to start *after* the module loads,
+> so moving it earlier is a behaviour change, not a relocation.
 >
 > Note the repo's own `reference/sd-card-hack/anyka_hack/gergesettings.txt` says
 > `rootfs_modified=1`. **The artifact people read disagrees with the one every
