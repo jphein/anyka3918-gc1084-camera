@@ -28,6 +28,7 @@ This repo exists because two things are documented nowhere else: the **GC1084 se
 | ✅ Speaker | MP3 playback out of the built-in speaker. **You do not need to raise `SPK_PA`** — the player does it [(that was retracted)](docs/ptz.md#speaker--audio-out-works) |
 | ✅ Speaker volume | **Six rungs, `ak_adec_demo.vol1..6` on the card, default 4.** Upstream called the control broken; it was **hardcoded at maximum and never exposed** — one byte. ⚠️ Do **not** pre-attenuate clips: the file sits upstream of a compressor that undoes it. [Detail and the caveats](docs/ptz.md#-volume-a-six-rung-ladder-shipped-on-the-card) |
 | ✅ Identity | Each camera **names itself from its own MAC** at first boot, write-once, no registry — and the name stays with the camera while the build version follows the card. [How](docs/identity.md) |
+| ✅ SSH | **Key-only, passwords disabled, a host key generated per camera.** The key the hack has shipped since 2024 is [published in the upstream repo](docs/ssh.md#-the-host-key-that-ships-with-the-hack-is-published) — anyone can impersonate any camera running it, silently. ECDSA only: this dropbear predates ed25519 |
 | ✅ Firmware update | The stock updater is documented, including **what it does not check** — no signature, and a "newer only" gate that is a string compare and inverts at this version. [Read the gate first](docs/firmware-update.md) |
 | ✅ Cross-compiling | A toolchain exists and is **proven on hardware**. [What it does — and does not — unblock](docs/cross-compiling.md) |
 | ✅ Clock | NTP syncs. No RTC battery, so it boots to 1969 and depends on it. The timezone was **15 hours wrong on every service** while `date` in a shell looked fine — [now fixed](docs/troubleshooting.md#the-clock--ntp-works-the-timezone-was-15-hours-wrong-on-every-service) |
@@ -164,6 +165,7 @@ FTP service above.**
 | [docs/firmware-update.md](docs/firmware-update.md) | The stock updater, what it does **not** check, and the recovery gate |
 | [docs/stock-attack-surface.md](docs/stock-attack-surface.md) | **What an un-hacked camera exposes** — read before assuming stock is safer |
 | [docs/cross-compiling.md](docs/cross-compiling.md) | The toolchain, proven on hardware — and what a compiler does **not** unblock |
+| [docs/ssh.md](docs/ssh.md) | **Key-only SSH, and why the host key that ships with the hack is worthless** — its private half is published |
 | [docs/backlog.md](docs/backlog.md) | Live queue, and **the rules section** — the part that transfers to devices that are not this one |
 | [reference/](reference/) | Vendored upstream material, provenance and licensing |
 | [reference/sd-card-original/](reference/sd-card-original/) | **This camera's real working config**, including `isp_gc1084.conf` |

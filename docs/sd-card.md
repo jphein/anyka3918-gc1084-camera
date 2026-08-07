@@ -36,6 +36,8 @@ sudo tools/write-sd-card.sh /dev/sdX (--ssid NAME | --keep-ssid) \
 | `--unit-name NAME` | Names this camera, e.g. `"Front Door"`. **Optional** — an unnamed camera [names itself from its own MAC at first boot](identity.md). Only takes effect on a camera that has never been named |
 | `--stock` | Writes the backup **unmodified**, with no project fixes. Escape hatch. |
 | `--force-wipe` | Overrides the "this does not look like a camera card" refusal. **Read the section below before using it.** |
+| `--authorized-keys FILE` | The SSH public key(s) allowed to log in. Defaults to `tools/authorized_keys.local` (gitignored). **Must contain at least one ECDSA key** — [why](ssh.md#-ecdsa-only-and-it-is-not-a-preference) |
+| `--no-ssh` | Write a **telnet-only** card deliberately. The published upstream host key is still deleted from it. |
 
 ## The tool refuses a device that does not look like a camera card
 
@@ -152,7 +154,39 @@ RCE**, and an **IR-cut filter stuck in the magenta position**.
 | `/sounds/` created | Where `ctl`'s `play` and `sounds` commands look |
 | Missing `]` in `Factory/config.sh` | [Upstream's bracket bug](#-latent-bug-in-factoryconfigsh), which stops the sensor symlink ever being recreated |
 | `cgi-bin/header` hardened | Closes the [pre-auth root RCE](web-ui.md#the-fix) on port 80. **Not** kernel-specific — applies unconditionally |
-| Boot-time IR-cut write in `Factory/config.sh` | Puts the filter in the non-magenta position 60 s into every boot. **JP relies on this**, and it was missing from the backup — [detail](ptz.md#the-boot-time-mitigation-is-user-relied-on-behaviour) |
+| Boot-time IR-cut write in `Factory/config.sh` | Puts the filter in the non-magenta position 60 s into every boot. **JP relies on this**, and it was missing from the backup — [detail](ptz.md#the-boot-time-mitigation-is-user-relied-on-behaviour). ⚠️ **but see the warning below — as placed, this line cannot execute** |
+| Key-only SSH + a per-camera host key | dropbear on port 22, passwords disabled, and a **freshly generated** host key replacing the published upstream one — [detail](ssh.md) |
+
+> 🔴 **Anything APPENDED to `Factory/config.sh` after the `/etc/jffs2/gergehack.sh`
+> line is dead code, and two of the entries above are appended there.**
+>
+> `gergehack.sh` never returns. It ends in
+> `while [ 1 ]; do sleep 30; done`, entered whenever `run_ipc=0` **and**
+> `rootfs_modified=0` — and `rootfs_modified=0` is what the backup every card is
+> built from actually carries. `Factory/config.sh` calls it **synchronously**.
+>
+> **Measured 2026-08-06 on both cameras**: `ps` shows `config.sh` and
+> `gergehack.sh` still resident with a `sleep 30` beneath them, indefinitely. A
+> tracer appended as the *last* line of `config.sh` never ran across two reboots.
+>
+> | hook | placement | runs? |
+> |---|---|---|
+> | isp symlink repair | **inserted before** `gergehack.sh` | ✅ |
+> | **SSH** | **inserted before** `gergehack.sh` | ✅ verified by cold boot |
+> | boot-time IR-cut | appended after | ❌ |
+> | first-boot identity naming | appended after | ❌ |
+>
+> ⚠️ **OPEN, and it needs JP rather than the files.** The mechanism above is
+> certain, but **JP reports the magenta fix working** — and that is not yet
+> explained. Note the trap: reading `/sys/user-gpio/ircut_a` as `1` after a boot
+> proves nothing without a control, since the pin can be `1` for other reasons.
+> Do not "fix" the placement of the IR-cut line until someone has established
+> what JP actually observes — its 60 s timer is tuned to start *after* the module
+> loads, so moving it earlier is a behaviour change, not a relocation.
+>
+> Note the repo's own `reference/sd-card-hack/anyka_hack/gergesettings.txt` says
+> `rootfs_modified=1`. **The artifact people read disagrees with the one every
+> card is built from**, which is why this survived.
 
 **Exactly one binary is patched: `cgi-bin/header`.** It earns its place by closing a live remote
 root hole, and it is kernel-agnostic. Everything else on the card is stock.
@@ -177,8 +211,11 @@ root hole, and it is kernel-agnostic. Everything else on the card is stock.
 which does not exist here, and the fallback ADC reads a constant. Nothing is lost by shipping
 stock. [Full story](ptz.md#-automatic-daynight-is-not-fixable-on-this-board).
 
-**What ships instead**, and it works: `ctl` writes `/sys/user-gpio/ircut_a` directly, and
-`Factory/config.sh` puts the filter in the non-magenta position 60 s into every boot.
+**What ships instead**: `ctl` writes `/sys/user-gpio/ircut_a` directly — that part is verified.
+`Factory/config.sh` also carries a line intended to put the filter in the non-magenta position
+60 s into every boot, ⚠️ **but as appended it sits after `gergehack.sh`, which never returns, so
+it cannot execute** — see [the dead-hook warning above](#what-gets-fixed). This
+paragraph previously read *"and it works"* of both halves; only the `ctl` half is established.
 
 ### 🔑 The per-boot selection: retained for reference, no longer used
 
