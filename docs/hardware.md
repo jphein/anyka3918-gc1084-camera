@@ -171,6 +171,31 @@ so whatever is wrong is downstream of the pin.
 speech, visibly purple image. **`WHITE_LED` and `IR_LED` drive nothing**: both pads swing and
 neither ring lights.
 
+> ⚠️ **That last sentence is true about the pins and was wrong about the LEDs** (corrected
+> 2026-08-07, second unit). It read as *"the rings are dead"*. **Cam #2's IR ring works.**
+> Covering its lens makes the firmware's auto day/night switch illuminate it — measured, JP
+> observed it directly, and cam #1 stays dark under the identical test.
+>
+> So `IR_LED` is not a broken output, it is **the wrong output**. The firmware owns the
+> illuminator and drives it through a path that is **not in `/sys/user-gpio` at all** — a
+> 3-minute sampler at 2 s intervals recorded **no change on `ircut_a`/`ircut_b`** across the
+> whole night-mode transition, so it isn't the IR-cut pins either.
+>
+> The day/night machinery lives in `anyka_cfg.ini`: `auto_day_night_enable = 1`,
+> `day_night_mode = 2` (auto), `day_to_night_lum = 6400`, `night_to_day_lum = 2048`. These are
+> **byte-identical on both cameras**, as are all six pin values — so the divergence is
+> **hardware**, and cam #1's ring is unpopulated or unwired. **[I]** which, not established.
+>
+> The white-LED result is *unchanged and now stronger*: dark on both units under a
+> confirmed-live 1 Hz blink (300 rapid reads caught both `0` and `1` inside the window JP was
+> watching, with `IR_LED` held steady as a control).
+>
+> **The generalisable part:** "the pad swings and nothing lights" is a fact about the pad. It
+> licenses *"this pin does not drive that LED"* and nothing more. Concluding the LED was dead
+> required a working example to compare against, and there wasn't one until a second camera
+> arrived. A negative result on the only unit you own is **an untested hypothesis wearing a
+> measurement's clothes** — see [method.md](method.md).
+
 ## I2C
 
 `/sys/bus/i2c/devices/` contains **`0-0058`**, which names itself `AW9523B` — a 16-channel I/O
