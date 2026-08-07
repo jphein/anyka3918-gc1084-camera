@@ -123,6 +123,16 @@ TIME_SOURCE=""
 UNIT_NAME=""
 STOCK=0
 FORCE_WIPE=0
+# The SSH public key(s) allowed to log in. A path, NOT a key: a public key is an
+# identifier (it carries user@host), this repo is public and deliberately
+# scrubbed, and tools/hosts.local already set the precedent for "real values
+# live in a gitignored local file". Default is that file; --authorized-keys
+# overrides for a camera that should accept a different key.
+AUTHORIZED_KEYS="$REPO/tools/authorized_keys.local"
+NO_SSH=0
+# Declared HERE, before any guard that appends to it. See the note where it used
+# to live, next to APPDIR.
+NOTES=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --ssid)        SSID="${2:-}"; shift 2 ;;
@@ -131,12 +141,15 @@ while [ $# -gt 0 ]; do
     --unit-name)   UNIT_NAME="${2:-}"; shift 2 ;;
     --stock)       STOCK=1; shift ;;
     --force-wipe)  FORCE_WIPE=1; shift ;;
+    --authorized-keys) AUTHORIZED_KEYS="${2:-}"; shift 2 ;;
+    --no-ssh)      NO_SSH=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
 
 [ -n "$DEV" ] || die "usage: $0 /dev/sdX (--ssid NAME | --keep-ssid) [--time-source IP]
-                        [--unit-name NAME] [--stock] [--force-wipe]"
+                        [--unit-name NAME] [--stock] [--force-wipe]
+                        [--authorized-keys FILE] [--no-ssh]"
 
 # --unit-name is NOT the counterpart of --ssid, and deliberately so.
 #
@@ -322,6 +335,86 @@ if [ -z "$BAKED_SSID" ]; then
   warn "could not read wifi_ssid out of the backup (harmless - --ssid overrides it anyway)"
 fi
 
+# --- SSH preflight, also BEFORE the destructive step, and for the same reason.
+#
+# THE KEY TYPE IS NOT A PREFERENCE HERE, IT IS A HARD CONSTRAINT, and getting it
+# wrong fails SILENTLY - which is why this is a guard and not a doc note.
+#
+# The dropbear on these cameras is v2016.74. MEASURED from the binary: it offers
+# ssh-dss, ssh-rsa and ecdsa-sha2-nistp256/384/521, and NO ssh-ed25519.
+# Confirmed on a live camera with a control - an ed25519 key placed IN
+# authorized_keys was refused while an ECDSA key in the same file on the same
+# server succeeded, which rules out "not authorized" as the explanation.
+# (curve25519-sha256@libssh.org IS in the binary. That is key EXCHANGE, not a
+# key type. Do not read it as ed25519 support.)
+#
+# ssh-rsa is technically accepted by the daemon but is SHA-1 signed, which
+# OpenSSH 8.8+ refuses by default at both ends - so it "works" only for a client
+# that has been specially configured, forever.
+#
+# An unusable key does not produce an error on the camera. It produces a camera
+# that accepts nobody. If telnet has since been turned off, that is a card pull.
+SSH_OK=0
+SSH_KEYCOUNT=0
+if [ "$STOCK" -eq 1 ]; then
+  echo
+  echo "SSH: not installed (--stock ships no scripts)"
+elif [ "$NO_SSH" -eq 1 ]; then
+  echo
+  echo "SSH: not installed (--no-ssh)"
+  NOTES+=("SSH was NOT installed (--no-ssh). This camera's only remote access is")
+  NOTES+=("  telnet and the writable-root FTP, both gated by a reusable password.")
+elif [ ! -f "$AUTHORIZED_KEYS" ]; then
+  echo
+  echo "SSH: not installed - no authorized-keys file at $AUTHORIZED_KEYS"
+  warn "no SSH public key found, so this card gets NO SSH."
+  NOTES+=("SSH NOT installed: $AUTHORIZED_KEYS does not exist.")
+  NOTES+=("  Create it (one ECDSA public key per line) or pass --authorized-keys FILE.")
+  NOTES+=("  Until then this camera's only remote access is telnet + writable-root FTP.")
+else
+  # Classify every key line from the FILE rather than trusting the filename or
+  # the operator's intent. Count usable and unusable separately: a file that
+  # contains only unusable keys is a MISCONFIGURATION, not an absence, and the
+  # camera it produces would look correct and accept nobody.
+  # Matched with a leading (^|space) rather than anchored hard at ^, because a
+  # real authorized_keys line may carry an options prefix
+  # (command="...", no-port-forwarding, from="..."), and anchoring would score a
+  # perfectly good key as unusable and abort the run. Comment lines are dropped
+  # first so a key type MENTIONED in a comment cannot be counted as present -
+  # which is the mirror-image error and the one that fails silently.
+  SSH_KEYSRC="$(grep -vE '^[[:space:]]*(#|$)' "$AUTHORIZED_KEYS" || true)"
+  SSH_KEYCOUNT=$(printf '%s\n' "$SSH_KEYSRC" \
+                   | grep -cE '(^|[[:space:]])ecdsa-sha2-nistp(256|384|521)[[:space:]]' || true)
+  SSH_BADTYPES=$(printf '%s\n' "$SSH_KEYSRC" \
+                   | grep -oE '(^|[[:space:]])(ssh-ed25519|ssh-rsa|ssh-dss|sk-[a-z0-9@.-]+)[[:space:]]' \
+                   | sed 's/[[:space:]]//g' | sort -u | tr '\n' ' ' || true)
+  # sed, not `tr -d '[:space:]'`. tr deletes the NEWLINES too, so every match
+  # collapses into one token and two distinct bad types print as
+  # "ssh-ed25519ssh-rsa" - a message that names the problem wrongly at exactly
+  # the moment someone is relying on it to tell them which key to replace.
+  echo
+  echo "SSH: $SSH_KEYCOUNT usable ECDSA key(s) in $(basename "$AUTHORIZED_KEYS")"
+  if [ -n "$SSH_BADTYPES" ]; then
+    warn "these key types CANNOT authenticate to dropbear 2016.74: $SSH_BADTYPES"
+    NOTES+=("authorized_keys contains key types this camera cannot use: $SSH_BADTYPES")
+    NOTES+=("  They are inert - they will be installed and will never authenticate.")
+  fi
+  if [ "$SSH_KEYCOUNT" -eq 0 ]; then
+    die "$AUTHORIZED_KEYS contains no ECDSA key, only: ${SSH_BADTYPES:-nothing recognisable}.
+  Dropbear 2016.74 cannot authenticate any of those, so this card would produce a
+  camera that accepts NOBODY over SSH - which looks identical to a working one
+  until you need it.
+  Generate one:   ssh-keygen -t ecdsa -b 256 -C anyka-cameras -f ~/.ssh/anyka_ecdsa
+  then put ~/.ssh/anyka_ecdsa.pub in $AUTHORIZED_KEYS.
+  Or pass --no-ssh to write a telnet-only card deliberately."
+  fi
+  command -v dropbearkey >/dev/null 2>&1 || die "dropbearkey not found (apt install dropbear-bin).
+  It generates this camera's own host key. Refusing to fall back to the key that
+  ships with the hack: that key's PRIVATE half is published in the upstream repo,
+  so it authenticates nothing and lets anyone impersonate this camera."
+  SSH_OK=1
+fi
+
 echo
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
 echo
@@ -358,7 +451,12 @@ CONFIG_SH="$MNT/Factory/config.sh"
 # camera ever needs its own credential rather than the shared one.
 VAULT_ITEM="${VAULT_ITEM:-anyka-cam1-root}"
 APPDIR="$MNT/anyka_hack/libre_anyka_app"
-NOTES=()
+# NOTES is declared up with the argument parsing, NOT here. It used to be
+# initialised at this line, which is AFTER the pre-erase preflights - so any
+# note added by a guard that runs before the erase was silently discarded by the
+# re-initialisation. Nothing failed; the notes just never printed. Moving a
+# declaration below its first use is invisible in review because both halves
+# look correct on their own.
 
 if [ -n "$SSID" ]; then
   echo "==> setting wifi_ssid=$SSID"
@@ -656,6 +754,125 @@ IRCUT
 IDENTITY
   fi
 
+  # --- 8b. key-only SSH, with a host key this camera actually owns.
+  #
+  # 🔴 THE HOST KEY THAT SHIPS WITH THE HACK IS PUBLISHED. Measured 2026-08-06:
+  # the dropbear_ecdsa_host_key in the backup, on both of JP's cameras, and in
+  # the upstream repo's SD_card_contents are all md5 d643a89f07f51cb32412d66fd34ef34b
+  # - fetched over plain HTTP from gitea.raspiweb.com to confirm it, not inferred
+  # from the fact that two cameras matched.
+  #
+  # So its PRIVATE half is downloadable by anyone. Host-key verification is the
+  # one thing SSH adds over telnet against someone already on the camera VLAN,
+  # and a published key inverts it: an impersonator verifies correctly and the
+  # client shows no warning at all. Every card therefore gets a FRESH key, and
+  # the published one is overwritten rather than left lying on the card.
+  #
+  # GENERATED HERE, ON THE WORKSTATION, NOT ON THE CAMERA. dropbear's -R would
+  # generate one at first boot and it would be a worse key: the camera reports
+  # ~180 bits in /proc/sys/kernel/random/entropy_avail, which is a poor source
+  # for something long-lived. This box has a real CSPRNG; the camera does not.
+  #
+  # ECDSA and not ed25519 - see the preflight above. That is a property of
+  # dropbear 2016.74, not a preference.
+  SSH_DIR="$MNT/anyka_hack/dropbear"
+  SSH_CARD_KEY="$SSH_DIR/dropbear_ecdsa_host_key"
+  if [ "$SSH_OK" -eq 1 ]; then
+    echo "==> generating this card's own SSH host key + installing key-only SSH"
+    mkdir -p "$SSH_DIR"
+    # Generated to a temp file on a REAL filesystem, then copied. dropbearkey
+    # creates its output 0600, and FAT32 cannot store that - rather than find out
+    # per-mount whether the mode request is ignored or fails, generate where the
+    # permission bits mean something and copy the bytes across.
+    SSH_TMP="$(mktemp)"
+    rm -f "$SSH_TMP"
+    if dropbearkey -t ecdsa -s 256 -f "$SSH_TMP" >/dev/null 2>&1 && [ -s "$SSH_TMP" ]; then
+      cp "$SSH_TMP" "$SSH_CARD_KEY"
+      shred -u "$SSH_TMP" 2>/dev/null || rm -f "$SSH_TMP"
+    else
+      rm -f "$SSH_TMP"
+      die "dropbearkey failed to produce a host key. Refusing to ship the published one."
+    fi
+    # Assert the EFFECT: a real key landed AND it is not the published one. Both
+    # halves matter - a zero-byte file and the upstream key are both "a file that
+    # exists", and this script's own history is full of guards that checked
+    # existence when they meant content.
+    got="$(md5sum "$SSH_CARD_KEY" | cut -d' ' -f1)"
+    [ -s "$SSH_CARD_KEY" ] || die "host key did not land on the card. Do not ship this card."
+    [ "$got" != "d643a89f07f51cb32412d66fd34ef34b" ] \
+      || die "the card still carries the PUBLISHED upstream host key. Do not ship this card."
+    echo "    host key: $got (fresh, unique to this card)"
+
+    cp "$AUTHORIZED_KEYS" "$SSH_DIR/authorized_keys"
+    if [ -f "$REPO/tools/ssh/ssh-up.sh" ]; then
+      install -m 755 "$REPO/tools/ssh/ssh-up.sh" "$SSH_DIR/ssh-up.sh"
+    else
+      die "tools/ssh/ssh-up.sh is missing - nothing would start SSH on this card."
+    fi
+
+    # --- the boot hook, and WHERE it goes is the whole story.
+    #
+    # INSERTED BEFORE gergehack.sh, exactly like the isp repair above and
+    # UNLIKE the IR-cut and identity hooks, which are appended after it.
+    #
+    # BECAUSE GERGEHACK.SH NEVER RETURNS. Its last statement is
+    #
+    #     if [[ $run_ipc == 0 ]] && [[ $rootfs_modified == 0 ]]; then
+    #       while [ 1 ]; do sleep 30; done
+    #     fi
+    #
+    # and Factory/config.sh calls it synchronously. MEASURED on both of JP's
+    # cameras: `ps` shows config.sh and gergehack.sh both still resident with a
+    # `sleep 30` under them, indefinitely. The backup every card is built from
+    # carries rootfs_modified=0, and this script never changes it - so the loop
+    # fires on every card this tool has ever written.
+    #
+    # Proven rather than reasoned: a tracer appended as the LAST line of
+    # config.sh never ran across two reboots, and the same hook placed here came
+    # up 32 seconds after a cold boot.
+    #
+    # >>> ANYTHING APPENDED TO Factory/config.sh AFTER THE gergehack.sh LINE IS
+    # >>> DEAD CODE. Do not "tidy" this hook down to join the others.
+    #
+    # rootfs_modified is deliberately NOT flipped to 1 to make gergehack return:
+    # it is a claim about whether this camera's rootfs launches anyka_ipc,
+    # changing it alters vendor-app behaviour, and editing gergesettings.txt also
+    # triggers gergehack's own card->flash sync AND A REBOOT.
+    if grep -q 'dropbear/ssh-up.sh' "$CONFIG_SH" 2>/dev/null; then
+      echo "==> SSH boot hook already present in Factory/config.sh"
+    else
+      echo "==> adding the SSH boot hook to Factory/config.sh (before gergehack.sh)"
+      SSH_HOOK='
+# key-only SSH. MUST stay BEFORE gergehack.sh: gergehack never returns (it ends
+# in an infinite sleep loop when rootfs_modified=0), so anything after it in
+# this file never executes. See tools/ssh/ssh-up.sh.
+[ -f /mnt/anyka_hack/dropbear/ssh-up.sh ] && sh /mnt/anyka_hack/dropbear/ssh-up.sh &
+'
+      awk -v block="$SSH_HOOK" '
+        /^\/etc\/jffs2\/gergehack\.sh$/ && !done { print block; done = 1 }
+        { print }
+      ' "$CONFIG_SH" > "$CONFIG_SH.new" && mv "$CONFIG_SH.new" "$CONFIG_SH"
+      # Verify placement, not just presence: a hook that landed AFTER the
+      # gergehack line would be silently dead, which is the exact failure this
+      # whole block exists to avoid.
+      hookline="$(grep -n '^\[ -f /mnt/anyka_hack/dropbear/ssh-up.sh \]' "$CONFIG_SH" | cut -d: -f1)"
+      gergeline="$(grep -n '^/etc/jffs2/gergehack.sh$' "$CONFIG_SH" | cut -d: -f1)"
+      if [ -z "$hookline" ] || [ -z "$gergeline" ] || [ "$hookline" -gt "$gergeline" ]; then
+        warn "SSH boot hook is missing or lands AFTER gergehack.sh - it would never run."
+        NOTES+=("SSH boot hook NOT correctly placed in Factory/config.sh. SSH will not")
+        NOTES+=("  start on this card. Insert it by hand ABOVE the /etc/jffs2/gergehack.sh line.")
+      fi
+    fi
+  elif [ -f "$SSH_CARD_KEY" ]; then
+    # No SSH on this card - but the published private key still arrived here from
+    # the backup, and a key whose private half is on the public internet has no
+    # business sitting on a card in a drawer. Nothing starts it today; that is an
+    # argument for deleting it being free, not for keeping it.
+    rm -f "$SSH_CARD_KEY"
+    echo "==> removed the PUBLISHED upstream dropbear host key from this card"
+    NOTES+=("The published upstream dropbear host key was deleted from this card.")
+  fi
+
   # --- 9. the speaker volume ladder: six one-byte variants of ak_adec_demo.
   #
   # ctl takes an optional &level=1..6 and runs ak_adec_demo.volN. Absent,
@@ -828,6 +1045,21 @@ echo "    bag of identical cameras inspectable. Ask a camera who it is with:"
 echo "        /mnt/anyka_hack/identity/whoami.sh"
 echo "    Naming is write-once: rewriting this card never renames a camera."
 echo "  * The card sets the root password from Factory/config.sh on every boot."
+if [ "$SSH_OK" -eq 1 ]; then
+echo "  * SSH IS KEY-ONLY AND THIS CARD'S HOST KEY IS UNIQUE TO IT. Password login"
+echo "    is disabled (dropbear -s), so the root password never crosses the wire."
+echo "    The camera ADOPTS this card's host key on first boot into /data/dropbear"
+echo "    and KEEPS IT afterwards - rewriting a card does not change a camera's"
+echo "    identity, which is what stops routine rewrites training you to click"
+echo "    through host-key warnings. authorized_keys, by contrast, is refreshed"
+echo "    from the card every boot, so revoking a key means rewriting the card."
+echo "  * ECDSA ONLY. This dropbear is v2016.74 and has no ed25519 at all; an"
+echo "    ed25519 key installs cleanly and then authenticates nobody."
+echo "  * The SSH hook sits BEFORE the gergehack.sh line in Factory/config.sh"
+echo "    because gergehack NEVER RETURNS - it ends in an infinite sleep loop"
+echo "    whenever rootfs_modified=0, which is what the backup carries. Anything"
+echo "    appended AFTER that line is dead code. Do not move the hook."
+fi
 echo "  * sensor_kern_module points at the GC1084 module ON THIS CARD. If the new"
 echo "    camera has a different image sensor, video will not come up until that"
 echo "    line and isp_gc1084.conf are swapped for the right sensor."

@@ -4,3 +4,9 @@
 # Your camera list for tools/fleet-status.sh. Real IPs/hostnames — never commit.
 # The tool ships with no host list baked in precisely so this file can be local.
 tools/hosts.local
+
+# The SSH public key(s) allowed to log into your cameras, read by
+# tools/write-sd-card.sh. A public key is not a secret, but it IS an identifier —
+# it carries user@host — and this repo is scrubbed of those. Same reasoning as
+# hosts.local: the tool ships with no key baked in so this file can be local.
+tools/authorized_keys.local
