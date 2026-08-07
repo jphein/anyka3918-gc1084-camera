@@ -194,7 +194,8 @@ neither ring lights.
 > licenses *"this pin does not drive that LED"* and nothing more. Concluding the LED was dead
 > required a working example to compare against, and there wasn't one until a second camera
 > arrived. A negative result on the only unit you own is **an untested hypothesis wearing a
-> measurement's clothes** — see [method.md](method.md).
+> measurement's clothes** — see *"Measuring anything on this camera"* in
+> [troubleshooting.md](troubleshooting.md).
 
 ## I2C
 
