@@ -185,6 +185,40 @@ It also **truncates JPEGs mid-stream**. Validate the `FFD9` end-of-image marker 
 downloaded frame as complete; a truncated frame will still decode to *something* and quietly skew
 whatever you measure from it.
 
+### "Is this service up?" — the listener is authoritative, the process table is not
+
+**Three people asked that question in one night and the process table lied to two of them,
+in the same way, independently.**
+
+The probe looks safe:
+
+```sh
+ps | grep -c "[t]elnetd"        # -> 2, on a camera with NO telnetd running
+```
+
+The `[t]` bracket trick stops `grep` matching its own `grep`. **It does nothing about the
+shell whose command line contains the word.** Run over SSH, dropbear's `sh -c` appears in
+the process table carrying your entire command string — so an `echo "telnetd procs: …"`
+anywhere in the same command makes the probe count itself.
+
+> 🔑 **The deeper reason it fooled people is `-c`. A count is a number with no way to show
+> you it is wrong.** Printing the matching *lines* exposes the fault instantly — you see
+> your own command staring back. The same parse printing lines instead of a count would
+> have been self-diagnosing.
+
+**Use the thing that cannot be fooled by the question you are asking:**
+
+```sh
+/sbin/netstat -ltn | grep ':23 '        # on the camera  (note: /sbin is NOT on ssh's PATH)
+# or, better, from another host entirely:
+timeout 3 bash -c 'exec 3<>/dev/tcp/<camera>/23'
+```
+
+An external port scan is authoritative because nothing about *how you asked* can appear in
+the answer. This is the same family as the `ps` parse that
+[counted regex matches rather than lines](backlog.md#improvement-backlog) — and it is worth
+noticing that the fix is identical: **stop counting, start looking.**
+
 ### On a watchdog box, `dmesg` is volatile evidence
 
 A GPIO sweep wedged the camera, and the **watchdog rebooted it — destroying the pre-hang `dmesg`
@@ -193,6 +227,40 @@ failure.
 
 **Stream kernel output somewhere non-volatile before doing anything that might hang the box** —
 to the SD card, or captured over [UART](hardware.md#serial-console).
+
+### ⚠️ OPEN: unexplained reboots on cam2 — and why attribution comes before mechanism
+
+On 2026-08-06/07, three unprompted reboots were reported on cam2 by two people: uptime
+`1403 s` then `109 s` about thirteen minutes later, and separately a camera seen at `up 3 min`
+going unreachable and returning at `up 0 min`. Nobody has explained them, and that is
+recorded here rather than left in a chat log.
+
+> 🔴 **Before hunting a mechanism, rule out each other.** In the same window, **one agent
+> rebooted cam2 nine times** — eight deliberately, plus one automatic reboot from
+> `gergehack.sh`'s card→flash sync — while testing boot persistence. Any observer scanning
+> during that window would have recorded reboots that were entirely accounted for.
+>
+> This is *"verifying that a state changed is not verifying who changed it"* in its most
+> expensive form: **a phantom hardware bug is the most costly kind of finding**, because it
+> has no owner, no reproduction, and no way to be closed. **Correlate timestamps against
+> everyone's command log first.** At least one of the three reports falls inside a known
+> deliberate-reboot window.
+
+**If reboots survive that check, the mechanism list is short but the evidence is hostile:**
+
+- **There is an 8-second hardware watchdog** — `[watchdog_enable:228] watchdog timeout = 8(s)`
+  in the UART logs. **Any hang longer than 8 s reboots the box**, so "unexplained reboot" has
+  a very large suspect set and tells you almost nothing on its own.
+- **`gergehack.sh` reboots deliberately, twice** (lines 62 and 70), whenever the card's
+  `gergesettings.txt` or `gergehack.sh` differs from the flash copy. **Anything that makes
+  those differ on every boot is a reboot on every boot.** Editing either file is therefore
+  expected to cost one extra reboot — that one is not a fault.
+- **`update_factory_data.sh` reboots** when the sensor file "differs from current".
+
+**And the reboot destroys the evidence**, per the section above. So the first useful step is
+not a theory, it is **making the next reboot leave a trace**: a boot counter and timestamp
+appended to a file on `/data` (which survives reboots and card swaps) on every boot, so the
+*next* occurrence arrives with a before-and-after instead of a shrug.
 
 > **The cause of that wedge is undetermined.** It was initially attributed to a pin being a
 > reserved SPI/SD line; **that attribution has been withdrawn** — the disassembly shows a

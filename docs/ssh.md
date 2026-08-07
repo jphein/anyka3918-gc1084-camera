@@ -253,6 +253,16 @@ or wrapper named `scp` somewhere on the remote `PATH`, and there is nowhere to p
 23 closed   telnet - gone, and it survived a further reboot
 ```
 
+> ⚠️ **`23 closed` is a statement about a *settled boot*, not about the camera.** Telnet is
+> started by `Factory/config.sh:2` and killed later by `gergehack.sh`, so **there is a
+> window early in every boot where port 23 is genuinely open.** Two people scanned this
+> camera minutes apart and got `open` and `closed`; **both readings were correct and on
+> different boots.**
+>
+> So: scan after the boot has settled, and record the qualifier with the result. Reading a
+> mid-boot window as a regression — or as a failed disable — is the obvious mistake, and
+> the port table above is exactly the artifact that invites it.
+
 `run_telnet=0` in `gergesettings.txt` on the card. `gergehack.sh` does `killall telnetd`
 near its top, which runs before its own infinite loop, so it takes effect.
 
