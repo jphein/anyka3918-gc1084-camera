@@ -219,6 +219,22 @@ the answer. This is the same family as the `ps` parse that
 [counted regex matches rather than lines](backlog.md#improvement-backlog) — and it is worth
 noticing that the fix is identical: **stop counting, start looking.**
 
+> 🔑 **The general form, and the reason care does not fix it: the probe enters the
+> population it is measuring.** `ps` enumerates processes, and asking the question *creates
+> a process carrying the question's text*. No amount of attention prevents that — it is a
+> property of the instrument, not a lapse by the operator. **Two people hit it
+> independently within one hour on this camera**, one reading `2` and one reading `1`,
+> neither warned by the other, both on a camera with zero matching processes.
+>
+> So prefer an instrument the question cannot contaminate. **An external port scan is the
+> only one here that qualifies**: it runs on a different machine, so nothing about how you
+> asked can reach the answer. Where you must ask on-box, print lines rather than counts —
+> a contaminated line is visibly your own command; a contaminated count is just a number.
+>
+> The same shape shows up wherever the observer shares a namespace with the observed:
+> `grep`-ing a log you are writing to, counting connections from the host making them,
+> `ls`-ing a directory your own tooling populates.
+
 ### On a watchdog box, `dmesg` is volatile evidence
 
 A GPIO sweep wedged the camera, and the **watchdog rebooted it — destroying the pre-hang `dmesg`
