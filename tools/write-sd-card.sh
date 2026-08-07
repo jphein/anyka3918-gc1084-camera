@@ -863,6 +863,43 @@ IDENTITY
         NOTES+=("  start on this card. Insert it by hand ABOVE the /etc/jffs2/gergehack.sh line.")
       fi
     fi
+    # --- turn telnet off, and ONLY from inside this branch.
+    #
+    # THE INDENTATION IS THE INTERLOCK. This sits inside `if [ "$SSH_OK" -eq 1 ]`
+    # on purpose: run_telnet=0 on a card with no working SSH is a camera with no
+    # remote access at all, recoverable only by pulling the card. Never lift this
+    # out to the top level "for clarity" - the nesting IS the safety property.
+    #
+    # gergehack.sh does `killall telnetd` near its top when run_telnet=0, and it
+    # runs before its own infinite loop, so this takes effect. Verified by port
+    # on a real camera, not by reading the setting back.
+    #
+    # FTP IS DELIBERATELY LEFT ON. MEASURED 2026-08-06: this dropbear ships no
+    # usable `scp` - there is no scp binary in the camera's PATH, a real
+    # `scp -O` attempt dies with `sh: scp: not found`, and /media does not exist
+    # so the third PATH entry is dead too. There is NO writable directory on
+    # PATH, so a wrapper cannot be dropped in without touching squashfs.
+    # Removing FTP would take away the only file-transfer route, and the Home
+    # Assistant clip-upload path uses it.
+    #
+    # `ssh <host> 'cat > /path'` DOES work and is byte-verified - it needs
+    # nothing on the far end but a shell. That is the migration when someone
+    # wants FTP gone; it is a change to the uploader, not to this file.
+    if grep -q '^run_telnet=' "$SETTINGS" 2>/dev/null; then
+      sed -i 's|^run_telnet=.*|run_telnet=0|' "$SETTINGS"
+      if grep -q '^run_telnet=0$' "$SETTINGS"; then
+        echo "==> telnet DISABLED (key-only SSH replaces it)"
+      else
+        warn "failed to set run_telnet=0 - telnet will still be on."
+        NOTES+=("telnet is still ENABLED on this card - the run_telnet edit did not take.")
+      fi
+    else
+      warn "gergesettings.txt has no run_telnet= line; leaving telnet as-is"
+      NOTES+=("could not disable telnet: no run_telnet= line in gergesettings.txt.")
+    fi
+    NOTES+=("FTP is still ENABLED and that is deliberate: this dropbear has no working")
+    NOTES+=("  scp, so FTP is the only file-transfer route. See docs/ssh.md.")
+
   elif [ -f "$SSH_CARD_KEY" ]; then
     # No SSH on this card - but the published private key still arrived here from
     # the backup, and a key whose private half is on the public internet has no
@@ -1031,10 +1068,18 @@ echo "    Change settings on the card, or edit both copies together."
 echo "  * This card works in ANY of these cameras. Nothing on it is specific to a"
 echo "    kernel build - the only patch is cgi-bin/header, which is kernel-agnostic."
 echo "  * IR-cut: MANUAL ONLY, and that is the correct configuration. ctl writes"
-echo "    /sys/user-gpio/ircut_a directly, and Factory/config.sh sets the filter to"
-echo "    the non-magenta position 60s into every boot. Automatic day/night is NOT"
-echo "    fixable on this board - the sense input the vendor driver wants does not"
-echo "    exist here. See docs/ptz.md before trying."
+echo "    /sys/user-gpio/ircut_a directly - that half is verified and is what the"
+echo "    Home Assistant button uses. Automatic day/night is NOT fixable on this"
+echo "    board - the sense input the vendor driver wants does not exist here."
+echo "    See docs/ptz.md before trying."
+echo "  * !! THE BOOT-TIME IR-CUT LINE IN Factory/config.sh DOES NOT RUN. It is"
+echo "    appended after /etc/jffs2/gergehack.sh, and gergehack NEVER RETURNS -"
+echo "    it ends in an infinite sleep loop whenever rootfs_modified=0, which is"
+echo "    what the backup carries. Measured on two cameras: forcing ircut_a to 0"
+echo "    and rebooting leaves it 0 straight through the line's own 60s timer."
+echo "    So expect a magenta image after a reboot until something sets the pin."
+echo "    The same defect kills the first-boot naming hook below. Only the isp"
+echo "    repair and SSH survive, because they are INSERTED BEFORE gergehack."
 echo "  * IDENTITY IS SPLIT ON PURPOSE. The camera's name lives in its own flash"
 echo "    (/data/unit.json, mtd7 - the partition the stock updater does not touch)"
 echo "    and survives a card swap; the stock update.sh never targets slot D, so a"
@@ -1044,6 +1089,10 @@ echo "    between cameras moves the BUILD, never the NAME - which is what makes 
 echo "    bag of identical cameras inspectable. Ask a camera who it is with:"
 echo "        /mnt/anyka_hack/identity/whoami.sh"
 echo "    Naming is write-once: rewriting this card never renames a camera."
+echo "  * !! BUT THE NAMING HOOK DOES NOT RUN YET, for the same reason as the"
+echo "    IR-cut line above: it is appended after gergehack.sh. /data/unit.json"
+echo "    exists on neither of JP's cameras. The design ships and is sound; the"
+echo "    hook needs relocating to the pre-gergehack seam and then testing."
 echo "  * The card sets the root password from Factory/config.sh on every boot."
 if [ "$SSH_OK" -eq 1 ]; then
 echo "  * SSH IS KEY-ONLY AND THIS CARD'S HOST KEY IS UNIQUE TO IT. Password login"

@@ -3,6 +3,21 @@
 **Status: working, and proven on hardware by an actual login — not by a config read.**
 Key-only, password login disabled, and every card carries a host key generated for it.
 
+> ## ⚠️ Two things that will bite you first
+>
+> **1. `PATH` over SSH is not the `PATH` over telnet.** Measured on a dropbear session:
+> `PATH=/usr/bin:/bin:/media/mmcblk0p2/data/usr/bin` — **no `/sbin`, no `/usr/sbin`**, and
+> that third entry does not exist. So `reboot`, `netstat`, `ifconfig` and `insmod` are
+> *not found* over SSH while working fine over telnet. **Use absolute paths**
+> (`/sbin/reboot`). Anything scripted against these cameras needs this, and it fails in a
+> way that looks nothing like a `PATH` problem.
+>
+> **2. There is no `scp`, and FTP is still on because of it.** Measured: no `scp` binary
+> in `PATH`, `scp -O` dies with `sh: scp: not found`, and since **no directory on `PATH`
+> is writable**, a wrapper cannot be added without touching read-only squashfs.
+> **`ssh <host> 'cat > /path/file' < localfile` works** and is byte-verified — it needs
+> nothing on the far end but a shell. See [file transfer](#file-transfer-there-is-no-scp).
+
 Everything on this page is marked **measured** or **inferred**. The measurements were taken
 on 2026-08-06 against a camera running the `chensheng` 2023 kernel.
 
@@ -97,10 +112,17 @@ writer refuses a key file with no ECDSA key in it instead of warning about one.
 
 ```
 /dev/root      on /            squashfs (ro)     <- root's home is "/", per /etc/passwd
-/dev/mtdblock6 on /etc/jffs2   jffs2 rw    64 K total,   8 K free  (88% full)
-/dev/mtdblock7 on /data        jffs2 rw   2.2 M total, ~492 K free
+/dev/mtdblock6 on /etc/jffs2   jffs2 rw    64 K total,  8 K free  (88% full)
+/dev/mtdblock7 on /data        jffs2 rw   2.2 M total                      <- see below
 /dev/mmcblk0p1 on /mnt         vfat  rw          <- the card
 ```
+
+> **Free space on `/data` is per-camera — do not carry one number as a fleet fact.**
+> Measured on **cam2: 492 K free** (78% used; it holds wifi driver tarballs). An earlier
+> note recorded **760 K**, which was a different unit. Both are true of the camera they
+> were measured on and neither is true of "the cameras". SSH needs about **2 K**, so the
+> margin is large either way — the point is the habit, not the number. This project has
+> already been bitten by a per-unit measurement restated as a fleet property.
 
 `/root` does not exist and `$HOME` is `/`, which is read-only. Dropbear takes the home directory
 from `getpwnam` and has **no option to relocate `authorized_keys`** (`-r` sets *host* keys; there
@@ -197,6 +219,55 @@ If nothing is listening on 22, `ssh-up.sh` **restarts `telnetd`**.
   local reach and a working root password to be worth anything.
 
 Set `SSH_NO_TELNET_FALLBACK=1` in `gergesettings.txt` to fail closed instead.
+
+## File transfer: there is no `scp`
+
+**Measured**, and it decided whether FTP could be turned off:
+
+| test | result |
+|---|---|
+| `scp` binary anywhere in the camera's `PATH` | **none** |
+| real `scp -O file anyka-cam2:/tmp/` | `sh: scp: not found`, `lost connection` |
+| could a wrapper be dropped on `PATH`? | **no** — `/usr/bin` and `/bin` are read-only squashfs and `/media` does not exist, so **no `PATH` entry is writable** |
+| `ssh host 'cat > /tmp/f' < localfile` | ✅ **works**, md5 identical both ends |
+
+`dropbearmulti` does contain `scp`, but it is a multi-call binary: it would need a symlink
+or wrapper named `scp` somewhere on the remote `PATH`, and there is nowhere to put one.
+(The card is vfat, which cannot store symlinks either.)
+
+> **So FTP stays on.** It is the only file-transfer route, and the Home Assistant clip
+> upload path uses it. **Turning telnet off does not require turning FTP off**, and the
+> two were deliberately decoupled.
+>
+> **The migration, when someone wants FTP gone**, is to switch the uploader to
+> `ssh 'cat > …'`. That is a change to the uploader, not to the camera — and it should be
+> made and tested before `run_ftp=0`, not after.
+
+## Telnet is off; FTP is not
+
+**Measured on cam2**, by port from another host rather than by reading config:
+
+```
+21 OPEN     FTP  - kept deliberately, see above
+22 OPEN     SSH  - key-only
+23 closed   telnet - gone, and it survived a further reboot
+```
+
+`run_telnet=0` in `gergesettings.txt` on the card. `gergehack.sh` does `killall telnetd`
+near its top, which runs before its own infinite loop, so it takes effect.
+
+> ⚠️ **Two telnetd's exist and only one matters.** `/etc/init.d/rcS:8` starts one and
+> `/usr/sbin/service.sh:85` kills it again; the live one is started by
+> `Factory/config.sh:2`. `run_telnet=0` is what removes that one.
+>
+> ⚠️ **`run_ftp` is not symmetrical with `run_telnet`.** It does not *start* FTP — the
+> vendor's `rc.local` starts `tcpsvd 0 21 ftpd -w / -t 600` unconditionally, and
+> `run_ftp=0` only makes gergehack `killall tcpsvd`. **It takes effect at boot**, so
+> checking straight after setting it looks like failure.
+
+**The writer only disables telnet when SSH is actually installed** — the `run_telnet=0`
+edit is nested inside the `SSH_OK` branch, and the nesting *is* the safety property. A card
+with neither telnet nor working SSH is recoverable only by pulling it.
 
 ## What this does *not* fix
 

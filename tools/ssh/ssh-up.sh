@@ -213,6 +213,26 @@ fi
 #
 # Set SSH_NO_TELNET_FALLBACK=1 in gergesettings.txt to refuse the fallback and
 # fail closed instead.
+#
+# 🔴 THE FALLBACK MUST BE DELAYED, AND THAT IS NOT A REFINEMENT - WITHOUT IT THE
+# NET IS GUARANTEED TO FAIL IN EXACTLY THE CASE IT EXISTS FOR.
+#
+# This script runs BEFORE gergehack.sh (it has to - see the hook placement note
+# in write-sd-card.sh). And gergehack.sh, near its top, does:
+#
+#     if [[ $run_telnet == 0 ]]; then killall telnetd; fi
+#
+# So on a camera where telnet has been turned off - the only camera where this
+# fallback matters at all - an immediate `telnetd &` here is started seconds
+# before gergehack kills it. The safety net would be removed by the very setting
+# that makes it necessary, silently, and nobody would find out until a camera
+# failed to come back and had to have its card pulled.
+#
+# So: wait past gergehack's killall, then RE-CHECK port 22 and only start telnetd
+# if it is still down. Re-checking rather than acting on the earlier result also
+# covers the case where dropbear was simply slow to bind - the earlier check is a
+# fact about one moment, and a stale one by the time this subshell wakes.
+FALLBACK_DELAY=120
 if netstat -ltn 2>/dev/null | grep -q ':22 '; then
   log "listening on 22, key-only"
 else
@@ -221,7 +241,16 @@ else
     log "  telnet fallback disabled by setting - this camera is now unreachable"
     log "  except by pulling the card."
   else
-    log "  starting telnetd as a fallback so this camera stays reachable"
-    telnetd &
+    log "  arming the telnet fallback: re-check in ${FALLBACK_DELAY}s, after"
+    log "  gergehack's killall, and start telnetd only if 22 is still down."
+    (
+      sleep "$FALLBACK_DELAY"
+      if netstat -ltn 2>/dev/null | grep -q ':22 '; then
+        log "fallback stood down - 22 came up after all"
+      else
+        log "fallback FIRING - starting telnetd so this camera stays reachable"
+        telnetd
+      fi
+    ) &
   fi
 fi
