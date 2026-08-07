@@ -231,6 +231,48 @@ interesting the problem is.
   Corollary that falls out of it: **sort such a list by frequency and read the
   bottom first.** A value appearing once is the one no convention covers.
 
+  > ⚠️ **The binaries under `scratch/anyka-white-led/` carry real identifiers** —
+  > `mtdblock3-env-baseline.bin` holds an `ethaddr`, and `mtdblock5.bin` is a whole
+  > rootfs image. They are scratch, not repo, **and must stay that way.** If either
+  > is ever promoted, it needs *reading* first, not copying. A binary is the one
+  > artifact a text sweep cannot classify for you.
+
+- **Transcription is where verified evidence degrades — in both directions.**
+  Both failures happen at the same step, moving a measurement into a document,
+  and neither is caught by "go and check" because **the checking already
+  happened.** Two instances, 2026-08-06, same day, opposite signs:
+
+  **Dropped the detail that *was* the evidence.** `web-ui.md`'s port table
+  recorded `tcpsvd 0 21 ftpd -w /` under a heading stating it was verified with
+  `netstat`. The live invocation is `… -w / -t 600`, and **`-t 600` comes from the
+  stock `rc.local` and from nothing the hack does** — so the one flag identifying
+  the process as the *vendor's* was the one lost in transcription. That omission
+  is why two pages said `run_ftp=1` *starts* FTP, when it only stops `run_ftp=0`
+  from killing it.
+
+  **Kept the detail that should not have travelled.** A measured `stats` payload,
+  handed over as a contract, contained JP's **real SSID and a real AP BSSID** —
+  caught in review before it reached a public repo.
+
+  > 🔑 **Why the second one is a different animal from every other identifier
+  > miss here.** The others were **someone typing a value into prose** — an act of
+  > authorship with a moment where you could choose otherwise. **A measured payload
+  > has no such moment: you run a command, paste the output, and the output is the
+  > point.** Editing it feels like weakening the evidence.
+  >
+  > **The property that makes a verbatim payload good documentation is the property
+  > that smuggles the data.** It is trusted *because* it is unedited, and
+  > **evidence is the thing we are least inclined to edit.**
+
+  **Two remedies, one per direction:**
+
+  * **Sanitise at the point of *capture*, not the point of writing.** Substitute
+    `<SSID>` in the script that prints the sample, where it is a deliberate act —
+    not in the document, where it competes with fidelity and loses.
+  * **When copying a verified command line, copy it whole.** If you shorten it,
+    you are deciding which arguments carry no information, and on this firmware
+    that judgement has already been wrong once.
+
 - **Before a repo's first push, a leak must be AMENDED OUT, not fixed forward.
   A fix-forward publishes the thing you are fixing.** This is the single window in
   a repository's life where history is free to rewrite — no clone exists, no
