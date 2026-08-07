@@ -397,6 +397,37 @@ interesting the problem is.
   that always says `OK` is internally consistent and externally useless. Expect
   the vendor's own success signals to be decorative until proven otherwise.
 
+- **Re-verifying the axis that burned you last time is not verification.** A
+  check adopted after one failure becomes a *ritual*, and performing it discharges
+  the feeling of having verified — while the axis that decides *this* case goes
+  unasked, precisely because the verification step is already ticked.
+
+  2026-08-06, twice in one afternoon, on the same rule:
+
+  | | |
+  |---|---|
+  | First miss | reported a broken anchor that had been **fixed four commits earlier** — did not re-check *existence* |
+  | Adopted | *"re-verify immediately before reporting"* |
+  | Second miss | re-checked existence dutifully — **and never asked whether the leak was published**, which was the whole decision |
+
+  The second report said *"not in history only — in the current tree"*, drawing a
+  contrast **between two things, one of which had not been looked at.** The repo
+  had **32 unpushed commits**: the leak was in the tree and *not yet public*,
+  which is the [free window](#improvement-backlog) where a leak can be **amended
+  out** instead of accepted. Reported as though already public, that option
+  disappears.
+
+  > 🔑 **This is [*"writing it down discharges the feeling of having handled
+  > it"*](#improvement-backlog) one layer up — applied to verification instead of
+  > documentation.** A correct check, correctly run, felt like *being verified*.
+  > **Having a verification step is not the same as having asked what matters
+  > here.**
+
+  **The practical form: name the decision the finding feeds, then verify the input
+  to *that*.** For a leak that is `git merge-base --is-ancestor <commit>
+  origin/main` — public or not decides *accept* versus *amend*, and nothing else
+  about the finding changes the answer.
+
 - **A checker's silence is a finding, and it is the one nobody reads.** A tool
   that *stops* reporting something is telling you the thing you believe has
   changed — but **"clean" reads as "nothing to do"**, not as *"the item you are
