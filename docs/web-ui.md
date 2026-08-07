@@ -611,22 +611,40 @@ Verified with `netstat -ltnp` on the camera:
 
 | Port | Process | Notes |
 |---|---|---|
-| 21 | `tcpsvd 0 21 ftpd -w /` | **Writable FTP rooted at `/`.** See the warning below. |
+| 21 | `tcpsvd 0 21 ftpd -w / -t 600` | **Writable FTP rooted at `/`.** Started by the **stock `rc.local`**, not by the hack. See the warning below. |
 | 23 | `telnetd` | Root login, plaintext. `run_telnet=1`. |
 | 80 | `busybox httpd` | The web UI. `run_web_interface=1`. |
 | 554 | `libre_anyka_app` | RTSP, unauthenticated. |
 | 3000 | `libre_anyka_app` | Snapshots, unauthenticated. |
 | 8782 | `cmd_serverd` | **Bound to `127.0.0.1` only.** Required by the PTZ daemon. |
 
-> ⚠️ **FTP is enabled by default and it is writable over the entire filesystem.** `run_ftp=1`
-> starts busybox `ftpd -w /`. Anonymous login is *rejected* (`530 Login failed`, verified), so
-> it is not wide open — but it accepts the **root account with the same root password**, in
-> plaintext, and `-w` grants write access to `/`. That is enough to overwrite `gergehack.sh` or
-> `Factory/config.sh` and own the camera on the next boot. It also serves
-> `gergesettings.txt`, which contains the **WiFi PSK in cleartext**.
+> ⚠️ **FTP is writable over the entire filesystem, and it is the vendor's, not this project's.**
+> Anonymous login is *rejected* (`530 Login failed`, verified), so it is not wide open — but it
+> accepts the **root account with the same root password**, in plaintext, and `-w` grants write
+> access to `/`. That is enough to overwrite `gergehack.sh` or `Factory/config.sh` and own the
+> camera on the next boot. It also serves `gergesettings.txt`, which contains the **WiFi PSK in
+> cleartext**.
+
+> ❌ **RETRACTED: "`run_ftp=1` starts busybox `ftpd -w /`."** It does not start anything.
+> **`rc.local` runs `tcpsvd 0 21 ftpd -w / -t 600` unconditionally on every boot, hacked or
+> not** — the hack never starts an ftpd. What `run_ftp=0` does is **kill** it
+> (`gergehack.sh:89: killall tcpsvd`). The setting is not *"start FTP"*, it is *"don't kill
+> FTP"*. **[M]**, `lucid-camera`.
 >
-> Nothing in this project needs FTP. Set `run_ftp=0` in `gergesettings.txt` unless you are
-> actively using it.
+> Two consequences, and the first is the one that matters:
+>
+> * **A stock, un-hacked camera runs writable FTP as root with no way to switch it off** short of
+>   changing the card. The exposure is the vendor's; the hack is what gives you the *off* switch.
+>   [The finding](stock-attack-surface.md#1--the-finding-that-stands-regardless-of-everything-else).
+> * **`run_ftp=0` only takes effect at the next boot**, because `gergehack.sh` runs once. Set it
+>   and reboot — **checking immediately shows FTP still listening and looks like the setting is
+>   broken.**
+>
+> The mitigation itself is sound: `comm` for that pid is exactly `(tcpsvd)` with no truncation,
+> and `tcpsvd` is used nowhere else on the box, so `killall tcpsvd` cannot collateral anything.
+
+Nothing in this project needs FTP. Set `run_ftp=0` in `gergesettings.txt` **and reboot** unless
+you are actively using it.
 
 ## Recipes
 

@@ -547,7 +547,10 @@ Not a bug, a hardware fact. [ptz.md](ptz.md#-the-microphone-cannot-be-muted).
 
 ### FTP is on by default and is writable
 
-`run_ftp=1` starts `tcpsvd 0 21 ftpd -w /`. Anonymous is rejected, but root with the root
+**`run_ftp=1` does not start FTP — the stock `rc.local` does, on every boot, hacked or not.**
+`run_ftp=0` **kills** it (`gergehack.sh:89`), and **only at the next boot**, since `gergehack.sh`
+runs once — so set it and reboot; checking immediately looks like the setting is broken.
+Anonymous is rejected, but root with the root
 password gets plaintext write access to the whole filesystem, and `gergesettings.txt` served
 over it contains the WiFi PSK in cleartext. Set `run_ftp=0`.
 
