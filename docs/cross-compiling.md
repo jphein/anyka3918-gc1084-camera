@@ -253,9 +253,12 @@ driving a demo binary from a script.
 
 **NOT unblocked, and worth being blunt about:**
 
-- **Automatic day/night.** Not compiler-blocked. The sense input `gpio-rf_feed` does not
-  exist on this board and the fallback `ain0` is a constant. No amount of new code invents a
-  sensor.
+- **Automatic day/night.** Not compiler-blocked. The sense input `gpio-rf_feed` does not exist on
+  this board — that part stands. ⚠️ **But "the fallback `ain0` is a constant" is RETRACTED**
+  (2026-08-07): `ain0` is a working light sensor, 2999 lit → ~130 with the lens covered, and it
+  only read constant because nobody varied the light. **The sensor is not the blocker.** Cam #2
+  has working automatic day/night; cam #1 does not. See
+  [the retraction](ptz.md#-automatic-daynight-is-not-fixable-on-this-board).
 - **The white LEDs.** Not compiler-blocked — the pin is electrically fine and drives nothing.
 - **The audio stop verb.** Probably not compiler-blocked either: `killall ak_adec_demo` is
   shell. Write the shell version first and only reach for a binary if it proves inadequate.

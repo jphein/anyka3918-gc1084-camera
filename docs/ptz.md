@@ -314,6 +314,49 @@ path is dead. That answers the older question — the repeated
 
 #### 🔴 Automatic day/night is not fixable on this board
 
+> # ✅ RETRACTED — 2026-08-07, on a second camera
+>
+> **Cam #2 has working automatic day/night.** Cover its lens and the IR ring lights; uncover it
+> and the ring goes out. JP observed this directly and repeatedly. Cam #1 does not do this — and
+> **cam #1 is the unit this entire section was written on.**
+>
+> Two of the supporting claims below are now **measured false**:
+>
+> **1. `ain0` is not a constant.** It is a working ambient-light sensor with a **23× range**, and
+> the reading below was taken in a steadily-lit room where it sits pinned at the top of its
+> range. Two independent cover/uncover events, 2 s sampling, `ircut_a` held fixed so the filter
+> was not a variable:
+>
+> ```
+> uncovered   ain0 = 2999          covered   ain0 ≈ 130-142
+> event 1     2999 → 135 → 2999    event 2   2999 → 131 → (held)
+> 26 of 91 samples below 500, entirely inside the two covered windows
+> ```
+>
+> `ain1` is live too, with a different character — it falls instantly and recovers *slowly*
+> (837 → 1157 over ~50 s), like an integrator. **Neither channel was documented.**
+> `/sys/kernel/ain/` exposes **three**, not one.
+>
+> **2. "Both LED rings are dark" is false for cam #2** — its IR ring works. So the closing
+> argument, *"there is no working IR illumination for a night mode to switch to anyway. Nothing
+> is being given up"*, does not hold. On cam #2 the thing being given up is a feature that
+> demonstrably works.
+>
+> **What still stands, untouched:** `gpio-rf_feed` genuinely does not exist on this board and
+> must not be pointed at another name. The `cfg[0x1c] != 2` gate is **unretested**. So the
+> *driver* path may well still be unreachable — but the conclusion *"the feature needs a sensor
+> input this hardware does not expose"* is refuted: **the hardware exposes it, on `ain0`.**
+>
+> ⚠️ **[I] Why cam #1 differs is not established.** Sensor not populated, a different board
+> revision, or a fault — unknown. Do not guess; it is one comparison away from being measured.
+>
+> > 🎯 **How this survived: the constant was convincing.** `ain0` really did read 2999 every time
+> > anyone looked — because nobody varied the light. A constant reading does not look like a
+> > failed measurement, it looks like a settled fact, and it hardened into a "not fixable"
+> > verdict that closed the question. **The instrument was fine and the stimulus was never
+> > varied.** Worse, the one unit that could refute it — a second camera — did not exist yet,
+> > so *"measured on this board"* silently meant *"measured on the only board we had."*
+
 **Stop here. This is not a patching problem, and it will consume a day if you treat it as one.**
 
 Even if `ak_drv_ir_init` succeeded, two further gates would bite:
@@ -877,6 +920,12 @@ failures. They were **true negatives all along**.
 
 **So both rings are dark, while both pins demonstrably toggle at the pad.**
 
+> ⚠️ **True of cam #1 only — RETRACTED as a board-wide statement (2026-08-07).** **Cam #2's IR
+> ring works**: cover its lens and it lights, uncover and it goes out. So "both rings are dark"
+> describes *one unit*, and the pins were never the mechanism — the ring responds to ambient
+> light while `IR_LED` toggles to no effect. The white-LED result is unchanged and now
+> **stronger**: dark on both units under a confirmed-live blink.
+
 > ❓ **Why the IR ring is dark remains open**, and is deliberately not folded into the white-LED
 > explanation. The vendor's `not support white led` string says nothing about IR. Two dark rings
 > may share a cause — an unpopulated LED stage, a missing supply rail — but that is an assumption,
@@ -1232,7 +1281,7 @@ afternoon.
 | `ak_drv_ir_demo -s 1/0` toggles the filter | ❌ **Tested live. Does nothing.** Prints `Ircut a & b interface can't access`; the pin does not follow `-s` |
 | The binary is under `oldcam` | ❌ no such path — it is at `/mnt/ak_drv_ir_demo` |
 | Needs `cmd_serverd` / `run_cmd_server=1` | ❌ **neither exists on this build** |
-| The LEDs are "automaticly controlled by a photoresistor" | ❌ not on this board — the driver's input is `gpio-rf_feed`, absent here, falling back to `ain0` **pinned at a constant 2999** |
+| The LEDs are "automaticly controlled by a photoresistor" | ⚠️ **Partly vindicated, 2026-08-07.** `gpio-rf_feed` is genuinely absent — but the *"`ain0` is pinned at a constant 2999"* half is **RETRACTED**: `ain0` is a working light sensor (2999 lit → ~130 covered) and cam #2's ring really does respond to ambient light. The upstream claim was closer to right than this table was |
 
 > ⚠️ **The photoresistor line is a real quote from that file, not a fabrication.** This project
 > previously logged it as an invented mechanism; it is not. **It is accurately transcribed and

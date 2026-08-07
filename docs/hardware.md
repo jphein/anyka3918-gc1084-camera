@@ -192,12 +192,19 @@ neither ring lights.
 > cameras, as are all six pin values, which is what makes the divergence **hardware**. Cam #1's
 > ring is unpopulated or unwired; **[I]** which, not established.
 >
-> ⚠️ **Open, and it reopens README line 25.** `/sys/kernel/ain/` exposes **three** channels, not
-> one. `ain0` is the documented constant (2999, re-confirmed). **`ain1` is live** — observed
-> stepping 831 → 1155 and settling — and appears **nowhere** in this repo. The claim *"the
-> fallback ADC reads a constant"* was established on `ain0` alone. **What `ain1` measures is
-> unknown**, and *"photoresistor"* is specifically the mechanism this project has already
-> invented, found quoted upstream, and refuted once — it needs a reading, not an argument.
+> ✅ **RESOLVED, and it overturned README line 25.** `/sys/kernel/ain/` exposes **three** channels
+> (`ain0`, `ain1`, `bat`), not one. **Both `ain0` and `ain1` respond to light** — measured, two
+> independent lens-cover events with `ircut_a` held fixed:
+>
+> | channel | lit | covered | character |
+> |---|---|---|---|
+> | `ain0` | **2999** | **~130–142** | snaps both ways, 23× range |
+> | `ain1` | ~1148–1172 | ~822–838 | falls instantly, recovers **slowly** (~50 s) |
+>
+> So *"the fallback ADC reads a constant"* was true only of a **steadily-lit room**. `ain0` sits
+> pinned at the top of its range and looks dead until something varies the light. **The
+> instrument was fine; the stimulus was never varied** — and the second camera that could have
+> shown it did not exist when the verdict was written.
 >
 > The white-LED result is *unchanged and now stronger*: dark on both units under a
 > confirmed-live 1 Hz blink (300 rapid reads caught both `0` and `1` inside the window JP was
