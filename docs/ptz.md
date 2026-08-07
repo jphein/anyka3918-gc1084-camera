@@ -735,6 +735,17 @@ drive nothing; `ircut_b` and `wifi_en` have no observable effect.
 
 Two notes on the pins themselves:
 
+> 🔑 **Restoring the command channel is not restoring the state.** The pin tells you what you
+> last *commanded*; it never tells you where the filter physically is. After driving `ircut_a`,
+> putting it back to the value you found it at leaves the **pin** as you found it and the
+> **filter** wherever your commands left it — and with 4–8 s of travel, the two can disagree for
+> longer than a check takes. This bit someone on 2026-08-07: pins reported "restored" at
+> `a=0 b=0`, identical to the starting state, with the filter's actual position unknown.
+>
+> The practical form: **`ircut_a=0` is not "no change", it is "not currently held in"** — the
+> position the boot-time mitigation exists to correct. If you have been driving the pin, set it
+> back to `1` and **wait out the travel**, rather than matching the number you wrote down.
+
 * **`ircut_a` is hold-to-engage, and it acts alone.** Assert it and the filter moves; release it
   and the filter returns. Holding `ircut_a=1` is the **normal operating state**, not a stress
   condition — both the vendor daemon's `set_ir_cut 0` path and the known-good baseline sit there.

@@ -7,10 +7,25 @@ Key-only, password login disabled, and every card carries a host key generated f
 >
 > **1. `PATH` over SSH is not the `PATH` over telnet.** Measured on a dropbear session:
 > `PATH=/usr/bin:/bin:/media/mmcblk0p2/data/usr/bin` — **no `/sbin`, no `/usr/sbin`**, and
-> that third entry does not exist. So `reboot`, `netstat`, `ifconfig` and `insmod` are
-> *not found* over SSH while working fine over telnet. **Use absolute paths**
-> (`/sbin/reboot`). Anything scripted against these cameras needs this, and it fails in a
-> way that looks nothing like a `PATH` problem.
+> that third entry does not exist. So `reboot` is *not found* over SSH while working fine
+> over telnet.
+>
+> ⚠️ **"Just use absolute paths" is the wrong lesson, and it broke this page's own author.**
+> The binaries are not all in the same place, so a guessed absolute path fails *differently
+> and more quietly* than a missing one:
+>
+> | | actually at | over SSH |
+> |---|---|---|
+> | `reboot` | `/sbin/reboot` | needs the **absolute path** |
+> | `netstat` | **`/bin/netstat`** | **plain `netstat` works** — `/sbin/netstat` does **not exist** |
+>
+> Writing `/sbin/netstat -ltn 2>/dev/null | grep …` produces an **empty pipeline, not an
+> error** — the `2>/dev/null` swallows `not found` and the result reads as "nothing is
+> listening". That is indistinguishable from a dead service, and it is how three separate
+> "no listeners" readings were produced on a camera happily serving five ports.
+>
+> **Check where a binary is before reaching for its path** (`command -v netstat`), or use
+> an off-box check that cannot be fooled at all.
 >
 > **2. There is no `scp`, and FTP is still on because of it.** Measured: no `scp` binary
 > in `PATH`, `scp -O` dies with `sh: scp: not found`, and since **no directory on `PATH`
