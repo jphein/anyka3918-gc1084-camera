@@ -1,0 +1,12 @@
+{
+  "name": "anyka3918-gc1084-camera",
+  "description": "Local RTSP, PTZ and Home Assistant for cheap Anyka AK3918 / GC1084 IP cameras",
+  "version": "Resonant Lattice \u00b7 2e2ec2a",
+  "hash": "2e2ec2a",
+  "branch": "main",
+  "dirty": false,
+  "built": "2026-08-07T00:34:04Z",
+  "realm": "signal",
+  "repo": "https://github.com/jphein/anyka3918-gc1084-camera",
+  "commit_url": "https://github.com/jphein/anyka3918-gc1084-camera/commit/2e2ec2a"
+}

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anyka AK3918 / GC1084 — a $20 camera, opened</title>
+<meta name="description" content="Local RTSP, PTZ, audio and Home Assistant control for cheap Anyka AK3918 / GC1084 cameras — and a reference for the firmware's undocumented internals.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  /* ── Two themes, one system. Every colour is a token; nothing below this
+       block names a colour. prefers-color-scheme picks the palette, so the page
+       matches the OS instead of asking. ───────────────────────────────────── */
+  :root {
+    --bg:        #fbfaf7;
+    --bg-sunk:   #f2efe9;
+    --rule:      #e2ddd3;
+    --ink:       #1c1a17;
+    --ink-soft:  #55504a;
+    --ink-faint: #86807a;
+    --accent:    #0f766e;
+    --accent-bg: #ddf3f0;
+    --mark:      #92400e;
+    --mark-bg:   #fdf0dc;
+    --ok:        #15803d;
+    --shut:      #9a3412;
+    --shadow:    0 1px 2px rgb(28 26 23 / .05), 0 8px 24px -12px rgb(28 26 23 / .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0f1211;
+      --bg-sunk:   #161a19;
+      --rule:      #262c2a;
+      --ink:       #e6e4e0;
+      --ink-soft:  #a8a49e;
+      --ink-faint: #736f6a;
+      --accent:    #2dd4bf;
+      --accent-bg: #10312e;
+      --mark:      #fbbf24;
+      --mark-bg:   #2e2410;
+      --ok:        #4ade80;
+      --shut:      #fb923c;
+      --shadow:    0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 17px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-feature-settings: "kern", "liga";
+  }
+  code, kbd, .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .92em;
+  }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  .skip {
+    position: absolute; left: -9999px; top: 0; background: var(--accent);
+    color: var(--bg); padding: .6rem 1rem; z-index: 10;
+  }
+  .skip:focus { left: 0; }
+
+  .wrap { max-width: 68ch; margin: 0 auto; padding: 0 1.4rem; }
+
+  /* ── Masthead ──────────────────────────────────────────────────────────── */
+  header { border-bottom: 1px solid var(--rule); padding: 3.5rem 0 2.6rem; }
+  .eyebrow {
+    font-size: .78rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 1rem;
+  }
+  h1 { font-size: clamp(1.9rem, 5.5vw, 2.7rem); line-height: 1.15; margin: 0 0 .9rem; letter-spacing: -.02em; }
+  .standfirst { font-size: 1.12rem; color: var(--ink-soft); margin: 0; max-width: 58ch; }
+
+  /* ── The finding, as an object rather than a paragraph ─────────────────── */
+  .finding {
+    margin: 2.4rem 0 0; padding: 1.5rem 1.6rem; background: var(--bg-sunk);
+    border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow);
+  }
+  .finding p { margin: 0 0 1.1rem; font-size: 1.02rem; }
+  .instr { display: grid; gap: .5rem; }
+  .instr div { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+  .instr .label {
+    font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-faint); min-width: 6.5em;
+  }
+  .instr .asm { font-size: 1.05rem; }
+  .byte {
+    background: var(--mark-bg); color: var(--mark); font-weight: 700;
+    padding: .05em .35em; border-radius: 3px;
+  }
+  .instr .note { color: var(--ink-faint); font-size: .84rem; }
+
+  /* ── Sections ──────────────────────────────────────────────────────────── */
+  main section { padding: 2.8rem 0; border-bottom: 1px solid var(--rule); }
+  h2 { font-size: 1.4rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
+  h2 + .sub { color: var(--ink-faint); margin: 0 0 1.6rem; font-size: .95rem; }
+  h3 { font-size: 1.02rem; margin: 1.8rem 0 .5rem; }
+  p { margin: 0 0 1.1rem; }
+
+  ul.plain { list-style: none; padding: 0; margin: 0; }
+  ul.plain li { padding: .85rem 0; border-top: 1px solid var(--rule); }
+  ul.plain li:first-child { border-top: 0; }
+  .rule-name { font-weight: 650; display: block; margin-bottom: .2rem; }
+  .rule-body { color: var(--ink-soft); font-size: .96rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: .7rem .6rem; border-top: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  .state { font-size: .78rem; font-weight: 700; letter-spacing: .04em; }
+  .state.on { color: var(--ok); }
+  .state.off { color: var(--shut); }
+  .scroll { overflow-x: auto; }
+
+  .docs { display: grid; gap: .1rem; }
+  .docs a {
+    display: block; padding: .8rem .9rem; border: 1px solid var(--rule);
+    border-radius: 8px; text-decoration: none; color: inherit; margin-bottom: .5rem;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  .docs a:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .docs .t { font-weight: 650; color: var(--accent); }
+  .docs .d { color: var(--ink-soft); font-size: .92rem; }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--accent-bg);
+    padding: .9rem 1.1rem; border-radius: 0 8px 8px 0; margin: 1.4rem 0;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+
+  footer { padding: 2.4rem 0 3.5rem; color: var(--ink-faint); font-size: .88rem; }
+  footer p { margin: 0 0 .6rem; }
+  .sigil { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--ink-faint); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+</style>
+  <meta name="realm-version" content='{"name": "anyka3918-gc1084-camera", "description": "Local RTSP, PTZ and Home Assistant for cheap Anyka AK3918 / GC1084 IP cameras", "version": "Resonant Lattice \u00b7 2e2ec2a", "hash": "2e2ec2a", "branch": "main", "dirty": false, "built": "2026-08-07T00:34:04Z", "realm": "signal", "repo": "https://github.com/jphein/anyka3918-gc1084-camera", "commit_url": "https://github.com/jphein/anyka3918-gc1084-camera/commit/2e2ec2a"}'>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Anyka AK3918 · GC1084 · Teruhal TC20</p>
+    <h1>A $20 camera, opened all the way up</h1>
+    <p class="standfirst">
+      Local RTSP, PTZ, audio and Home&nbsp;Assistant control for a cheap Chinese IP camera —
+      no cloud, no app — plus a reference for the firmware's undocumented internals,
+      written down as it was found.
+    </p>
+
+    <div class="finding">
+      <p><strong>The speaker's volume control was documented as broken.</strong>
+      It was never broken. It was <em>welded shut</em> at maximum — one immediate
+      operand, compiled in, with no CLI flag and no environment variable to reach it.</p>
+      <div class="instr mono">
+        <div><span class="label">shipped</span><span class="asm">mov&nbsp;r1,&nbsp;#<span class="byte">6</span></span><span class="note">→ ak_ao_set_dac_volume(h, 6)</span></div>
+        <div><span class="label">patched</span><span class="asm">mov&nbsp;r1,&nbsp;#<span class="byte">1</span></span><span class="note">one byte, at offset 9356</span></div>
+      </div>
+      <p style="margin:1.1rem 0 0;font-size:.94rem;color:var(--ink-soft)">
+        Upstream's advice was to quieten the audio file instead. That cannot work:
+        the firmware runs an always-on look-ahead compressor which normalises a
+        quiet file straight back up. The DAC value reaches the hardware
+        <em>downstream</em> of it — measured, then confirmed by ear.
+      </p>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section>
+    <div class="wrap">
+      <h2>What this gives you</h2>
+      <p class="sub">If you own one of these cameras.</p>
+      <div class="scroll">
+      <table>
+        <thead><tr><th>Capability</th><th>State</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>RTSP video</td><td class="state on">WORKS</td><td>640×360 and 1280×720, ~15.2 fps measured, PCM A-law audio</td></tr>
+          <tr><td>Stills</td><td class="state on">WORKS</td><td>JPEG over HTTP</td></tr>
+          <tr><td>PTZ</td><td class="state on">WORKS</td><td>Eight directions plus a home/centre routine</td></tr>
+          <tr><td>Speaker</td><td class="state on">WORKS</td><td>Text-to-speech and clips, with six real hardware volume steps</td></tr>
+          <tr><td>IR-cut filter</td><td class="state on">WORKS</td><td>Manual day/night, by direct pin write</td></tr>
+          <tr><td>Telemetry</td><td class="state on">WORKS</td><td>CPU, memory, disk, Wi-Fi quality, encoder load, viewer count</td></tr>
+          <tr><td>Home Assistant</td><td class="state on">WORKS</td><td>Camera, switches, media player, sensors — no cloud</td></tr>
+          <tr><td>Automatic day/night</td><td class="state off">CLOSED</td><td>No ambient light sensor exists on this board to trigger it</td></tr>
+          <tr><td>White LED ring</td><td class="state off">CLOSED</td><td>Not wired on this board — the vendor firmware says so itself</td></tr>
+          <tr><td>IR LED ring</td><td class="state off">CLOSED</td><td>Dark on this unit, checked with a phone camera that sees infrared</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="callout">
+        <p><strong>Closed means closed.</strong> Each of those has a refuted
+        hypothesis behind it, not a shrug — an expander that nothing answers on, a
+        pin-config theory disproved with a control, a rename that turned out to be a
+        regression. They are written up so the next person doesn't spend the evening
+        we already spent.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Rules that earned their place</h2>
+      <p class="sub">The most reusable thing here, and none of it is camera-specific.</p>
+
+      <ul class="plain">
+        <li>
+          <span class="rule-name">Read the artifact before measuring the device.</span>
+          <span class="rule-body">Every conclusion drawn from disassembly, source or
+          <code>/proc</code> held. Nearly every conclusion drawn from an unvalidated
+          measurement was overturned.</span>
+        </li>
+        <li>
+          <span class="rule-name">This firmware narrates itself.</span>
+          <span class="rule-body">Twice the answer was a log line nobody had read. Run the
+          binary in the foreground and read its output before inferring anything.</span>
+        </li>
+        <li>
+          <span class="rule-name">Establish what depends on a fault before repairing it.</span>
+          <span class="rule-body">Three separate bugs turned out to be the only reason
+          something worked.</span>
+        </li>
+        <li>
+          <span class="rule-name">Verify the effect, not the invocation.</span>
+          <span class="rule-body">A <code>200</code>, an exit code and an acknowledgement all
+          mean <em>parsed</em> — never <em>honoured</em>.</span>
+        </li>
+        <li>
+          <span class="rule-name">A uniform result across varied inputs is a broken instrument.</span>
+          <span class="rule-body">Not a conclusion. Several times a check returned the same
+          answer for every input and looked like a clean pass.</span>
+        </li>
+        <li>
+          <span class="rule-name">Prose drifts, data doesn't.</span>
+          <span class="rule-body">When a file holds both a table and a sentence summarising
+          it, re-derive the sentence. Tables are usually measured; summaries are usually
+          unsourced. At the observed frequency this is the dominant failure, not bad luck.</span>
+        </li>
+        <li>
+          <span class="rule-name">The stale half is the dangerous half.</span>
+          <span class="rule-body">A doc gets edited where a new fact lands, not where the old
+          one lives — so it ends up carrying a claim and its own refutation, both reading
+          authoritative. Proximity is no protection: nobody re-reads the paragraph they
+          just wrote.</span>
+        </li>
+        <li>
+          <span class="rule-name">Writing something down discharges the feeling of having handled it.</span>
+          <span class="rule-body">A passage that is <em>correct</em> feels
+          <em>finished</em>, which is why your own re-reads are least reliable on exactly
+          the text you just wrote. Someone else reading it is the only mechanism that
+          reliably works.</span>
+        </li>
+        <li>
+          <span class="rule-name">Printing evidence and requiring interpretation is not a guard.</span>
+          <span class="rule-body">It fails precisely when the operator is in a hurry, which
+          is when destructive tools get run. A guard should turn "an operator interprets
+          output" into "a human answers a direct question about a named thing" — and the
+          override must be documented <em>with</em> the refusal, or a correctly-working
+          guard just sends someone to a tool that has none.</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>The reference</h2>
+      <p class="sub">Written while the thing was in pieces. Linked, not copied — these are the living documents.</p>
+      <div class="docs">
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera#readme"><span class="t">Start here</span><br><span class="d">What the camera is, what the hack does, and how to get RTSP out of it</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/hardware.md"><span class="t">hardware.md</span><br><span class="d">The board, the SoC, the sensor, the pins, and which of them do nothing</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/sd-card.md"><span class="t">sd-card.md</span><br><span class="d">How the hack boots, and why the card is the safe place to edit</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/web-ui.md"><span class="t">web-ui.md</span><br><span class="d">The undocumented HTTP API, mapped endpoint by endpoint</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/ptz.md"><span class="t">ptz.md</span><br><span class="d">Motors, the daemon, the FIFO, and the IR-cut investigation in full</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/home-assistant.md"><span class="t">home-assistant.md</span><br><span class="d">Entities, the volume ladder, telemetry, and the polling budget</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/firmware-update.md"><span class="t">firmware-update.md</span><br><span class="d">The OTA updater, disassembled — including the slot that wipes config</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/troubleshooting.md"><span class="t">troubleshooting.md</span><br><span class="d">Symptoms, causes, and the false trails that looked like causes</span></a>
+        <a href="https://github.com/jphein/anyka3918-gc1084-camera/blob/main/docs/backlog.md"><span class="t">backlog.md</span><br><span class="d">What's open, what's closed and why — and the rules above, in full</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Honest limits</h2>
+      <p>This is one person's camera, opened up and written down. Two things follow
+      from that, and they are worth reading before you rely on any of it.</p>
+      <p><strong>The repo is not the world.</strong> "Teruhal TC20" covers several
+      board variants. The white LEDs are unwired <em>on this one</em>; the IR ring is
+      dark <em>on this one</em>. Where a finding is unit-specific it says so, but treat
+      a board difference as likely rather than surprising.</p>
+      <p><strong>Verified is per path, not global.</strong> The docs distinguish what
+      was measured from what follows by construction — including cases where something
+      was confirmed by ear, then had its mechanism changed underneath it and is
+      honestly marked as no longer covered by that test.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="https://github.com/jphein/anyka3918-gc1084-camera">github.com/jphein/anyka3918-gc1084-camera</a></p>
+    <p>Reference material and firmware notes are published for interoperability and
+    repair. No credentials, keys or private network details are included.</p>
+    <p class="sigil" id="sigil"></p>
+  </div>
+</footer>
+
+<script>
+  // Render the realm-sigil build name, if the tag is present. Guarded on every
+  // step: a version badge that throws would be a worse bug than a missing one.
+  (function () {
+    try {
+      var m = document.querySelector('meta[name="realm-version"]');
+      if (!m) return;
+      var v = JSON.parse(m.getAttribute('content'));
+      if (!v || !v.version_name) return;
+      document.getElementById('sigil').textContent = v.version_name;
+    } catch (e) { /* leave the line empty rather than show a broken badge */ }
+  })();
+</script>
+</body>
+</html>
