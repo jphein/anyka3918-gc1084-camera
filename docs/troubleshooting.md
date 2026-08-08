@@ -176,6 +176,34 @@ care what is lighting the room.
 Judge by the image, not the pin: the pin read is trustworthy, but the solenoid is downstream of
 the pad, so a swinging pad does not prove the mechanism moved.
 
+### 🔑 RTSP works only with the camera's IP in the URL — a hostname is refused
+
+`rtsp://<name>:554/vs0` **fails**, `rtsp://<ip>:554/vs0` succeeds. Same socket, same
+stream; only the URL host differs:
+
+```
+DESCRIBE rtsp://10.0.10.227:554/vs1  ->  RTSP/1.0 200 OK
+DESCRIBE rtsp://anyka-cam2:554/vs1   ->  connection reset by peer
+```
+
+It **resets** rather than returning a 4xx, so there is no error text to read. Reproduced
+on **both** cameras and from two different hosts on identical ffmpeg 6.1.1 — and one of
+those cameras had working DNS for months, so this is the RTSP server's behaviour, not a
+name-resolution problem.
+
+⚠️ **Through `ffprobe`/`ffmpeg` the symptom is `Invalid data found when processing
+input`** — which reads unmistakably like a codec or corruption fault and sends you to
+check the stream, the H.264 profile, or your ffmpeg build. None of that is wrong.
+
+The tell that separates them costs one command: a raw `DESCRIBE` over `/dev/tcp`. ffprobe
+bundles connect, negotiate and decode into a single verdict, so its message names the last
+stage it was thinking about rather than the one that failed.
+
+**Consequence for config files:** any RTSP URL for these cameras must be an address, even
+in a project whose convention is hostnames. Pin the address with a DHCP reservation
+instead, and write the reason next to the entry — otherwise someone will "fix" it to a
+name and break the stream.
+
 ### Use `curl`, not `urllib`
 
 The same server returns a **deterministic 502 to Python's `urllib`** while `curl` gets 200 every
